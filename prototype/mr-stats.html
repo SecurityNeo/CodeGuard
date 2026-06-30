@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>代码提交统计 - CodeGuard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/auth.js?v=4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        .sidebar-item:hover { background-color: rgba(255,255,255,0.1); }
+        .sidebar-item.active { background-color: rgba(255,255,255,0.15); border-left: 3px solid #3b82f6; }
+        .card-hover { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .score-badge {
+            position: relative;
+            display: inline-block;
+        }
+        .score-badge .tooltip-content {
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            bottom: 100%;
+            right: 0;
+            left: auto;
+            transform: none;
+            background: #1e293b;
+            color: white;
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            width: max-content;
+            max-width: none;
+            text-align: center;
+            z-index: 50;
+            margin-bottom: 6px;
+            line-height: 1.6;
+            transition: opacity 0.2s, visibility 0.2s;
+        }
+        .score-badge:hover .tooltip-content {
+            visibility: visible;
+            opacity: 1;
+        }
+        .score-badge .tooltip-content::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            right: 12px;
+            left: auto;
+            transform: none;
+            border: 5px solid transparent;
+            border-top-color: #1e293b;
+        }
+        .commit-wrapper {
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f3f4f6;
+            height: 220px;
+            overflow-y: auto;
+        }
+        .commit-wrapper .commit-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            font-size: 12px;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f9fafb;
+        }
+        .commit-wrapper .commit-row:last-child {
+            border-bottom: none;
+        }
+        .commit-wrapper .commit-row:hover {
+            background: #f3f4f6;
+        }
+        .commit-wrapper::-webkit-scrollbar {
+            width: 5px;
+        }
+        .commit-wrapper::-webkit-scrollbar-track {
+            background: #e5e7eb;
+            border-radius: 2px;
+        }
+        .commit-wrapper::-webkit-scrollbar-thumb {
+            background: #9ca3af;
+            border-radius: 3px;
+        }
+        .toast { position: fixed; top: 20px; right: 20px; z-index: 9999; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <div id="toastContainer"></div>
+    <div class="flex h-screen">
+        <!-- 侧边栏 -->
+        <aside class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
+            <div class="p-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-robot text-xl"></i>
+                    </div>
+                    <div><h1 class="font-bold text-lg">CodeGuard</h1><p class="text-xs text-gray-400">代码智能门禁</p></div>
+                </div>
+            </div>
+            <nav class="flex-1 px-3 py-4 space-y-1">
+                <a href="statistics.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-chart-line w-5"></i><span>首页</span>
+                </a>
+                <a href="mr-stats.html" class="sidebar-item active flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-code-branch w-5"></i><span>代码提交统计</span>
+                </a>
+                <a href="projects.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-folder-open w-5"></i><span>项目管理</span>
+                </a>
+                <a href="tasks.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-tasks w-5"></i><span>任务列表</span>
+                </a>
+                <a href="pools.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-server w-5"></i><span>任务资源池</span>
+                </a>
+                <a href="models.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-brain w-5"></i><span>大模型管理</span>
+                </a>
+                <div class="space-y-1">
+                    <div class="flex items-center justify-between px-4 py-3 rounded-lg text-sm cursor-pointer" onclick="toggleNotifyMenu()">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-bell w-5"></i><span>通知管理</span>
+                        </div>
+                        <i class="fas fa-chevron-down text-xs transition-transform" id="notifyMenuIcon"></i>
+                    </div>
+                    <div id="notifyMenu" class="hidden pl-10 space-y-1">
+                        <a href="notifiers.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">企业微信</a>
+                        <a href="mail.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">邮件</a>
+                        <a href="member-mappings.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">成员映射</a>
+                        <a href="report.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">报告管理</a>
+                    </div>
+                </div>
+                <a href="settings.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-cog w-5"></i><span>系统管理</span>
+                </a>
+            </nav>
+            <div class="p-4 border-t border-slate-700">
+                <div class="flex items-center gap-3 cursor-pointer" id="userMenuTrigger" onclick="toggleUserMenu()">
+                    <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center"><i class="fas fa-user text-sm"></i></div>
+                    <div class="text-sm flex-1">
+                        <div class="font-medium" id="currentUser">管理员</div>
+                        <div class="text-xs text-gray-400">管理后台</div>
+                    </div>
+                    <i class="fas fa-chevron-down text-xs text-gray-400"></i>
+                </div>
+                <div id="userMenu" class="hidden mt-2 bg-slate-800 rounded-lg py-1">
+                    <button onclick="showChangePasswordModal()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
+                        <i class="fas fa-key w-5"></i>修改密码
+                    </button>
+                    <button onclick="logout()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
+                        <i class="fas fa-sign-out-alt w-5"></i>退出登录
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="flex-1 overflow-y-auto">
+            <header class="bg-white border-b px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-800">代码提交统计</h2>
+                    <p class="text-sm text-gray-500 mt-1">查看 MR 审查记录、AI 评分及代码变更信息</p>
+                </div>
+            </header>
+
+            <div class="p-8">
+                <!-- 过滤器 -->
+                <div class="bg-white rounded-xl p-4 border mb-6 flex items-center gap-4 flex-wrap">
+                    <div class="flex items-center gap-2">
+                        <select id="projectFilter" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" onchange="loadMRLogs()">
+                            <option value="">所有项目</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <select id="authorFilter" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" onchange="loadMRLogs()">
+                            <option value="">所有作者</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <select id="mrStateFilter" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" onchange="loadMRLogs()">
+                            <option value="">所有状态</option>
+                            <option value="merged">已合并</option>
+                            <option value="opened">进行中</option>
+                            <option value="closed">已关闭</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="date" id="startDate" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" onchange="loadMRLogs()">
+                        <span class="text-gray-400">至</span>
+                        <input type="date" id="endDate" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" onchange="loadMRLogs()">
+                    </div>
+                    <div class="flex items-center gap-2 ml-auto">
+                        <button onclick="loadMRLogs()" class="bg-blue-50 text-blue-600 px-3 py-2 rounded-lg text-sm hover:bg-blue-100">
+                            <i class="fas fa-sync-alt mr-1"></i>刷新
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 统计摘要 -->
+                <div class="grid grid-cols-4 gap-4 mb-6">
+                    <!-- MR 总数 + 状态 -->
+                    <div class="bg-white rounded-xl p-4 border flex items-center gap-4">
+                        <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-code-branch text-blue-600 text-lg"></i>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold text-gray-800">
+                                <span id="statTotal">-</span>
+                                <span class="text-gray-400 text-lg font-normal">(</span>
+                                <span id="statMerged" class="text-green-600">-</span>
+                                <span class="text-gray-300 mx-1">/</span>
+                                <span id="statOpened" class="text-blue-600">-</span>
+                                <span class="text-gray-300 mx-1">/</span>
+                                <span id="statClosed" class="text-gray-500">-</span>
+                                <span class="text-gray-400 text-lg font-normal">)</span>
+                            </div>
+                            <div class="text-sm text-gray-500">MR 总数（merged / opened / closed）</div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 border flex items-center gap-4">
+                        <div class="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-exchange-alt text-orange-600 text-lg"></i>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold text-gray-800" id="statChanges">
+                                <span class="text-green-600">-</span> / <span class="text-red-600">-</span>
+                            </div>
+                            <div class="text-sm text-gray-500">代码变更量</div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 border flex items-center gap-4">
+                        <div class="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-check-double text-teal-600 text-lg"></i>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold text-gray-800" id="statReviewCount">-</div>
+                            <div class="text-sm text-gray-500">CodeReview 次数</div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl p-4 border flex items-center gap-4">
+                        <div class="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center">
+                            <i class="fas fa-star text-purple-600 text-lg"></i>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold text-gray-800" id="statAvgScore">-</div>
+                            <div class="text-sm text-gray-500">平均评分</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MR 卡片列表 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" id="mrCardsContainer">
+                    <!-- Cards will be rendered here -->
+                </div>
+
+                <!-- 分页 -->
+                <div class="mt-6 bg-white rounded-xl border px-6 py-4 flex items-center justify-between">
+                    <span id="totalCount" class="text-sm text-gray-500">共 0 条记录</span>
+                    <div class="flex items-center gap-4">
+                        <select id="pageSizeSelect" onchange="changePageSize()" class="px-2 py-1 border rounded text-sm">
+                            <option value="10">10条/页</option>
+                            <option value="18" selected>18条/页</option>
+                            <option value="30">30条/页</option>
+                            <option value="50">50条/页</option>
+                        </select>
+                        <div id="pagination" class="flex gap-2"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_BASE = '/api/v1';
+        let mrLogsData = [];
+        let currentPage = 1;
+        let pageSize = 18;
+        let totalPages = 1;
+
+        function showToast(message, type = 'success') {
+            const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+            const icons = { success: 'fa-check', error: 'fa-times', info: 'fa-info' };
+            const toast = document.createElement('div');
+            toast.className = `toast ${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3`;
+            toast.innerHTML = `<i class="fas ${icons[type]}"></i><span>${message}</span>`;
+            document.getElementById('toastContainer').appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function formatNumber(num) {
+            if (num >= 10000) {
+                return (num / 10000).toFixed(1) + 'w';
+            }
+            if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'k';
+            }
+            return num.toString();
+        }
+
+        function formatDateSec(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            const seconds = String(d.getSeconds()).padStart(2, '0');
+            return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
+        }
+
+        function parseScoreHistory(scoreHistory) {
+            if (!scoreHistory) return [];
+            try {
+                const arr = JSON.parse(scoreHistory);
+                return Array.isArray(arr) ? arr : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function getScoreColorClass(score) {
+            if (score >= 80) return 'text-green-600 bg-green-50 border-green-200';
+            if (score >= 60) return 'text-yellow-600 bg-yellow-50 border-yellow-200';
+            return 'text-red-600 bg-red-50 border-red-200';
+        }
+
+        async function loadMRLogs() {
+            const projectName = document.getElementById('projectFilter')?.value || '';
+            const author = document.getElementById('authorFilter')?.value || '';
+            const mrState = document.getElementById('mrStateFilter')?.value || '';
+            const startDate = document.getElementById('startDate')?.value || '';
+            const endDate = document.getElementById('endDate')?.value || '';
+
+            let url = `${API_BASE}/mr-review-logs?page=${currentPage}&page_size=${pageSize}`;
+            if (projectName) url += `&project_name=${encodeURIComponent(projectName)}`;
+            if (author) url += `&author=${encodeURIComponent(author)}`;
+            if (mrState) url += `&mr_state=${encodeURIComponent(mrState)}`;
+            if (startDate) url += `&start_date=${startDate}`;
+            if (endDate) url += `&end_date=${endDate}`;
+
+            try {
+                const res = await apiFetch(url);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const json = await res.json();
+                mrLogsData = json.data || [];
+                const total = json.total || 0;
+                totalPages = Math.ceil(total / 18);
+                renderMRCards(mrLogsData);
+                renderPagination(total, currentPage);
+                updateStats(json.stats || {}, total);
+            } catch (e) {
+                console.error('加载 MR 日志失败:', e);
+                showToast('加载 MR 日志失败: ' + e.message, 'error');
+            }
+        }
+
+        function renderMRCards(logs) {
+            const container = document.getElementById('mrCardsContainer');
+            if (!container) return;
+
+            if (logs.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center text-gray-400 py-16"><i class="fas fa-inbox text-4xl mb-4"></i><div>暂无数据</div></div>';
+                return;
+            }
+
+            container.innerHTML = logs.map(log => {
+                const scoreHistory = parseScoreHistory(log.score_history);
+                const latestScore = scoreHistory.length > 0 ? scoreHistory[scoreHistory.length - 1] : log.score;
+                const scoreColor = getScoreColorClass(latestScore);
+                
+                // Parse commits
+                let commits = [];
+                try {
+                    if (log.commits) {
+                        commits = JSON.parse(log.commits);
+                    }
+                } catch (e) {
+                    commits = [];
+                }
+
+                const scoreHistoryTooltip = scoreHistory.length > 0 
+                    ? scoreHistory.join(' → ') 
+                    : '暂无历史评分';
+
+                const stateBadge = log.mr_state === 'merged' 
+                    ? '<span class="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded border border-purple-200">已合并</span>'
+                    : log.mr_state === 'closed'
+                        ? '<span class="text-xs bg-gray-50 text-gray-500 px-2 py-0.5 rounded border border-gray-200">已关闭</span>'
+                        : '<span class="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-200">进行中</span>';
+
+                const draftBadge = (log.mr_state === 'opened' && log.is_draft)
+                    ? '<span class="text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded border border-amber-200 ml-1">Draft</span>'
+                    : '';
+
+                const markAsDraftBtn = (log.mr_state === 'opened' && !log.is_draft)
+                    ? `<button onclick="markAsDraft(${log.id}, this)" class="text-xs bg-gray-50 text-gray-600 px-2 py-1 rounded border border-gray-200 hover:bg-gray-100 transition-colors" title="标记为 Draft">
+                        <i class="far fa-edit mr-1"></i>Mark as Draft
+                       </button>`
+                    : '';
+
+                const markAsReadyBtn = (log.mr_state === 'opened' && log.is_draft)
+                    ? `<button onclick="markAsReady(${log.id}, this)" class="text-xs bg-amber-50 text-amber-700 px-2 py-1 rounded border border-amber-200 hover:bg-amber-100 transition-colors" title="移除 Draft 状态">
+                        <i class="fas fa-check mr-1"></i>Mark as ready
+                       </button>`
+                    : '';
+
+                const actionBtns = markAsDraftBtn || markAsReadyBtn;
+
+                return `
+                <div class="bg-white rounded-xl border card-hover overflow-hidden flex flex-col h-full">
+                    <div class="p-5 flex flex-col flex-1">
+                        <!-- 顶部：作者和标题 + 操作按钮 + URL图标 -->
+                        <div class="flex items-start justify-between mb-3">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <div class="w-7 h-7 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                                        ${(log.author_display_name || log.author || '?').charAt(0).toUpperCase()}
+                                    </div>
+                                    <span class="text-sm font-medium text-gray-700 truncate">${escapeHtml(log.author_display_name || log.author || '-')}</span>
+                                    ${stateBadge}
+                                    ${draftBadge}
+                                </div>
+                                <h3 class="text-base font-bold text-gray-900 truncate" title="${escapeHtml(log.mr_title || '')}">
+                                    ${escapeHtml(log.mr_title || 'MR #' + log.mr_id || '未知 MR')}
+                                </h3>
+                            </div>
+                            <!-- 右侧：操作按钮 + 打开MR页面 -->
+                            <div class="ml-2 shrink-0 flex items-center gap-2">
+                                ${actionBtns}
+                                <a href="${escapeHtml(log.url || '#')}" target="_blank" title="打开 MR 页面" class="text-gray-400 hover:text-blue-500 transition-colors inline-block">
+                                    <i class="fas fa-external-link-alt text-sm"></i>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- 第二行：左侧【分支+创建时间】垂直堆叠，右侧【变更量+评分】水平排列并底部对齐 -->
+                        <div class="flex items-end justify-between mb-3">
+                            <!-- 左：分支与创建时间（垂直同一列） -->
+                            <div class="flex flex-col gap-1 text-xs text-gray-500">
+                                <div class="flex items-center gap-1.5" title="${escapeHtml((log.source_branch || '-') + ' → ' + (log.target_branch || '-'))}">
+                                    <i class="fas fa-code-branch text-blue-500"></i>
+                                    <span class="font-medium text-blue-600 truncate max-w-[100px]" title="${escapeHtml(log.source_branch || '-')}">${escapeHtml(log.source_branch || '-')}</span>
+                                    <i class="fas fa-arrow-right text-gray-400 mx-0.5"></i>
+                                    <span class="font-medium text-green-600 truncate max-w-[100px]" title="${escapeHtml(log.target_branch || '-')}">${escapeHtml(log.target_branch || '-')}</span>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <i class="fas fa-clock text-gray-400"></i>
+                                    <span>${formatDateSec(log.mr_created_at)}</span>
+                                </div>
+                            </div>
+                            <!-- 右：变更量 + AI评分（水平排列，底部对齐） -->
+                            <div class="flex items-end gap-4">
+                                <div class="flex items-center gap-2 text-sm pb-1">
+                                    <span class="text-green-600 font-semibold">+${formatNumber(log.additions || 0)}</span>
+                                    <span class="text-gray-300">/</span>
+                                    <span class="text-red-600 font-semibold">-${formatNumber(log.deletions || 0)}</span>
+                                </div>
+                                <div class="score-badge group cursor-pointer">
+                                    <span class="inline-flex items-center px-6 py-3 rounded-xl border text-xl font-bold ${scoreColor} transition-transform group-hover:scale-105">
+                                        ${latestScore.toFixed(1)}
+                                    </span>
+                                    <div class="tooltip-content">
+                                        ${scoreHistoryTooltip}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Commit列表（带边框、分割线、底色） -->
+                        <div class="flex-1 min-h-0 mb-3">
+                            <div class="text-xs text-gray-400 mb-2 flex items-center gap-1">
+                                <i class="fas fa-code-commit"></i>
+                                <span>Commit 列表 (${commits.length})</span>
+                            </div>
+                            <div class="commit-wrapper">
+                                ${commits.length > 0 
+                                    ? commits.map(c => `
+                                        <div class="commit-row" title="${escapeHtml(c.title || '')}">
+                                            <span class="text-gray-400 font-mono text-[10px] shrink-0">${(c.short_id || c.id || '').substring(0, 7)}</span>
+                                            <span class="text-gray-700 truncate">${escapeHtml(c.title || '-')}</span>
+                                        </div>
+                                    `).join('')
+                                    : '<div class="commit-row text-gray-400">暂无 commit 信息</div>'
+                                }
+                            </div>
+                        </div>
+
+                        <!-- 项目名固定底部 -->
+                        <div class="mt-auto pt-3 border-t flex items-center gap-1.5 text-xs text-gray-400">
+                            <i class="fas fa-cube text-gray-400"></i>
+                            <span class="font-medium">${escapeHtml(log.project_name || '-')}</span>
+                        </div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function renderPagination(total, page) {
+            const pagination = document.getElementById('pagination');
+            if (!pagination) return;
+
+            const totalText = document.getElementById('totalCount');
+            if (totalText) totalText.textContent = `共 ${total} 条记录`;
+
+            totalPages = Math.ceil(total / pageSize);
+            const pages = totalPages;
+            if (pages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+            // 上一页
+            html += `<button class="px-3 py-1 border rounded text-sm ${page <= 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'}" ${page <= 1 ? 'disabled' : ''} onclick="goPage(${page - 1})">上一页</button>`;
+
+            // 首页
+            if (page > 3) {
+                html += `<button class="px-3 py-1 border rounded text-sm text-gray-500 hover:bg-gray-50" onclick="goPage(1)">1</button>`;
+                if (page > 4) {
+                    html += `<span class="px-2 py-1 text-gray-400">...</span>`;
+                }
+            }
+
+            // 中间页码（以当前页为中心，最多5个）
+            let start = Math.max(1, page - 2);
+            let end = Math.min(pages, page + 2);
+            if (end - start < 4) {
+                if (start === 1) {
+                    end = Math.min(pages, start + 4);
+                } else if (end === pages) {
+                    start = Math.max(1, end - 4);
+                }
+            }
+            for (let i = start; i <= end; i++) {
+                html += `<button class="px-3 py-1 border rounded text-sm ${i === page ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}" onclick="goPage(${i})">${i}</button>`;
+            }
+
+            // 尾页
+            if (page < pages - 2) {
+                if (page < pages - 3) {
+                    html += `<span class="px-2 py-1 text-gray-400">...</span>`;
+                }
+                html += `<button class="px-3 py-1 border rounded text-sm text-gray-500 hover:bg-gray-50" onclick="goPage(${pages})">${pages}</button>`;
+            }
+
+            // 下一页
+            html += `<button class="px-3 py-1 border rounded text-sm ${page >= pages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'}" ${page >= pages ? 'disabled' : ''} onclick="goPage(${page + 1})">下一页</button>`;
+
+            pagination.innerHTML = html;
+        }
+
+        function changePageSize() {
+            pageSize = parseInt(document.getElementById('pageSizeSelect').value) || 18;
+            currentPage = 1;
+            loadMRLogs();
+        }
+
+        function goPage(page) {
+            currentPage = page;
+            loadMRLogs();
+        }
+
+        function updateStats(stats, total) {
+            document.getElementById('statTotal').textContent = total;
+
+            if (stats && typeof stats.total_additions === 'number') {
+                // 使用后端返回的聚合统计数据
+                document.getElementById('statChanges').innerHTML =
+                    `<span class="text-green-600">+${stats.total_additions}</span> / <span class="text-red-600">-${stats.total_deletions}</span>`;
+                document.getElementById('statReviewCount').textContent = stats.total_review_count || 0;
+                document.getElementById('statAvgScore').textContent = stats.avg_score ? stats.avg_score.toFixed(1) : '-';
+                
+                // MR 状态汇总
+                document.getElementById('statMerged').textContent = stats.merged_count || 0;
+                document.getElementById('statOpened').textContent = stats.opened_count || 0;
+                document.getElementById('statClosed').textContent = stats.closed_count || 0;
+            } else {
+                // fallback: 兜底用分页数据计算（仅兜底，正常不应走这里）
+                let totalAdditions = 0;
+                let totalDeletions = 0;
+                let totalScore = 0;
+                let scoreCount = 0;
+                let totalReviewCount = 0;
+                (mrLogsData || []).forEach(log => {
+                    totalAdditions += log.additions || 0;
+                    totalDeletions += (log.deletions || 0);
+                    totalReviewCount += log.review_count || 0;
+                    const scoreHistory = parseScoreHistory(log.score_history);
+                    const latestScore = scoreHistory.length > 0 ? scoreHistory[scoreHistory.length - 1] : log.score;
+                    if (latestScore > 0) {
+                        totalScore += latestScore;
+                        scoreCount++;
+                    }
+                });
+                document.getElementById('statChanges').innerHTML =
+                    `<span class="text-green-600">+${totalAdditions}</span> / <span class="text-red-600">-${totalDeletions}</span>`;
+                document.getElementById('statReviewCount').textContent = totalReviewCount;
+                document.getElementById('statAvgScore').textContent = scoreCount > 0 ? (totalScore / scoreCount).toFixed(1) : '-';
+                document.getElementById('statMerged').textContent = '-';
+                document.getElementById('statOpened').textContent = '-';
+                document.getElementById('statClosed').textContent = '-';
+            }
+        }
+
+        async function loadFilterOptions() {
+            try {
+                // Load project names
+                const projectRes = await apiFetch(`${API_BASE}/mr-review-logs/projects`);
+                if (projectRes.ok) {
+                    const projectJson = await projectRes.json();
+                    const projectSelect = document.getElementById('projectFilter');
+                    if (projectSelect) {
+                        projectSelect.innerHTML = '<option value="">所有项目</option>' + 
+                            (projectJson.data || []).map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+                    }
+                }
+
+                // Load authors
+                const authorRes = await apiFetch(`${API_BASE}/mr-review-logs/authors`);
+                if (authorRes.ok) {
+                    const authorJson = await authorRes.json();
+                    const authorSelect = document.getElementById('authorFilter');
+                    if (authorSelect) {
+                        authorSelect.innerHTML = '<option value="">所有作者</option>' + 
+                            (authorJson.data || []).map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('');
+                    }
+                }
+            } catch (e) {
+                console.error('加载筛选选项失败:', e);
+            }
+        }
+
+        function resetFilters() {
+            document.getElementById('projectFilter').value = '';
+            document.getElementById('authorFilter').value = '';
+            document.getElementById('mrStateFilter').value = '';
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            currentPage = 1;
+            loadMRLogs();
+        }
+
+        async function markAsDraft(id, btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>处理中...';
+            try {
+                const res = await apiFetch(`${API_BASE}/mr-review-logs/${id}/mark-as-draft`, { method: 'POST' });
+                if (!res.ok) throw new Error('标记失败');
+                const data = await res.json();
+                showToast(data.message || '已标记为 Draft');
+                setTimeout(() => loadMRLogs(), 1000);
+            } catch (e) {
+                showToast('标记失败: ' + e.message, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="far fa-edit mr-1"></i>Mark as Draft';
+            }
+        }
+
+        async function markAsReady(id, btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>处理中...';
+            try {
+                const res = await apiFetch(`${API_BASE}/mr-review-logs/${id}/mark-as-ready`, { method: 'POST' });
+                if (!res.ok) throw new Error('标记失败');
+                const data = await res.json();
+                showToast(data.message || '已标记为 ready');
+                setTimeout(() => loadMRLogs(), 1000);
+            } catch (e) {
+                showToast('标记失败: ' + e.message, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check mr-1"></i>Mark as ready';
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFilterOptions();
+            loadMRLogs();
+        });
+    </script>
+</body>
+</html>

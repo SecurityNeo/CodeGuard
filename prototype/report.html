@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>报告管理 - CodeGuard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/auth.js?v=4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        .sidebar-item:hover { background-color: rgba(255,255,255,0.1); }
+        .sidebar-item.active { background-color: rgba(255,255,255,0.15); border-left: 3px solid #3b82f6; }
+        .toast { position: fixed; top: 20px; right: 20px; z-index: 9999; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .toast-success { background-color: #10b981; }
+        .toast-error { background-color: #ef4444; }
+        .toast-info { background-color: #3b82f6; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <div id="toastContainer"></div>
+    <div class="flex h-screen">
+        <aside class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
+            <div class="p-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-robot text-xl"></i>
+                    </div>
+                    <div><h1 class="font-bold text-lg">CodeGuard</h1><p class="text-xs text-gray-400">代码智能门禁</p></div>
+                </div>
+            </div>
+            <nav class="flex-1 px-3 py-4 space-y-1">
+                <a href="statistics.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-chart-line w-5"></i><span>首页</span>
+                </a>
+                <a href="mr-stats.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-code-branch w-5"></i><span>代码提交统计</span>
+                </a>
+                <a href="projects.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-folder-open w-5"></i><span>项目管理</span>
+                </a>
+                <a href="tasks.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-tasks w-5"></i><span>任务列表</span>
+                </a>
+                <a href="pools.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-server w-5"></i><span>任务资源池</span>
+                </a>
+                <a href="models.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-brain w-5"></i><span>大模型管理</span>
+                </a>
+                <div class="space-y-1">
+                    <div class="flex items-center justify-between px-4 py-3 rounded-lg text-sm cursor-pointer" onclick="toggleNotifyMenu()">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-bell w-5"></i><span>通知管理</span>
+                        </div>
+                        <i class="fas fa-chevron-down text-xs transition-transform" id="notifyMenuIcon"></i>
+                    </div>
+                    <div id="notifyMenu" class="hidden pl-10 space-y-1">
+                        <a href="notifiers.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">企业微信</a>
+                        <a href="mail.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">邮件</a>
+                        <a href="member-mappings.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">成员映射</a>
+                        <a href="report.html" class="sidebar-item active flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">报告管理</a>
+                    </div>
+                </div>
+                <a href="settings.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-cog w-5"></i><span>系统管理</span>
+                </a>
+            </nav>
+            <div class="p-4 border-t border-slate-700">
+                <div class="flex items-center gap-3 cursor-pointer" id="userMenuTrigger" onclick="toggleUserMenu()">
+                    <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center"><i class="fas fa-user text-sm"></i></div>
+                    <div class="text-sm flex-1">
+                        <div class="font-medium" id="currentUser">管理员</div>
+                        <div class="text-xs text-gray-400">管理后台</div>
+                    </div>
+                    <i class="fas fa-chevron-down text-xs text-gray-400"></i>
+                </div>
+                <div id="userMenu" class="hidden mt-2 bg-slate-800 rounded-lg py-1">
+                    <button onclick="showChangePasswordModal()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
+                        <i class="fas fa-key w-5"></i>修改密码
+                    </button>
+                    <button onclick="logout()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
+                        <i class="fas fa-sign-out-alt w-5"></i>退出登录
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 overflow-y-auto">
+            <header class="bg-white border-b px-8 py-4 sticky top-0 z-10">
+                <h2 class="text-xl font-bold text-gray-800">报告管理</h2>
+                <p class="text-sm text-gray-500 mt-1">报告配置（周报/月报）与历史报告数据</p>
+            </header>
+
+            <div class="p-8">
+                <div class="bg-white rounded-xl border p-6 space-y-6">
+                    <!-- 周报/月报配置 -->
+                    <div class="grid grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                <i class="fas fa-calendar-week text-green-500"></i>周报配置
+                            </h3>
+                            <div class="space-y-3">
+                                <div class="flex items-center gap-4">
+                                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input type="checkbox" id="weeklyGenerateEnabled" class="w-4 h-4 text-blue-600 rounded">
+                                        <span class="font-medium">自动生成报告</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input type="checkbox" id="weeklySendEnabled" class="w-4 h-4 text-blue-600 rounded">
+                                        <span class="font-medium">自动发送邮件</span>
+                                    </label>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs text-gray-500 mb-1">生成时间（每周）</label>
+                                        <select id="weeklyDay" class="w-full px-3 py-2 border rounded-lg text-sm">
+                                            <option value="1">周一</option><option value="2">周二</option><option value="3">周三</option>
+                                            <option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="0">周日</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-500 mb-1">时刻</label>
+                                        <div class="flex items-center gap-1">
+                                            <input type="number" id="weeklyHour" min="0" max="23" value="9" class="w-16 px-2 py-2 border rounded-lg text-sm text-center">
+                                            <span class="text-gray-400">:</span>
+                                            <input type="number" id="weeklyMinute" min="0" max="59" value="0" class="w-16 px-2 py-2 border rounded-lg text-sm text-center">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">数据周期（天）</label>
+                                    <input type="number" id="weeklyPeriod" value="7" min="1" max="30" class="w-full px-3 py-2 border rounded-lg text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">发送分组（空则发给所有启用的收件人）</label>
+                                    <div id="weeklyGroups" class="flex flex-wrap gap-2 text-sm min-h-[28px]"></div>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 mt-4">
+                                <button onclick="previewReport('weekly')" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50">
+                                    <i class="fas fa-eye mr-1"></i>预览周报
+                                </button>
+                                <button id="btnSendWeekly" onclick="openSendModal('weekly')" class="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed">
+                                    <i class="fas fa-paper-plane mr-1"></i>立即发送
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                <i class="fas fa-calendar-alt text-purple-500"></i>月报配置
+                            </h3>
+                            <div class="space-y-3">
+                                <div class="flex items-center gap-4">
+                                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input type="checkbox" id="monthlyGenerateEnabled" class="w-4 h-4 text-blue-600 rounded">
+                                        <span class="font-medium">自动生成报告</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input type="checkbox" id="monthlySendEnabled" class="w-4 h-4 text-blue-600 rounded">
+                                        <span class="font-medium">自动发送邮件</span>
+                                    </label>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs text-gray-500 mb-1">生成时间（每月）</label>
+                                        <select id="monthlyDay" class="w-full px-3 py-2 border rounded-lg text-sm">
+                                            <option value="1">1 日</option>
+                                            <option value="2">2 日</option>
+                                            <option value="3">3 日</option>
+                                            <option value="4">4 日</option>
+                                            <option value="5">5 日</option>
+                                            <option value="6">6 日</option>
+                                            <option value="7">7 日</option>
+                                            <option value="8">8 日</option>
+                                            <option value="9">9 日</option>
+                                            <option value="10">10 日</option>
+                                            <option value="11">11 日</option>
+                                            <option value="12">12 日</option>
+                                            <option value="13">13 日</option>
+                                            <option value="14">14 日</option>
+                                            <option value="15">15 日</option>
+                                            <option value="16">16 日</option>
+                                            <option value="17">17 日</option>
+                                            <option value="18">18 日</option>
+                                            <option value="19">19 日</option>
+                                            <option value="20">20 日</option>
+                                            <option value="21">21 日</option>
+                                            <option value="22">22 日</option>
+                                            <option value="23">23 日</option>
+                                            <option value="24">24 日</option>
+                                            <option value="25">25 日</option>
+                                            <option value="26">26 日</option>
+                                            <option value="27">27 日</option>
+                                            <option value="28">28 日</option>
+                                            <option value="29">29 日</option>
+                                            <option value="30">30 日</option>
+                                            <option value="31">31 日</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-500 mb-1">时刻</label>
+                                        <div class="flex items-center gap-1">
+                                            <input type="number" id="monthlyHour" min="0" max="23" value="9" class="w-16 px-2 py-2 border rounded-lg text-sm text-center">
+                                            <span class="text-gray-400">:</span>
+                                            <input type="number" id="monthlyMinute" min="0" max="59" value="0" class="w-16 px-2 py-2 border rounded-lg text-sm text-center">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">数据周期（天）</label>
+                                    <input type="number" id="monthlyPeriod" value="30" min="1" max="90" class="w-full px-3 py-2 border rounded-lg text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">发送分组（空则发给所有启用的收件人）</label>
+                                    <div id="monthlyGroups" class="flex flex-wrap gap-2 text-sm min-h-[28px]"></div>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 mt-4">
+                                <button onclick="previewReport('monthly')" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50">
+                                    <i class="fas fa-eye mr-1"></i>预览月报
+                                </button>
+                                <button id="btnSendMonthly" onclick="openSendModal('monthly')" class="flex-1 px-3 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 disabled:opacity-60 disabled:cursor-not-allowed">
+                                    <i class="fas fa-paper-plane mr-1"></i>立即发送
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-4 border-t">
+                        <button onclick="saveReportConfigs()" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 shadow-sm">
+                            <i class="fas fa-save mr-1"></i>保存报告配置
+                        </button>
+                    </div>
+
+                    <!-- 报告数据 -->
+                    <div class="mt-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-base font-bold text-gray-800 flex items-center gap-2">
+                                <i class="fas fa-history text-gray-500"></i>报告数据
+                            </h3>
+                            <div class="flex items-center gap-3">
+                                <select id="logStatusFilter" onchange="loadReportLogs(1)" class="px-2 py-1 border rounded-lg text-sm text-gray-600">
+                                    <option value="">全部状态</option>
+                                    <option value="sent_success">发送成功</option>
+                                    <option value="sent_failed">发送失败</option>
+                                    <option value="generated_success">生成成功</option>
+                                    <option value="generated_failed">生成失败</option>
+                                </select>
+                                <button onclick="loadReportLogs(1)" class="text-blue-600 text-sm hover:text-blue-700 flex items-center gap-1">
+                                    <i class="fas fa-redo"></i>刷新
+                                </button>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="bg-gray-50 text-gray-600">
+                                        <th class="px-4 py-2 text-left font-medium">时间</th>
+                                        <th class="px-4 py-2 text-left font-medium">类型</th>
+                                        <th class="px-4 py-2 text-left font-medium">触发方式</th>
+                                        <th class="px-4 py-2 text-left font-medium">接收人</th>
+                                        <th class="px-4 py-2 text-center font-medium">状态</th>
+                                        <th class="px-4 py-2 text-center font-medium" style="width: 120px;">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reportLogTable">
+                                    <tr><td colspan="6" class="text-center text-gray-400 py-6">暂无数据</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <!-- 分页 -->
+                        <div id="logPagination" class="flex items-center justify-between mt-4 text-sm text-gray-600 hidden">
+                            <span id="logPageInfo"></span>
+                            <div class="flex items-center gap-1" id="logPageButtons"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_BASE = '/api/v1';
+
+        function showToast(message, type = 'info') {
+            const colors = { success: 'toast-success', error: 'toast-error', info: 'toast-info' };
+            const icons = { success: 'fa-check-circle', error: 'fa-times-circle', info: 'fa-info-circle' };
+            const toast = document.createElement('div');
+            toast.className = `toast ${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3`;
+            toast.innerHTML = `<i class="fas ${icons[type]}"></i><span>${message}</span>`;
+            document.getElementById('toastContainer').appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            return d.toLocaleString('zh-CN');
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ========== 报告配置 ==========
+
+        async function loadReportConfig() {
+            try {
+                const [weeklyRes, monthlyRes, recipientsRes] = await Promise.all([
+                    apiFetch(`${API_BASE}/reports/config/weekly`),
+                    apiFetch(`${API_BASE}/reports/config/monthly`),
+                    apiFetch(`${API_BASE}/reports/recipients`),
+                ]);
+                const weekly = weeklyRes.ok ? (await weeklyRes.json()).data : null;
+                const monthly = monthlyRes.ok ? (await monthlyRes.json()).data : null;
+                const recipients = recipientsRes.ok ? (await recipientsRes.json()).data : [];
+                if (weekly) {
+                    document.getElementById('weeklyGenerateEnabled').checked = weekly.generate_enabled;
+                    document.getElementById('weeklySendEnabled').checked = weekly.send_enabled;
+                    document.getElementById('weeklyDay').value = weekly.send_day_of_week ?? 1;
+                    document.getElementById('weeklyHour').value = weekly.send_hour ?? 9;
+                    document.getElementById('weeklyMinute').value = weekly.send_minute ?? 0;
+                    document.getElementById('weeklyPeriod').value = weekly.data_period_days ?? 7;
+                }
+                if (monthly) {
+                    document.getElementById('monthlyGenerateEnabled').checked = monthly.generate_enabled;
+                    document.getElementById('monthlySendEnabled').checked = monthly.send_enabled;
+                    document.getElementById('monthlyDay').value = monthly.send_day_of_month ?? 1;
+                    document.getElementById('monthlyHour').value = monthly.send_hour ?? 9;
+                    document.getElementById('monthlyMinute').value = monthly.send_minute ?? 0;
+                    document.getElementById('monthlyPeriod').value = monthly.data_period_days ?? 30;
+                }
+                // 去重分组
+                const groups = Array.from(new Set(recipients.map(r => r.group_name || '默认分组'))) ;
+                renderGroupChks('weeklyGroups', groups, weekly?.send_groups || '[]');
+                renderGroupChks('monthlyGroups', groups, monthly?.send_groups || '[]');
+            } catch (e) { console.error('load report config failed', e); }
+        }
+
+        async function saveReportConfigs() {
+            const weeklyGroups = Array.from(document.querySelectorAll('#weeklyGroups input[type="checkbox"]:checked')).map(cb => cb.value);
+            const monthlyGroups = Array.from(document.querySelectorAll('#monthlyGroups input[type="checkbox"]:checked')).map(cb => cb.value);
+            const weekly = {
+                generate_enabled: document.getElementById('weeklyGenerateEnabled').checked,
+                send_enabled: document.getElementById('weeklySendEnabled').checked,
+                send_groups: weeklyGroups,
+                send_day_of_week: parseInt(document.getElementById('weeklyDay').value),
+                send_hour: parseInt(document.getElementById('weeklyHour').value),
+                send_minute: parseInt(document.getElementById('weeklyMinute').value),
+                data_period_days: parseInt(document.getElementById('weeklyPeriod').value),
+            };
+            const monthly = {
+                generate_enabled: document.getElementById('monthlyGenerateEnabled').checked,
+                send_enabled: document.getElementById('monthlySendEnabled').checked,
+                send_groups: monthlyGroups,
+                send_day_of_month: parseInt(document.getElementById('monthlyDay').value),
+                send_hour: parseInt(document.getElementById('monthlyHour').value),
+                send_minute: parseInt(document.getElementById('monthlyMinute').value),
+                data_period_days: parseInt(document.getElementById('monthlyPeriod').value),
+            };
+            try {
+                const [wRes, mRes] = await Promise.all([
+                    apiFetch(`${API_BASE}/reports/config/weekly`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(weekly) }),
+                    apiFetch(`${API_BASE}/reports/config/monthly`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(monthly) }),
+                ]);
+                if (!wRes.ok) { const err = await wRes.json(); throw new Error(err.error); }
+                if (!mRes.ok) { const err = await mRes.json(); throw new Error(err.error); }
+                showToast('报告配置已保存', 'success');
+            } catch (e) { showToast('保存失败: ' + e.message, 'error'); }
+        }
+
+        async function previewReport(type) {
+            try {
+                const res = await apiFetch(`${API_BASE}/reports/preview/${type}`);
+                if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
+                const html = await res.text();
+
+                const modal = document.createElement('div');
+                modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+                modal.innerHTML = `
+                    <div class="bg-white rounded-xl shadow-xl w-[min(920px,95vw)] mx-4 max-h-[90vh] flex flex-col">
+                        <div class="px-6 py-4 border-b flex items-center justify-between">
+                            <h3 class="font-bold text-lg">${type === 'weekly' ? '周报' : '月报'}预览</h3>
+                            <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-gray-600">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="flex-1 overflow-auto p-0" id="previewBody"></div>
+                        <div class="px-6 py-4 border-t flex justify-end">
+                            <button onclick="this.closest('.fixed').remove()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">关闭</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+
+                const iframe = document.createElement('iframe');
+                iframe.style.cssText = 'width:100%;min-height:600px;border:none;';
+                iframe.srcdoc = html;
+                modal.querySelector('#previewBody').appendChild(iframe);
+            } catch (e) { showToast('预览失败: ' + e.message, 'error'); }
+        }
+
+        async function sendReport(type, groups) {
+            const btnId = type === 'weekly' ? 'btnSendWeekly' : 'btnSendMonthly';
+            const btn = document.getElementById(btnId);
+            if (!btn || btn.disabled) return;
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>发送中...';
+            try {
+                const body = groups ? JSON.stringify({ groups }) : '{}';
+                const res = await apiFetch(`${API_BASE}/reports/send/${type}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.error);
+                showToast(result.message || '报告已发送', 'success');
+                loadReportLogs();
+            } catch (e) { showToast('发送失败: ' + e.message, 'error'); }
+            finally { btn.disabled = false; btn.innerHTML = originalHTML; }
+        }
+
+        function renderGroupChks(containerId, groups, selectedJson) {
+            let selected = [];
+            try { selected = JSON.parse(selectedJson); } catch (e) {}
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.innerHTML = groups.map(g => {
+                const checked = selected.includes(g) ? 'checked' : '';
+                return '<label class="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 border rounded hover:bg-gray-100 cursor-pointer">' +
+                    '<input type="checkbox" value="' + escapeHtml(g) + '" ' + checked + ' class="w-3.5 h-3.5 text-blue-600 rounded">' +
+                    '<span>' + escapeHtml(g) + '</span></label>';
+            }).join('');
+        }
+
+        function openSendModal(type) {
+            // 读取对应配置的选中分组作为默认
+            const selected = Array.from(document.querySelectorAll('#' + type + 'Groups input[type="checkbox"]:checked')).map(cb => cb.value);
+            // 取所有分组
+            const allGroups = Array.from(document.querySelectorAll('#' + type + 'Groups input[type="checkbox"]')).map(cb => cb.value);
+            const groupHtml = allGroups.map(g => {
+                const checked = selected.includes(g) ? 'checked' : '';
+                return '<label class="inline-flex items-center gap-1 px-2 py-1 bg-gray-50 border rounded hover:bg-gray-100 cursor-pointer">' +
+                    '<input type="checkbox" value="' + escapeHtml(g) + '" ' + checked + ' class="w-3.5 h-3.5 text-blue-600 rounded">' +
+                    '<span>' + escapeHtml(g) + '</span></label>';
+            }).join('');
+
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+            modal.id = 'sendReportModal';
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 flex flex-col">
+                    <div class="px-6 py-4 border-b flex items-center justify-between">
+                        <h3 class="font-bold text-lg text-gray-800">发送${type === 'weekly' ? '周报' : '月报'}</h3>
+                        <button onclick="document.getElementById('sendReportModal').remove()" class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="px-6 py-4 space-y-3">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-2">发送分组（不选则发给所有启用的收件人）</label>
+                            <div class="flex flex-wrap gap-2" id="modalSendGroups">${groupHtml}</div>
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 border-t flex justify-end gap-3">
+                        <button onclick="document.getElementById('sendReportModal').remove()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50">取消</button>
+                        <button id="btnModalSend" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">确认发送</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            document.getElementById('btnModalSend').addEventListener('click', () => {
+                const groups = Array.from(document.querySelectorAll('#modalSendGroups input:checked')).map(cb => cb.value);
+                modal.remove();
+                sendReport(type, groups.length > 0 ? groups : undefined);
+            });
+        }
+
+        // ========== 报告数据（日志） ==========
+
+        let logPageCurrent = 1;
+        let logPageSize = 10;
+
+        function getStatusLabel(status) {
+            const labels = {
+                'sent_success': '发送成功',
+                'sent_failed': '发送失败',
+                'generated_success': '生成成功',
+                'generated_failed': '生成失败',
+            };
+            return labels[status] || status;
+        }
+
+        function getStatusClass(status) {
+            if (status === 'sent_success' || status === 'generated_success') {
+                return 'bg-green-50 text-green-600';
+            }
+            return 'bg-red-50 text-red-600';
+        }
+
+        async function loadReportLogs(page) {
+            if (!page) page = logPageCurrent;
+            logPageCurrent = page;
+            const statusFilter = document.getElementById('logStatusFilter')?.value || '';
+            try {
+                const url = new URL(`${API_BASE}/reports/logs`, window.location.origin);
+                url.searchParams.set('page', page);
+                url.searchParams.set('page_size', logPageSize);
+                if (statusFilter) url.searchParams.set('status', statusFilter);
+                const res = await apiFetch(url.pathname + url.search);
+                if (!res.ok) return;
+                const result = await res.json();
+                const tbody = document.getElementById('reportLogTable');
+                if (!result.data || result.data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-6">暂无数据</td></tr>';
+                    document.getElementById('logPagination').classList.add('hidden');
+                    return;
+                }
+                tbody.innerHTML = result.data.map(l => `
+                    <tr class="border-b">
+                        <td class="px-4 py-2 text-sm">${formatDate(l.sent_at)}</td>
+                        <td class="px-4 py-2 text-sm">${l.report_type === 'weekly' ? '周报' : '月报'}</td>
+                        <td class="px-4 py-2 text-sm">${l.trigger_type === 'auto' ? '自动' : l.trigger_type === 'manual' ? '手动' : '预览'}</td>
+                        <td class="px-4 py-2 text-sm">${(() => { try { const r = JSON.parse(l.recipients || '[]'); return r.map(x => x.name || x.email).join(', '); } catch(e) { return '-'; } })()}</td>
+                        <td class="px-4 py-2 text-center text-sm">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ${getStatusClass(l.status)}">${getStatusLabel(l.status)}</span>
+                        </td>
+                        <td class="px-4 py-2 text-center text-sm">
+                            <button onclick="viewReportLog(${l.id})" class="text-blue-600 hover:text-blue-800 text-xs mr-2">查看</button>
+                            <button onclick="showDeleteConfirm(${l.id})" class="text-red-600 hover:text-red-800 text-xs">删除</button>
+                        </td>
+                    </tr>
+                `).join('');
+                // 分页
+                const total = result.total || 0;
+                const totalPages = Math.ceil(total / logPageSize);
+                const pageInfo = document.getElementById('logPageInfo');
+                const pageButtons = document.getElementById('logPageButtons');
+                const paginationEl = document.getElementById('logPagination');
+                if (totalPages > 1) {
+                    paginationEl.classList.remove('hidden');
+                    pageInfo.textContent = `共 ${total} 条，第 ${page}/${totalPages} 页`;
+                    pageButtons.innerHTML = buildLogPagination(page, totalPages);
+                } else {
+                    paginationEl.classList.add('hidden');
+                }
+            } catch (e) { console.error('load report data failed', e); }
+        }
+
+        function buildLogPagination(current, total) {
+            let html = '';
+            html += `<button ${current === 1 ? 'disabled' : ''} onclick="loadReportLogs(${current - 1})" class="px-3 py-1 border rounded-lg text-xs ${current === 1 ? 'text-gray-300' : 'text-gray-600 hover:bg-gray-50'}">上一页</button>`;
+            const startPage = Math.max(1, Math.min(current - 2, total - 4));
+            const endPage = Math.min(total, Math.max(current + 2, Math.min(5, total)));
+            for (let p = Math.max(1, current - 2); p <= Math.min(total, current + 2); p++) {
+                html += `<button onclick="loadReportLogs(${p})" class="px-3 py-1 border rounded-lg text-xs ${p === current ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}">${p}</button>`;
+            }
+            html += `<button ${current === total ? 'disabled' : ''} onclick="loadReportLogs(${current + 1})" class="px-3 py-1 border rounded-lg text-xs ${current === total ? 'text-gray-300' : 'text-gray-600 hover:bg-gray-50'}">下一页</button>`;
+            return html;
+        }
+
+        function showDeleteConfirm(id) {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+            modal.id = 'deleteConfirmModal';
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 flex flex-col">
+                    <div class="px-6 py-4 border-b flex items-center justify-between">
+                        <h3 class="font-bold text-lg text-gray-800">确认删除</h3>
+                        <button onclick="document.getElementById('deleteConfirmModal').remove()" class="text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="px-6 py-6 text-center">
+                        <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-exclamation-triangle text-red-500 text-xl"></i>
+                        </div>
+                        <p class="text-gray-700 mb-2">确定要删除该报告数据吗？</p>
+                        <p class="text-sm text-gray-500">删除后不可恢复，请谨慎操作。</p>
+                    </div>
+                    <div class="px-6 py-4 border-t flex justify-end gap-3">
+                        <button onclick="document.getElementById('deleteConfirmModal').remove()" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50">取消</button>
+                        <button id="btnConfirmDelete" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">确认删除</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            document.getElementById('btnConfirmDelete').addEventListener('click', async () => {
+                try {
+                    const res = await apiFetch(`${API_BASE}/reports/logs/${id}`, { method: 'DELETE' });
+                    if (!res.ok) throw new Error('删除失败');
+                    modal.remove();
+                    showToast('删除成功', 'success');
+                    loadReportLogs(logPageCurrent);
+                } catch (e) {
+                    modal.remove();
+                    showToast('删除失败: ' + e.message, 'error');
+                }
+            });
+        }
+
+        async function viewReportLog(id) {
+            try {
+                const res = await apiFetch(`${API_BASE}/reports/logs/${id}/html`);
+                if (!res.ok) throw new Error('加载失败');
+                const html = await res.text();
+                const modal = document.createElement('div');
+                modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+                modal.innerHTML = `
+                    <div class="bg-white rounded-xl shadow-xl w-[min(920px,95vw)] mx-4 max-h-[90vh] flex flex-col">
+                        <div class="px-6 py-4 border-b flex items-center justify-between">
+                            <h3 class="font-bold text-lg">历史报告</h3>
+                            <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-gray-600">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="flex-1 overflow-auto p-0" id="previewBody"></div>
+                        <div class="px-6 py-4 border-t flex justify-end">
+                            <button onclick="this.closest('.fixed').remove()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">关闭</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                const iframe = document.createElement('iframe');
+                iframe.style.cssText = 'width:100%;min-height:600px;border:none;';
+                iframe.srcdoc = html;
+                modal.querySelector('#previewBody').appendChild(iframe);
+            } catch (e) { showToast('加载失败: ' + e.message, 'error'); }
+        }
+
+        // 初始化下拉框
+        (function initMonthlyDay() {
+            const sel = document.getElementById('monthlyDay');
+            if (!sel) return;
+            sel.innerHTML = '';
+            for (let i = 1; i <= 31; i++) {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = i + ' 日';
+                sel.appendChild(opt);
+            }
+        })();
+
+        loadReportConfig();
+        loadReportLogs();
+    </script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
+type Config struct {
+	Debug           bool   `yaml:"debug"`
+	Port            int    `yaml:"port"`
+	DSN             string `yaml:"dsn"`
+	Database        string `yaml:"database"`
+
+	// Database connection details (alternative to DSN)
+	DBHost     string `yaml:"db_host"`
+	DBPort     int    `yaml:"db_port"`
+	DBUser     string `yaml:"db_user"`
+	DBPassword string `yaml:"db_password"`
+	DBName     string `yaml:"db_name"`
+
+	EncryptKey      string `yaml:"encrypt_key"`
+	SyncInterval    int    `yaml:"sync_interval"`
+	GitlabToken    string `yaml:"gitlab_token"`
+	TaskTimeoutMin  int    `yaml:"task_timeout_min"`
+	MaxParallelTask int    `yaml:"max_parallel_task"`
+	ProjectBaseDir  string `yaml:"project_base_dir"`
+	FrontendPath    string `yaml:"frontend_path"`
+}
+
+func Load() *Config {
+	cfg := &Config{
+		Debug:           getEnvBool("DEBUG", false),
+		Port:            getEnvInt("PORT", 8080),
+		DSN:             getEnv("DSN", ""),
+		Database:        getEnv("DATABASE", "mysql"),
+
+		DBHost:     getEnv("DB_HOST", "127.0.0.1"),
+		DBPort:     getEnvInt("DB_PORT", 3306),
+		DBUser:     getEnv("DB_USER", "root"),
+		DBPassword: getEnv("DB_PASSWORD", ""),
+		DBName:     getEnv("DB_NAME", "ai_optimizer"),
+
+		EncryptKey:      getEnv("ENCRYPTION_KEY", ""),
+		SyncInterval:    getEnvInt("SYNC_INTERVAL", 60),
+		GitlabToken:    getEnv("GITLAB_TOKEN", ""),
+		TaskTimeoutMin:  getEnvInt("TASK_TIMEOUT_MIN", 30),
+		MaxParallelTask: getEnvInt("MAX_PARALLEL_TASK", 20),
+		ProjectBaseDir:  getEnv("PROJECT_BASE_DIR", "/data/gitlab/"),
+		FrontendPath:    getEnv("FRONTEND_PATH", "/app/prototype"),
+	}
+	return cfg
+}
+
+func (c *Config) GetDSN() string {
+	if c.DSN != "" {
+		return c.DSN
+	}
+	return c.buildDSN()
+}
+
+func (c *Config) buildDSN() string {
+	switch c.Database {
+	case "postgres":
+		return fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=disable TimeZone=Asia/Shanghai",
+			c.DBHost, c.DBUser, c.DBPassword, c.DBName, c.DBPort)
+	default:
+		return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+			c.DBUser, c.DBPassword, c.DBHost, c.DBPort, c.DBName)
+	}
+}
+
+func (c *Config) GetGormDialector() string {
+	return c.Database
+}
+
+func getEnv(key, defaultVal string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return defaultVal
+}
+
+func getEnvBool(key string, defaultVal bool) bool {
+	if v := os.Getenv(key); v != "" {
+		b, _ := strconv.ParseBool(v)
+		return b
+	}
+	return defaultVal
+}
+
+func getEnvInt(key string, defaultVal int) int {
+	if v := os.Getenv(key); v != "" {
+		i, _ := strconv.Atoi(v)
+		return i
+	}
+	return defaultVal
+}

@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务资源池 - CodeGuard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/auth.js?v=4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        .sidebar-item:hover { background-color: rgba(255,255,255,0.1); }
+        .sidebar-item.active { background-color: rgba(255,255,255,0.15); border-left: 3px solid #3b82f6; }
+        .modal { display: none; }
+        .modal.active { display: flex; }
+        .loading { opacity: 0.5; pointer-events: none; }
+        .toast { position: fixed; top: 20px; right: 20px; z-index: 9999; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <div id="toastContainer"></div>
+    <div class="flex h-screen">
+        <aside class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
+            <div class="p-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-robot text-xl"></i>
+                    </div>
+                    <div><h1 class="font-bold text-lg">CodeGuard</h1><p class="text-xs text-gray-400">代码智能门禁</p></div>
+                </div>
+            </div>
+            <nav class="flex-1 px-3 py-4 space-y-1">
+                <a href="statistics.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-chart-line w-5"></i><span>首页</span>
+                </a>
+                <a href="mr-stats.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-code-branch w-5"></i><span>代码提交统计</span>
+                </a>
+                <a href="projects.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-folder-open w-5"></i><span>项目管理</span>
+                </a>
+                <a href="tasks.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-tasks w-5"></i><span>任务列表</span>
+                </a>
+                <a href="pools.html" class="sidebar-item active flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-server w-5"></i><span>任务资源池</span>
+                </a>
+                <a href="models.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-brain w-5"></i><span>大模型管理</span>
+                </a>
+                <div class="space-y-1">
+                    <div class="flex items-center justify-between px-4 py-3 rounded-lg text-sm cursor-pointer" onclick="toggleNotifyMenu()">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-bell w-5"></i><span>通知管理</span>
+                        </div>
+                        <i class="fas fa-chevron-down text-xs transition-transform" id="notifyMenuIcon"></i>
+                    </div>
+                    <div id="notifyMenu" class="hidden pl-10 space-y-1">
+                        <a href="notifiers.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">企业微信</a>
+                        <a href="mail.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">邮件</a>
+                        <a href="member-mappings.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">成员映射</a>
+                        <a href="report.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">报告管理</a>
+                    </div>
+                </div>
+                <a href="settings.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-cog w-5"></i><span>系统管理</span>
+                </a>
+        </nav>
+        <div class="p-4 border-t border-slate-700">
+            <div class="flex items-center gap-3 cursor-pointer" id="userMenuTrigger" onclick="toggleUserMenu()">
+                <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center"><i class="fas fa-user text-sm"></i></div>
+                <div class="text-sm flex-1">
+                    <div class="font-medium" id="currentUser">管理员</div>
+                    <div class="text-xs text-gray-400">管理后台</div>
+                </div>
+                <i class="fas fa-chevron-down text-xs text-gray-400"></i>
+            </div>
+            <div id="userMenu" class="hidden mt-2 bg-slate-800 rounded-lg py-1">
+                <button onclick="showChangePasswordModal()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
+                    <i class="fas fa-key w-5"></i>修改密码
+                </button>
+                <button onclick="logout()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
+                    <i class="fas fa-sign-out-alt w-5"></i>退出登录
+                </button>
+            </div>
+        </div>
+    </aside>
+
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <header class="bg-white border-b px-8 py-4">
+                <h2 class="text-xl font-semibold text-gray-800">任务资源池</h2>
+            </header>
+
+            <div class="flex-1 overflow-auto p-8">
+                <div class="bg-white rounded-xl border overflow-hidden">
+                    <div class="px-6 py-4 border-b flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="searchInput" placeholder="搜索资源池名称..." 
+                                   class="border rounded-lg px-3 py-2 text-sm w-64"
+                                   onkeyup="if(event.key==='Enter')loadPools()">
+                            <button onclick="loadPools()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
+                                搜索
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <button onclick="loadPools()" class="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-200">
+                                刷新
+                            </button>
+                            <button onclick="openCreateModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
+                                新建资源池
+                            </button>
+                        </div>
+                    </div>
+                    <table class="w-full">
+                        <thead class="bg-gray-50 border-b">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">名称</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">OpenCode Endpoint</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">OpenCode版本</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">最大并行</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">健康检查间隔</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">状态</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">最后检查</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">默认</th>
+                                <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="poolsBody" class="divide-y">
+                        </tbody>
+                    </table>
+                    <div class="px-6 py-4 border-t flex items-center justify-between">
+                        <span id="totalCount" class="text-sm text-gray-500">共 0 条记录</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="createModal" class="modal fixed inset-0 bg-black/50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl w-full max-w-2xl mx-4">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="text-lg font-semibold">新建资源池</h3>
+                <button onclick="hideModal('createModal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">名称 *</label>
+                        <input type="text" id="poolName" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="opencode-prod-pool">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">OpenCode Endpoint *</label>
+                        <input type="text" id="poolEndpoint" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="http://localhost:4096">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+                        <input type="text" id="poolUsername" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="opencode">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                        <div class="relative">
+                            <input type="password" id="poolPassword" class="w-full px-3 py-2 pr-10 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="password">
+                            <button type="button" onclick="togglePassword('poolPassword', this)" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">API Key (可选，优先级高于用户名密码)</label>
+                    <div class="relative">
+                        <input type="password" id="poolAPIKey" class="w-full px-3 py-2 pr-10 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="OpenCode API Key">
+                        <button type="button" onclick="togglePassword('poolAPIKey', this)" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">最大并行任务数 *</label>
+                        <input type="number" id="poolMaxParallel" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" value="5">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">健康检查间隔(秒) *</label>
+                        <input type="number" id="poolCheckInterval" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" value="5">
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-between">
+                <button onclick="testConnectivity()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">测试连接</button>
+                <div class="flex gap-3">
+                    <button onclick="hideModal('createModal')" class="px-4 py-2 text-gray-600 hover:text-gray-800">取消</button>
+                    <button onclick="savePool()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="viewModal" class="modal fixed inset-0 bg-black/50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl w-full max-w-2xl mx-4">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="text-lg font-semibold">资源池详情</h3>
+                <button onclick="hideModal('viewModal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <!-- 基本信息卡片 -->
+                <div class="bg-gray-50 rounded-lg p-4 border">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                        <i class="fas fa-info-circle text-blue-500"></i>基本信息
+                    </h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">名称</label>
+                            <p id="viewName" class="text-sm text-gray-900 font-medium">-</p>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">OpenCode 版本</label>
+                            <p id="viewVersion" class="text-sm text-gray-900 font-medium">-</p>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">OpenCode Endpoint</label>
+                        <p id="viewEndpoint" class="text-sm text-gray-900 font-mono break-all">-</p>
+                    </div>
+                </div>
+
+                <!-- 配置参数卡片 -->
+                <div class="bg-gray-50 rounded-lg p-4 border">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                        <i class="fas fa-sliders-h text-blue-500"></i>配置参数
+                    </h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">最大并行任务数</label>
+                            <p id="viewMaxParallel" class="text-sm text-gray-900">-</p>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">健康检查间隔</label>
+                            <p id="viewTimeoutMin" class="text-sm text-gray-900">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 健康状态卡片 -->
+                <div class="bg-gray-50 rounded-lg p-4 border">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                        <i class="fas fa-heartbeat text-blue-500"></i>健康状态
+                    </h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">当前状态</label>
+                            <p id="viewStatus" class="text-sm font-medium">-</p>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">最后检查</label>
+                            <p id="viewLastCheckAt" class="text-sm text-gray-900">-</p>
+                        </div>
+                    </div>
+                    <div id="viewCheckErrorRow" class="mt-3 hidden">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">检查错误</label>
+                        <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+                            <p id="viewCheckError" class="text-sm text-red-600">-</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end">
+                <button onclick="hideModal('viewModal')" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/v1';
+        let editingId = null;
+
+        async function loadPools() {
+            const refreshBtn = document.querySelector('button[onclick="loadPools()"]');
+            const originalContent = refreshBtn.innerHTML;
+            refreshBtn.innerHTML = '刷新中...';
+            refreshBtn.disabled = true;
+            
+            const searchInput = document.getElementById('searchInput');
+            const keyword = searchInput.value.trim();
+            let url = `${API_BASE}/pools`;
+            if (keyword) {
+                url += `?name=${encodeURIComponent(keyword)}`;
+            }
+            
+            try {
+                const res = await apiFetch(url);
+                const data = await res.json();
+                renderPools(data.data || []);
+            } catch (e) {
+                showToast('加载失败: ' + e.message, 'error');
+            } finally {
+                refreshBtn.innerHTML = originalContent;
+                refreshBtn.disabled = false;
+            }
+        }
+
+        function renderPools(pools) {
+            const tbody = document.getElementById('poolsBody');
+            document.getElementById('totalCount').textContent = `共 ${pools.length} 条记录`;
+            
+            if (pools.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="px-6 py-8 text-center text-gray-500">暂无数据</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = pools.map(p => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center text-green-600">
+                                <i class="fas fa-server text-sm"></i>
+                            </div>
+                            <a href="pool-detail.html?id=${p.id}" class="font-medium text-sm text-blue-600 hover:text-blue-800 hover:underline">${p.name || '-'}</a>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${p.opencode_endpoint || '-'}</td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${p.opencode_version || '-'}</td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${p.max_parallel || '-'}</td>
+                    <td class="px-6 py-4 text-sm text-gray-600">${p.check_interval_sec || 5} 秒</td>
+                    <td class="px-6 py-4">
+                        <span class="px-2 py-1 rounded text-xs ${getStatusClass(p.status)}">${getStatusText(p.status)}</span>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500">${formatDate(p.last_check_at)}</td>
+                    <td class="px-6 py-4">
+                        ${p.is_default ? '<span class="px-2 py-1 rounded text-xs bg-blue-50 text-blue-600">默认</span>' : '-'}
+                    </td>
+                    <td class="px-6 py-4 text-center space-x-2">
+                        <button onclick="setDefaultPool(${p.id})" class="text-blue-600 hover:text-blue-800 text-xs">${p.is_default ? '取消默认' : '设为默认'}</button>
+                        <button onclick="viewPool(${p.id})" class="text-blue-600 hover:text-blue-800 text-xs">查看</button>
+                        <button onclick="togglePool(${p.id}, ${p.status !== 'active'})" class="text-blue-600 hover:text-blue-800 text-xs">${p.status === 'active' ? '停用' : '启用'}</button>
+                        <button onclick="editPool(${p.id})" class="text-blue-600 hover:text-blue-800 text-xs">编辑</button>
+                        <button onclick="deletePool(${p.id})" class="text-blue-600 hover:text-blue-800 text-xs">删除</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function getStatusClass(status) {
+            if (status === 'active') return 'bg-green-50 text-green-600';
+            if (status === 'inactive') return 'bg-gray-50 text-gray-600';
+            if (status === 'error') return 'bg-red-50 text-red-600';
+            return 'bg-gray-50 text-gray-600';
+        }
+
+        function getStatusText(status) {
+            if (status === 'active') return '运行中';
+            if (status === 'inactive') return '已停用';
+            if (status === 'error') return '异常';
+            return status || '-';
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            return d.toLocaleString('zh-CN');
+        }
+
+        function openCreateModal() {
+            editingId = null;
+            document.querySelector('#createModal h3').textContent = '新建资源池';
+            document.getElementById('poolName').value = '';
+            document.getElementById('poolEndpoint').value = '';
+            document.getElementById('poolUsername').value = '';
+            document.getElementById('poolPassword').value = '';
+            document.getElementById('poolAPIKey').value = '';
+            document.getElementById('poolMaxParallel').value = '5';
+            document.getElementById('poolCheckInterval').value = '5';
+            showModal('createModal');
+        }
+
+        async function editPool(id) {
+            try {
+                const res = await apiFetch(`${API_BASE}/pools/${id}`);
+                const data = await res.json();
+                const p = data.data;
+                
+                editingId = id;
+                document.querySelector('#createModal h3').textContent = '编辑资源池';
+                document.getElementById('poolName').value = p.name || '';
+                document.getElementById('poolEndpoint').value = p.opencode_endpoint || '';
+                document.getElementById('poolUsername').value = p.opencode_username || '';
+                document.getElementById('poolPassword').value = p.opencode_password || '';
+                document.getElementById('poolAPIKey').value = p.opencode_api_key || '';
+                document.getElementById('poolMaxParallel').value = p.max_parallel || 5;
+                document.getElementById('poolCheckInterval').value = p.check_interval_sec || 5;
+                showModal('createModal');
+            } catch (e) {
+                showToast('加载失败: ' + e.message, 'error');
+            }
+        }
+
+        async function savePool() {
+            const data = {
+                name: document.getElementById('poolName').value,
+                opencode_endpoint: document.getElementById('poolEndpoint').value,
+                opencode_username: document.getElementById('poolUsername').value,
+                opencode_password: document.getElementById('poolPassword').value,
+                opencode_api_key: document.getElementById('poolAPIKey').value,
+                max_parallel: parseInt(document.getElementById('poolMaxParallel').value) || 5,
+                check_interval_sec: parseInt(document.getElementById('poolCheckInterval').value) || 5
+            };
+
+            if (!data.name || !data.opencode_endpoint) {
+                showToast('请填写所有必填字段', 'error');
+                return;
+            }
+
+            // 移除空字符串的字段
+            if (!data.opencode_username) delete data.opencode_username;
+            if (!data.opencode_password) delete data.opencode_password;
+            if (!data.opencode_api_key) delete data.opencode_api_key;
+
+            try {
+                const url = editingId ? `${API_BASE}/pools/${editingId}` : `${API_BASE}/pools`;
+                const method = editingId ? 'PUT' : 'POST';
+                const res = await apiFetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.error || '保存失败');
+                
+                showToast(editingId ? '更新成功' : '创建成功', 'success');
+                hideModal('createModal');
+                loadPools();
+            } catch (e) {
+                showToast('保存失败: ' + e.message, 'error');
+            }
+        }
+
+        async function testConnectivity() {
+            const endpoint = document.getElementById('poolEndpoint').value;
+            const username = document.getElementById('poolUsername').value;
+            const password = document.getElementById('poolPassword').value;
+
+            if (!endpoint) {
+                showToast('请填写OpenCode Endpoint', 'error');
+                return;
+            }
+
+            try {
+                const res = await apiFetch(`${API_BASE}/pools/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        opencode_endpoint: endpoint,
+                        opencode_username: username,
+                        opencode_password: password
+                    })
+                });
+                const data = await res.json();
+                if (data.status === 'connected') {
+                    showToast(data.message || '连接成功', 'success');
+                } else {
+                    showToast(data.message || '连接失败', 'error');
+                }
+            } catch (e) {
+                showToast('测试失败: ' + e.message, 'error');
+            }
+        }
+
+        async function deletePool(id) {
+            if (!confirm('确定要删除这个资源池吗？')) return;
+            
+            try {
+                const res = await apiFetch(`${API_BASE}/pools/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('删除失败');
+                showToast('删除成功', 'success');
+                loadPools();
+            } catch (e) {
+                showToast('删除失败: ' + e.message, 'error');
+            }
+        }
+
+        async function checkPool(id) {
+            const btn = document.querySelector(`button[onclick="checkPool(${id})"]`);
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            btn.disabled = true;
+            
+            try {
+                const res = await apiFetch(`${API_BASE}/pools/${id}/check`, { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'connected') {
+                    showToast('连接成功', 'success');
+                } else {
+                    showToast('连接失败: ' + data.message, 'error');
+                }
+                loadPools();
+            } catch (e) {
+                showToast('检查失败: ' + e.message, 'error');
+            } finally {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }
+        }
+
+        async function togglePool(id, enabled) {
+            try {
+                const res = await apiFetch(`${API_BASE}/pools/${id}/toggle`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: enabled })
+                });
+                if (!res.ok) throw new Error('操作失败');
+                showToast(enabled ? '已启用' : '已停用', 'success');
+                loadPools();
+            } catch (e) {
+                showToast('操作失败: ' + e.message, 'error');
+            }
+        }
+
+        async function setDefaultPool(id) {
+            try {
+                const res = await apiFetch(`${API_BASE}/pools/${id}/default`, { method: 'PUT' });
+                if (!res.ok) throw new Error('设置失败');
+                showToast('已设为默认', 'success');
+                loadPools();
+            } catch (e) {
+                showToast('设置失败: ' + e.message, 'error');
+            }
+        }
+
+        async function viewPool(id) {
+            try {
+                const res = await apiFetch(`${API_BASE}/pools/${id}`);
+                const data = await res.json();
+                const p = data.data;
+                
+                document.getElementById('viewName').textContent = p.name || '-';
+                document.getElementById('viewVersion').textContent = p.opencode_version || '-';
+                document.getElementById('viewEndpoint').textContent = p.opencode_endpoint || '-';
+                document.getElementById('viewMaxParallel').textContent = p.max_parallel || '-';
+                document.getElementById('viewTimeoutMin').textContent = p.check_interval_sec ? p.check_interval_sec + ' 秒' : '5 秒';
+                
+                const statusEl = document.getElementById('viewStatus');
+                statusEl.textContent = getStatusText(p.status);
+                statusEl.className = 'text-sm font-medium ' + getStatusClass(p.status);
+                
+                document.getElementById('viewLastCheckAt').textContent = formatDate(p.last_check_at);
+                
+                const errRow = document.getElementById('viewCheckErrorRow');
+                if (p.check_error) {
+                    errRow.classList.remove('hidden');
+                    document.getElementById('viewCheckError').textContent = p.check_error;
+                } else {
+                    errRow.classList.add('hidden');
+                }
+                
+                showModal('viewModal');
+            } catch (e) {
+                showToast('加载失败: ' + e.message, 'error');
+            }
+        }
+
+        function togglePassword(inputId, btn) {
+            const input = document.getElementById(inputId);
+            const icon = btn.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('active'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        function showToast(message, type = 'info') {
+            const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+            const toast = document.createElement('div');
+            toast.className = `toast ${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg`;
+            toast.innerHTML = `<span>${message}</span>`;
+            document.getElementById('toastContainer').appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        loadPools();
+    </script>
+</body>
+</html>

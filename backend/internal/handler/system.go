@@ -1,0 +1,275 @@
+package handler
+
+import (
+	"errors"
+	"strconv"
+	"time"
+
+	"github.com/ai-optimizer/backend/internal/model"
+	"github.com/ai-optimizer/backend/internal/service"
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+	"gorm.io/gorm"
+)
+
+type SystemHandler struct {
+	startTime time.Time
+}
+
+func NewSystemHandler() *SystemHandler {
+	return &SystemHandler{
+		startTime: time.Now(),
+	}
+}
+
+func (h *SystemHandler) GetConfig(c *gin.Context) {
+	var cfg model.SystemConfig
+	if err := model.DB.First(&cfg).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+		cfg = model.SystemConfig{
+			TaskTimeoutMin:          30,
+			MaxParallelTask:         20,
+			LogRetentionDay:         90,
+			DiffTruncationThreshold: 5000,
+			AlertDurationSec:        300,
+			AlertCooldownSec:        3600,
+			AlertNotifierID:         0,
+			AlertMentionUserIDs:     "",
+			AILogTemplate: "请先执行以下命令拉取代码：\ngit clone {{CLONE_URL}}\n\n变更摘要：\n{{MR_DIFF}}\n\n{{USER_INPUT}}\n\n请审查以上代码变更，给出审查意见。",
+		}
+			if err := model.DB.Create(&cfg).Error; err != nil {
+				zap.L().Error("create system config failed", zap.Error(err))
+				c.JSON(500, gin.H{"error": err.Error()})
+				return
+			}
+			// 重新查询以获取完整的记录
+			model.DB.First(&cfg)
+		} else {
+			zap.L().Error("get system config failed", zap.Error(err))
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	// 确保只有一条系统配置记录，删除其他记录
+	if cfg.ID > 1 {
+		model.DB.Where("id > 1").Delete(&model.SystemConfig{})
+		zap.L().Info("deleted duplicate system configs, keeping id 1", zap.Uint("kept_id", cfg.ID))
+		// 重新查询id=1的记录
+		model.DB.First(&cfg)
+	}
+	c.JSON(200, gin.H{"data": cfg})
+}
+
+func (h *SystemHandler) UpdateConfig(c *gin.Context) {
+	var data map[string]interface{}
+	if err := c.ShouldBindJSON(&data); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	var cfg model.SystemConfig
+	if err := model.DB.First(&cfg).Error; err != nil {
+		c.JSON(404, gin.H{"error": "config not found"})
+		return
+	}
+
+	// 确保只有一条系统配置记录，删除其他记录
+	if cfg.ID > 1 {
+		model.DB.Where("id > 1").Delete(&model.SystemConfig{})
+		zap.L().Info("deleted duplicate system configs, keeping id 1", zap.Uint("kept_id", cfg.ID))
+	}
+
+	// 构建更新字段
+	updates := make(map[string]interface{})
+
+	if v, ok := data["gitlab_token"]; ok {
+		updates["gitlab_token"] = v.(string)
+	}
+	if v, ok := data["task_timeout_min"]; ok {
+		updates["task_timeout_min"] = int(v.(float64))
+	}
+	if v, ok := data["sync_interval_sec"]; ok {
+		updates["sync_interval_sec"] = int(v.(float64))
+	}
+	if v, ok := data["mr_sync_interval_sec"]; ok {
+		updates["mr_sync_interval_sec"] = int(v.(float64))
+	}
+	if v, ok := data["max_parallel_task"]; ok {
+		updates["max_parallel_task"] = int(v.(float64))
+	}
+	if v, ok := data["log_retention_day"]; ok {
+		updates["log_retention_day"] = int(v.(float64))
+	}
+	if v, ok := data["ai_log_template"]; ok {
+		updates["ai_log_template"] = v.(string)
+	}
+	if v, ok := data["score_threshold"]; ok {
+		val := int(v.(float64))
+		if val < 1 {
+			val = 1
+		} else if val > 100 {
+			val = 100
+		}
+		updates["score_threshold"] = val
+	}
+	if v, ok := data["diff_truncation_threshold"]; ok {
+		val := int(v.(float64))
+		if val < 0 {
+			val = 0
+		}
+		updates["diff_truncation_threshold"] = val
+	}
+	if v, ok := data["alert_duration_sec"]; ok {
+		val := int(v.(float64))
+		if val < 60 {
+			val = 60
+		}
+		updates["alert_duration_sec"] = val
+	}
+	if v, ok := data["alert_cooldown_sec"]; ok {
+		val := int(v.(float64))
+		if val < 300 {
+			val = 300
+		}
+		updates["alert_cooldown_sec"] = val
+	}
+	if v, ok := data["alert_notifier_id"]; ok {
+		updates["alert_notifier_id"] = uint(int(v.(float64)))
+	}
+	if v, ok := data["alert_mention_user_ids"]; ok {
+		updates["alert_mention_user_ids"] = v.(string)
+	}
+	if v, ok := data["review_template"]; ok {
+		updates["review_template"] = v.(string)
+	}
+
+	// 判断是更新哪种模板或系统配置
+	isAITemplateOnly := len(data) == 1 && data["ai_log_template"] != nil
+	isReviewTemplateOnly := len(data) == 1 && data["review_template"] != nil
+
+	if isAITemplateOnly {
+		model.RecordOpLog("AI对话模板更新", "AI对话模板", cfg.ID, "success", "", c.ClientIP())
+	} else if isReviewTemplateOnly {
+		model.RecordOpLog("代码审查模版更新", "代码审查模版", cfg.ID, "success", "", c.ClientIP())
+	} else {
+		model.RecordOpLog("系统配置更新", "系统配置", cfg.ID, "success", "", c.ClientIP())
+	}
+
+	// 执行数据库更新
+	if len(updates) > 0 {
+		if err := model.DB.Model(&cfg).Updates(updates).Error; err != nil {
+			zap.L().Error("update system config failed", zap.Error(err))
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	// 重新查询获取最新数据
+	model.DB.First(&cfg)
+
+	// 如果 MR 同步间隔有变更，重建定时任务
+	if _, ok := data["mr_sync_interval_sec"]; ok {
+		service.RebuildMRSyncCron()
+	}
+
+	c.JSON(200, gin.H{"message": "配置已更新", "data": cfg})
+}
+
+func (h *SystemHandler) OperationLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	opType := c.Query("type")
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+
+	var logs []model.OperationLog
+	var total int64
+
+	query := model.DB.Model(&model.OperationLog{})
+
+	if opType != "" {
+		query = query.Where("op_type = ?", opType)
+	}
+	if startDate != "" {
+		query = query.Where("created_at >= ?", startDate)
+	}
+	if endDate != "" {
+		query = query.Where("created_at <= ?", endDate+" 23:59:59")
+	}
+
+	query.Count(&total)
+	query = query.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize)
+	query.Find(&logs)
+
+	c.JSON(200, gin.H{
+		"data":  logs,
+		"total": total,
+		"page":  page,
+	})
+}
+
+func (h *SystemHandler) ClearLogs(c *gin.Context) {
+	var cfg model.SystemConfig
+	if err := model.DB.First(&cfg).Error; err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	days := cfg.LogRetentionDay
+	if days <= 0 {
+		days = 90
+	}
+
+	cutoff := time.Now().AddDate(0, 0, -days)
+	result := model.DB.Where("created_at < ?", cutoff).Delete(&model.OperationLog{})
+
+	c.JSON(200, gin.H{
+		"message":      "清理完成",
+		"deleted_rows": result.RowsAffected,
+	})
+}
+
+func (h *SystemHandler) Info(c *gin.Context) {
+	var totalProjects, totalTasks, totalPools, totalModels int64
+	var runningTasks, failedTasks int64
+
+	model.DB.Model(&model.Project{}).Count(&totalProjects)
+	model.DB.Model(&model.Task{}).Count(&totalTasks)
+	model.DB.Model(&model.ResourcePool{}).Count(&totalPools)
+	model.DB.Model(&model.LLMModel{}).Count(&totalModels)
+	model.DB.Model(&model.Task{}).Where("status = ?", "running").Count(&runningTasks)
+	model.DB.Model(&model.Task{}).Where("status = ?", "failed").Count(&failedTasks)
+
+	uptime := time.Since(h.startTime)
+	uptimeStr := uptime.Round(time.Minute).String()
+
+	c.JSON(200, gin.H{
+		"version":        "v1.0.0",
+		"uptime":         uptimeStr,
+		"db_status":      "ok",
+		"total_projects": totalProjects,
+		"total_tasks":    totalTasks,
+		"total_pools":    totalPools,
+		"total_models":   totalModels,
+		"running_tasks":  runningTasks,
+		"failed_tasks":   failedTasks,
+	})
+}
+
+func (h *SystemHandler) SyncLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+
+	var logs []model.SyncLog
+	var total int64
+
+	model.DB.Model(&model.SyncLog{}).Count(&total)
+	model.DB.Model(&model.SyncLog{}).Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&logs)
+
+	c.JSON(200, gin.H{
+		"data":  logs,
+		"total": total,
+		"page":  page,
+	})
+}

@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>企业微信通知 - CodeGuard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="js/auth.js?v=4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        .sidebar-item:hover { background-color: rgba(255,255,255,0.1); }
+        .sidebar-item.active { background-color: rgba(255,255,255,0.15); border-left: 3px solid #3b82f6; }
+        .modal { display: none; }
+        .modal.active { display: flex; }
+        .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .3s; border-radius: 22px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background-color: #3b82f6; }
+        input:checked + .slider:before { transform: translateX(18px); }
+        .switch-disabled { opacity: 0.5; cursor: not-allowed; }
+        /* Markdown 预览样式 */
+        .md-preview { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; white-space: pre-wrap; line-height: 1.8; }
+        .md-preview h1, .md-preview h2, .md-preview h3 { font-weight: bold; margin: 8px 0; }
+        .md-preview h1 { font-size: 1.3em; }
+        .md-preview h2 { font-size: 1.1em; }
+        .md-preview ul { list-style: disc; padding-left: 20px; }
+        .md-preview ol { list-style: decimal; padding-left: 20px; }
+        .md-preview code { background: #f0f0f0; padding: 2px 4px; border-radius: 3px; }
+        .md-preview a { color: #3b82f6; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <div class="flex h-screen">
+        <!-- 侧边栏 -->
+        <aside class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
+            <div class="p-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-robot text-xl"></i>
+                    </div>
+                    <div><h1 class="font-bold text-lg">CodeGuard</h1><p class="text-xs text-gray-400">代码智能门禁</p></div>
+                </div>
+            </div>
+            <nav class="flex-1 px-3 py-4 space-y-1">
+                <a href="statistics.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-chart-line w-5"></i><span>首页</span>
+                </a>
+                <a href="mr-stats.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-code-branch w-5"></i><span>代码提交统计</span>
+                </a>
+                <a href="projects.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-folder-open w-5"></i><span>项目管理</span>
+                </a>
+                <a href="tasks.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-tasks w-5"></i><span>任务列表</span>
+                </a>
+                <a href="pools.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-server w-5"></i><span>任务资源池</span>
+                </a>
+                <a href="models.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-brain w-5"></i><span>大模型管理</span>
+                </a>
+                <div class="space-y-1">
+                    <div class="flex items-center justify-between px-4 py-3 rounded-lg text-sm cursor-pointer" onclick="toggleNotifyMenu()">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-bell w-5"></i><span>通知管理</span>
+                        </div>
+                        <i class="fas fa-chevron-down text-xs transition-transform" id="notifyMenuIcon"></i>
+                    </div>
+                    <div id="notifyMenu" class="hidden pl-10 space-y-1">
+                        <a href="notifiers.html" class="sidebar-item active flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">企业微信</a>
+                        <a href="mail.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">邮件</a>
+                        <a href="member-mappings.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">成员映射</a>
+                        <a href="report.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">报告管理</a>
+                    </div>
+                </div>
+                <a href="settings.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-cog w-5"></i><span>系统管理</span>
+                </a>
+            </nav>
+            <div class="p-4 border-t border-slate-700">
+                <div class="flex items-center gap-3 cursor-pointer" id="userMenuTrigger" onclick="toggleUserMenu()">
+                    <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center"><i class="fas fa-user text-sm"></i></div>
+                    <div class="text-sm flex-1">
+                        <div class="font-medium" id="currentUser">管理员</div>
+                        <div class="text-xs text-gray-400">管理后台</div>
+                    </div>
+                    <i class="fas fa-chevron-down text-xs text-gray-400"></i>
+                </div>
+                <div id="userMenu" class="hidden mt-2 bg-slate-800 rounded-lg py-1">
+                    <button onclick="showChangePasswordModal()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
+                        <i class="fas fa-key w-5"></i>修改密码
+                    </button>
+                    <button onclick="logout()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
+                        <i class="fas fa-sign-out-alt w-5"></i>退出登录
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 overflow-y-auto">
+            <header class="bg-white border-b px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-800">企业微信通知</h2>
+                    <p class="text-sm text-gray-500 mt-1">配置企业微信机器人，AI 评审完成后自动发送通知</p>
+                </div>
+                <button onclick="openCreateModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 flex items-center gap-2">
+                    <i class="fas fa-plus"></i>新建配置
+                </button>
+            </header>
+
+            <div class="p-8 space-y-6">
+                <!-- 配置列表 -->
+                <div class="bg-white rounded-xl border overflow-hidden">
+                    <table class="w-full">
+                        <thead class="bg-gray-50 border-b">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">配置名称</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">Webhook Url</th>
+                                <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500">通知模板</th>
+                                <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500">启用状态</th>
+                                <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="notifierTable" class="divide-y divide-gray-100">
+                            <tr><td colspan="5" class="px-6 py-8 text-center text-gray-400">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 新建/编辑配置弹窗 -->
+    <div id="notifierModal" class="modal fixed inset-0 bg-black/50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl w-[500px]">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="font-bold text-lg" id="modalTitle">新建通知配置</h3>
+                <button onclick="hideModal('notifierModal')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="hidden" id="notifierId">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">配置名称 <span class="text-red-500">*</span></label>
+                    <input type="text" id="notifierName" placeholder="如：CodeGuard 通知群" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Webhook Url <span class="text-red-500">*</span></label>
+                    <div class="relative">
+                        <input type="password" id="notifierUrl" placeholder="企业微信 Webhook URL" class="w-full px-3 py-2 pr-10 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <button type="button" onclick="toggleUrlVisibility()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer">
+                            <i class="fas fa-eye" id="urlEyeIcon"></i>
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1">从企业微信机器人详情页获取 URL 地址</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">关联项目（为空则全局生效）</label>
+                    <select id="notifierProject" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <option value="">全局（所有项目）</option>
+                    </select>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end gap-3">
+                <button onclick="hideModal('notifierModal')" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">取消</button>
+                <button onclick="saveNotifier()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通知模板弹窗 -->
+    <div id="templateModal" class="modal fixed inset-0 bg-black/50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl w-[600px] flex flex-col" style="max-height: 85vh;">
+            <div class="px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
+                <h3 class="font-bold text-lg">通知模板</h3>
+                <button onclick="hideModal('templateModal')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-4 overflow-y-auto flex-1">
+                <input type="hidden" id="templateNotifierId">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">消息模板</label>
+                    <textarea id="messageTemplate" rows="10" placeholder="在下方编辑消息模板..." 
+                              class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono leading-relaxed"></textarea>
+                    <div class="text-xs text-gray-500 mt-2 space-y-1">
+                        <p class="font-medium text-gray-700">支持变量：</p>
+                        <div class="flex flex-wrap gap-2">
+                            <code class="bg-gray-100 px-2 py-0.5 rounded text-xs cursor-pointer hover:bg-blue-100" onclick="insertVariable('{{PROJECT_NAME}}')">{{PROJECT_NAME}}</code>
+                            <code class="bg-gray-100 px-2 py-0.5 rounded text-xs cursor-pointer hover:bg-blue-100" onclick="insertVariable('{{DEVELOPER}}')">{{DEVELOPER}}</code>
+                            <code class="bg-gray-100 px-2 py-0.5 rounded text-xs cursor-pointer hover:bg-blue-100" onclick="insertVariable('{{BRANCH}}')">{{BRANCH}}</code>
+                            <code class="bg-gray-100 px-2 py-0.5 rounded text-xs cursor-pointer hover:bg-blue-100" onclick="insertVariable('{{SCORE}}')">{{SCORE}}</code>
+                            <code class="bg-gray-100 px-2 py-0.5 rounded text-xs cursor-pointer hover:bg-blue-100" onclick="insertVariable('{{CHANGES}}')">{{CHANGES}}</code>
+                            <code class="bg-gray-100 px-2 py-0.5 rounded text-xs cursor-pointer hover:bg-blue-100" onclick="insertVariable('{{MR_TITLE}}')">{{MR_TITLE}}</code>
+                            <code class="bg-gray-100 px-2 py-0.5 rounded text-xs cursor-pointer hover:bg-blue-100" onclick="insertVariable('{{MR_URL}}')">{{MR_URL}}</code>
+                        </div>
+                        <p class="text-gray-400 mt-1">点击变量可插入到光标位置</p>
+                    </div>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4 border">
+                    <div class="text-xs text-gray-500 font-medium mb-2">预览</div>
+                    <div id="templatePreview" class="md-preview"></div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end gap-3 flex-shrink-0">
+                <button onclick="hideModal('templateModal')" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">取消</button>
+                <button onclick="saveTemplate()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">保存模板</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除确认弹窗 -->
+    <div id="deleteModal" class="modal fixed inset-0 bg-black/50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl p-6 w-[400px]">
+            <h3 class="font-bold text-lg mb-2">确认删除</h3>
+            <p class="text-gray-600 text-sm">确定要删除此通知配置吗？</p>
+            <div class="flex justify-end gap-3 mt-6">
+                <button onclick="hideModal('deleteModal')" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">取消</button>
+                <button onclick="confirmDelete()" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">删除</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isEdit = false;
+        let deleteId = null;
+        let templateNotifierId = null;
+
+        function toggleUrlVisibility() {
+            var input = document.getElementById('notifierUrl');
+            var icon = document.getElementById('urlEyeIcon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('active'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        async function loadNotifiers() {
+            try {
+                const resp = await apiFetch('/api/v1/notifiers');
+                const result = await resp.json();
+                const data = result.data || [];
+                const tbody = document.getElementById('notifierTable');
+                
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-gray-400">暂无通知配置</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.map(n => {
+                    const templateBadge = n.has_template 
+                        ? '<span class="bg-green-50 text-green-600 px-2 py-0.5 rounded text-xs"><i class="fas fa-check mr-1"></i>已配置</span>'
+                        : '<span class="bg-red-50 text-red-600 px-2 py-0.5 rounded text-xs"><i class="fas fa-times mr-1"></i>未配置</span>';
+                    
+                    // 无模板时禁用启用开关
+                    const toggleDisabled = !n.has_template;
+                    const toggleTitle = toggleDisabled ? '请先配置通知模板' : '';
+                    
+                    // Webhook URL 脱敏：key= 后面的内容用 **** 替代
+                    const displayUrl = n.webhook_url ? n.webhook_url.replace(/key=[\w-]+/, 'key=****') : '-';
+                    
+                    return `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 text-sm font-medium">${n.name}</td>
+                            <td class="px-6 py-4 text-sm font-mono text-gray-600">${displayUrl}</td>
+                            <td class="px-6 py-4 text-center">${templateBadge}</td>
+                            <td class="px-6 py-4 text-center">
+                                <label class="switch ${toggleDisabled ? 'switch-disabled' : ''}" title="${toggleTitle}">
+                                    <input type="checkbox" ${n.enabled ? 'checked' : ''} ${toggleDisabled ? 'disabled' : ''} onchange="toggleNotifier(${n.id}, this.checked)">
+                                    <span class="slider"></span>
+                                </label>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <button onclick="editTemplate(${n.id})" class="text-purple-600 hover:text-purple-700 text-sm mr-3">
+                                    <i class="fas fa-file-alt mr-1"></i>通知模板
+                                </button>
+                                <button onclick="editNotifier(${n.id})" class="text-gray-600 hover:text-gray-800 text-sm mr-3">编辑</button>
+                                <button onclick="testNotifier(${n.id})" class="text-green-600 hover:text-green-700 text-sm mr-3">测试</button>
+                                <button onclick="openDeleteModal(${n.id})" class="text-red-600 hover:text-red-700 text-sm">删除</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (e) {
+                console.error('loadNotifiers failed:', e);
+                document.getElementById('notifierTable').innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-red-400">加载失败</td></tr>';
+            }
+        }
+
+        async function loadProjects() {
+            try {
+                const resp = await apiFetch('/api/v1/projects');
+                const result = await resp.json();
+                const data = result.data || [];
+                const select = document.getElementById('notifierProject');
+                select.innerHTML = '<option value="">全局（所有项目）</option>';
+                data.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = p.name;
+                    select.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('loadProjects failed:', e);
+            }
+        }
+
+        function openCreateModal() {
+            isEdit = false;
+            document.getElementById('modalTitle').textContent = '新建通知配置';
+            document.getElementById('notifierId').value = '';
+            document.getElementById('notifierName').value = '';
+            document.getElementById('notifierUrl').value = '';
+            document.getElementById('notifierProject').value = '';
+            showModal('notifierModal');
+        }
+
+        async function editNotifier(id) {
+            try {
+                const resp = await apiFetch(`/api/v1/notifiers/${id}`);
+                const result = await resp.json();
+                const n = result.data;
+                if (!n) return;
+
+                isEdit = true;
+                document.getElementById('modalTitle').textContent = '编辑通知配置';
+                document.getElementById('notifierId').value = n.id;
+                document.getElementById('notifierName').value = n.name;
+                document.getElementById('notifierUrl').value = n.webhook_url || '';
+                document.getElementById('notifierUrl').type = 'password';
+                document.getElementById('urlEyeIcon').className = 'fas fa-eye';
+                document.getElementById('notifierProject').value = n.project_id || '';
+                showModal('notifierModal');
+            } catch (e) {
+                alert('加载失败: ' + e.message);
+            }
+        }
+
+        async function saveNotifier() {
+            const name = document.getElementById('notifierName').value.trim();
+            const key = document.getElementById('notifierUrl').value.trim();
+            
+            if (!name) {
+                alert('请输入配置名称');
+                return;
+            }
+            if (!isEdit && !key) {
+                alert('请输入 Webhook Url');
+                return;
+            }
+
+            const data = {
+                name: name,
+                webhook_url: key,
+                project_id: document.getElementById('notifierProject').value ? parseInt(document.getElementById('notifierProject').value) : null,
+            };
+
+            try {
+                let url = '/api/v1/notifiers';
+                let method = 'POST';
+                if (isEdit) {
+                    url = `/api/v1/notifiers/${document.getElementById('notifierId').value}`;
+                    method = 'PUT';
+                }
+
+                const resp = await apiFetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (resp.ok) {
+                    hideModal('notifierModal');
+                    loadNotifiers();
+                    showToast(isEdit ? '更新成功' : '创建成功', 'success');
+                } else {
+                    const err = await resp.json();
+                    alert('保存失败: ' + (err.error || '未知错误'));
+                }
+            } catch (e) {
+                alert('保存失败: ' + e.message);
+            }
+        }
+
+        async function editTemplate(id) {
+            templateNotifierId = id;
+            try {
+                const resp = await apiFetch(`/api/v1/notifiers/${id}`);
+                const result = await resp.json();
+                const n = result.data;
+                if (!n) return;
+
+                document.getElementById('templateNotifierId').value = id;
+                document.getElementById('messageTemplate').value = n.message_template || '';
+                updatePreview();
+                showModal('templateModal');
+            } catch (e) {
+                alert('加载失败: ' + e.message);
+            }
+        }
+
+        function insertVariable(variable) {
+            const textarea = document.getElementById('messageTemplate');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const text = textarea.value;
+            textarea.value = text.substring(0, start) + variable + text.substring(end);
+            textarea.selectionStart = textarea.selectionEnd = start + variable.length;
+            textarea.focus();
+            updatePreview();
+        }
+
+        function updatePreview() {
+            const template = document.getElementById('messageTemplate').value || '';
+            let preview = template
+                .replace(/{{PROJECT_NAME}}/g, 'Kube-CC')
+                .replace(/{{DEVELOPER}}/g, 'johndoe(张三)')
+                .replace(/{{BRANCH}}/g, 'feature/login -> main')
+                .replace(/{{SCORE}}/g, '85')
+                .replace(/{{CHANGES}}/g, '+120/-45')
+                .replace(/{{MR_TITLE}}/g, 'feat: 新增登录功能')
+                .replace(/{{MR_URL}}/g, 'https://gitlab.example.com/project/-/merge_requests/123');
+            
+            if (preview === '') {
+                preview = '**🔍 AI 代码评审完成**\n\n**项目：** Kube-CC\n**开发人员：** johndoe(张三)\n**分支：** feature/login -> main\n**分数：** **85** 分\n**变更：** +120/-45\n**MR：** feat: 新增登录功能\n**MR 链接：** https://gitlab.example.com/project/-/merge_requests/123';
+            }
+            
+            document.getElementById('templatePreview').innerHTML = marked.parse(preview, { breaks: true, gfm: true });
+        }
+
+        document.getElementById('messageTemplate').addEventListener('input', updatePreview);
+
+        async function saveTemplate() {
+            if (!templateNotifierId) return;
+            
+            const template = document.getElementById('messageTemplate').value;
+            
+            try {
+                const resp = await apiFetch(`/api/v1/notifiers/${templateNotifierId}/template`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message_template: template })
+                });
+
+                if (resp.ok) {
+                    hideModal('templateModal');
+                    loadNotifiers();
+                    showToast('模板保存成功', 'success');
+                } else {
+                    const err = await resp.json();
+                    alert('保存失败: ' + (err.error || '未知错误'));
+                }
+            } catch (e) {
+                alert('保存失败: ' + e.message);
+            }
+        }
+
+        function openDeleteModal(id) {
+            deleteId = id;
+            showModal('deleteModal');
+        }
+
+        async function confirmDelete() {
+            if (!deleteId) return;
+            try {
+                const resp = await apiFetch(`/api/v1/notifiers/${deleteId}`, { method: 'DELETE' });
+                if (resp.ok) {
+                    hideModal('deleteModal');
+                    loadNotifiers();
+                } else {
+                    alert('删除失败');
+                }
+            } catch (e) {
+                alert('删除失败: ' + e.message);
+            }
+            deleteId = null;
+        }
+
+        async function toggleNotifier(id, enabled) {
+            try {
+                const resp = await apiFetch(`/api/v1/notifiers/${id}/toggle`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: enabled })
+                });
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    alert('操作失败: ' + (err.error || '未知错误'));
+                    loadNotifiers(); // 刷新恢复原状态
+                }
+            } catch (e) {
+                alert('操作失败: ' + e.message);
+                loadNotifiers();
+            }
+        }
+
+        async function testNotifier(id) {
+            const resp = await apiFetch(`/api/v1/notifiers/${id}/test`, { method: 'POST' });
+            const result = await resp.json();
+            if (resp.ok) {
+                showToast(result.message || '测试消息发送成功', 'success');
+            } else {
+                showToast('测试失败: ' + (result.error || '未知错误'), 'error');
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+            const toast = document.createElement('div');
+            toast.className = `fixed top-4 right-4 ${colors[type] || colors.info} text-white px-4 py-2 rounded-lg shadow-lg z-50 transition-opacity duration-300`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+        }
+
+        // 初始化
+        loadNotifiers();
+        loadProjects();
+    </script>
+</body>
+</html>

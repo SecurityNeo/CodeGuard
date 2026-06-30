@@ -1,0 +1,1619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务列表 - CodeGuard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/auth.js?v=4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/diff.min.js"></script>
+    <style>
+        .sidebar-item:hover { background-color: rgba(255,255,255,0.1); }
+        .sidebar-item.active { background-color: rgba(255,255,255,0.15); border-left: 3px solid #3b82f6; }
+        .status-badge {
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status-pending { background-color: #fef3c7; color: #92400e; }
+        .status-running { background-color: #dbeafe; color: #1e40af; }
+        .status-success { background-color: #d1fae5; color: #065f46; }
+        .status-failed { background-color: #fee2e2; color: #991b1b; }
+        .status-timeout { background-color: #fce7f3; color: #9d174d; }
+        .status-stopped { background-color: #f3f4f6; color: #6b7280; }
+        .task-type-badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .task-type-badge.chat { background-color: #e0e7ff; color: #4338ca; }
+        .task-type-badge.review { background-color: #f3e8ff; color: #7c3aed; }
+        .modal { display: none; }
+        .modal.active { display: flex; }
+        #logContent { color: #e5e7eb; }
+        #logContent h1 { font-size: 1.5em; font-weight: bold; margin: 15px 0 10px; color: #60a5fa; }
+        #logContent h2 { font-size: 1.3em; font-weight: bold; margin: 14px 0 8px; color: #60a5fa; }
+        #logContent h3 { font-size: 1.1em; font-weight: bold; margin: 12px 0 6px; color: #60a5fa; }
+        #logContent ul { list-style-type: disc; padding-left: 20px; }
+        #logContent ol { list-style-type: decimal; padding-left: 20px; }
+        #logContent li { margin: 5px 0; }
+        #logContent p { margin: 10px 0; }
+        #logContent table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+        #logContent th, #logContent td { border: 1px solid #4b5563; padding: 8px; text-align: left; }
+        #logContent th { background-color: #374151; }
+        #logContent tr:nth-child(even) { background-color: #1f2937; }
+        #logContent code { background-color: #374151; padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+        #logContent pre { background-color: #111827; color: #e5e7eb; padding: 16px; border-radius: 8px; overflow-x: auto; margin: 12px 0; border: 2px solid #374151; box-shadow: 0 2px 8px rgba(0,0,0,0.3); position: relative; }
+        #logContent pre code { background: none; padding: 0; color: #e5e7eb; }
+        #logContent pre::before { content: "Diff"; position: absolute; top: 0; right: 0; background: #374151; color: #9ca3af; padding: 2px 10px; font-size: 10px; border-bottom-left-radius: 8px; border-top-right-radius: 8px; z-index: 1; }
+        #logContent .hljs-addition { color: #86efac; background-color: rgba(34,197,94,0.15); display: block; }
+        #logContent .hljs-deletion { color: #fca5a5; background-color: rgba(239,68,68,0.15); display: block; }
+        #logContent .hljs-meta { color: #93c5fd; }
+        #logContent hr { border-top: 1px solid #4b5563; margin: 15px 0; }
+        #logContent a { color: #60a5fa; text-decoration: underline; }
+
+        /* markdown-body: 渲染 Markdown 完整样式 */
+        .markdown-body { line-height: 1.6; }
+        .markdown-body h1 { font-size: 1.5em; font-weight: bold; margin: 16px 0 10px; color: #1f2937; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
+        .markdown-body h2 { font-size: 1.3em; font-weight: bold; margin: 14px 0 8px; color: #1f2937; }
+        .markdown-body h3 { font-size: 1.1em; font-weight: bold; margin: 12px 0 6px; color: #1f2937; }
+        .markdown-body h4, .markdown-body h5, .markdown-body h6 { font-weight: bold; margin: 10px 0 4px; color: #374151; }
+        .markdown-body p { margin: 8px 0; }
+        .markdown-body ul { list-style-type: disc; padding-left: 24px; margin: 8px 0; }
+        .markdown-body ol { list-style-type: decimal; padding-left: 24px; margin: 8px 0; }
+        .markdown-body li { margin: 4px 0; }
+        .markdown-body table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 0.9em; }
+        .markdown-body th, .markdown-body td { border: 1px solid #d1d5db; padding: 8px 12px; text-align: left; }
+        .markdown-body th { background-color: #f3f4f6; font-weight: 600; }
+        .markdown-body tr:nth-child(even) { background-color: #f9fafb; }
+        .markdown-body code { background-color: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 0.9em; color: #ef4444; }
+        .markdown-body pre { background-color: #1f2937; color: #e5e7eb; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 10px 0; border: 2px solid #4b5563; box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: relative; }
+        .markdown-body pre code { background: none; padding: 0; color: #e5e7eb; }
+        .markdown-body pre::before { content: "Diff"; position: absolute; top: -1px; right: -1px; background: #374151; color: #9ca3af; padding: 2px 8px; font-size: 10px; border-bottom-left-radius: 8px; border-top-right-radius: 8px; }
+
+        /* diff 代码块行级高亮 */
+        .markdown-body .hljs-addition { color: #86efac; background-color: rgba(34,197,94,0.1); display: block; }
+        .markdown-body .hljs-deletion { color: #fca5a5; background-color: rgba(239,68,68,0.1); display: block; }
+        .markdown-body .hljs-meta { color: #93c5fd; }
+        .markdown-body .hljs-comment { color: #6b7280; font-style: italic; }
+        .markdown-body blockquote { border-left: 4px solid #e5e7eb; padding-left: 12px; margin: 10px 0; color: #6b7280; }
+        .markdown-body hr { border: none; border-top: 1px solid #e5e7eb; margin: 16px 0; }
+        .markdown-body a { color: #2563eb; text-decoration: underline; }
+        .markdown-body strong { font-weight: 700; }
+        .markdown-body em { font-style: italic; }
+        .markdown-body img { max-width: 100%; border-radius: 6px; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <div class="flex h-screen">
+        <!-- 侧边栏 -->
+        <aside class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
+            <div class="p-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-robot text-xl"></i>
+                    </div>
+                    <div><h1 class="font-bold text-lg">CodeGuard</h1><p class="text-xs text-gray-400">代码智能门禁</p></div>
+                </div>
+            </div>
+            <nav class="flex-1 px-3 py-4 space-y-1">
+                <a href="statistics.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-chart-line w-5"></i><span>首页</span>
+                </a>
+                <a href="mr-stats.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-code-branch w-5"></i><span>代码提交统计</span>
+                </a>
+                <a href="projects.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-folder-open w-5"></i><span>项目管理</span>
+                </a>
+                <a href="tasks.html" class="sidebar-item active flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-tasks w-5"></i><span>任务列表</span>
+                </a>
+                <a href="pools.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-server w-5"></i><span>任务资源池</span>
+                </a>
+                <a href="models.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-brain w-5"></i><span>大模型管理</span>
+                </a>
+                <div class="space-y-1">
+                    <div class="flex items-center justify-between px-4 py-3 rounded-lg text-sm cursor-pointer" onclick="toggleNotifyMenu()">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-bell w-5"></i><span>通知管理</span>
+                        </div>
+                        <i class="fas fa-chevron-down text-xs transition-transform" id="notifyMenuIcon"></i>
+                    </div>
+                    <div id="notifyMenu" class="hidden pl-10 space-y-1">
+                        <a href="notifiers.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">企业微信</a>
+                        <a href="mail.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">邮件</a>
+                        <a href="member-mappings.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">成员映射</a>
+                        <a href="report.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">报告管理</a>
+                    </div>
+                </div>
+                <a href="settings.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-cog w-5"></i><span>系统管理</span>
+                </a>
+            </nav>
+            <div class="p-4 border-t border-slate-700">
+                <div class="flex items-center gap-3 cursor-pointer" id="userMenuTrigger" onclick="toggleUserMenu()">
+                    <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center"><i class="fas fa-user text-sm"></i></div>
+                    <div class="text-sm flex-1">
+                        <div class="font-medium" id="currentUser">管理员</div>
+                        <div class="text-xs text-gray-400">管理后台</div>
+                    </div>
+                    <i class="fas fa-chevron-down text-xs text-gray-400"></i>
+                </div>
+                <div id="userMenu" class="hidden mt-2 bg-slate-800 rounded-lg py-1">
+                    <button onclick="showChangePasswordModal()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
+                        <i class="fas fa-key w-5"></i>修改密码
+                    </button>
+                    <button onclick="logout()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
+                        <i class="fas fa-sign-out-alt w-5"></i>退出登录
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 overflow-y-auto">
+            <header class="bg-white border-b px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-800">任务列表</h2>
+                    <p class="text-sm text-gray-500 mt-1">查看所有AI任务执行记录与状态</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="text-sm text-gray-500">运行中: <span id="runningCount" class="text-blue-600 font-medium">-</span></span>
+                    <span class="text-sm text-gray-500">|</span>
+                    <span class="text-sm text-gray-500">今日: <span id="todayCount" class="text-green-600 font-medium">-</span></span>
+                </div>
+            </header>
+
+            <div class="p-8 space-y-6">
+                <!-- 筛选区 -->
+                <div class="bg-white rounded-xl p-4 border flex items-center justify-end gap-4 flex-wrap">
+                    <select id="projectFilter" class="px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <option value="">所有项目</option>
+                    </select>
+                    <select id="statusFilter" class="px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <option value="">所有状态</option>
+                        <option value="pending">待处理</option>
+                        <option value="running">运行中</option>
+                        <option value="success">成功</option>
+                        <option value="failed">失败</option>
+                    </select>
+                    <select id="timeFilter" class="px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <option value="">所有时间</option>
+                        <option value="today">今日</option>
+                        <option value="7d">近7日</option>
+                        <option value="30d">近30日</option>
+                    </select>
+                    <div class="flex gap-2">
+                        <input type="text" id="authorFilter" placeholder="开发人员" class="w-32 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <input type="text" id="mrFilter" placeholder="MR ID" class="w-28 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <button onclick="filterTasks()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">
+                        <i class="fas fa-search mr-1"></i>查询
+                    </button>
+                    <button onclick="refreshTasks()" class="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm hover:bg-gray-200">
+                        <i class="fas fa-redo mr-1"></i>刷新
+                    </button>
+                </div>
+
+                <!-- 任务表格 -->
+                <div class="bg-white rounded-xl border overflow-hidden">
+                    <table class="w-full">
+                        <thead class="bg-gray-50 border-b">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">任务ID</th>
+                                <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">类型</th>
+                                <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">触发方式</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">所属项目</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">MR ID</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">开发人员</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">代码分支</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">资源池/大模型</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">耗时</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">创建时间</th>
+                                <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">状态</th>
+                                <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500">操作</th>
+                            </tr>
+                        </thead>
+<tbody id="tasksBody" class="divide-y divide-gray-100">
+                        </tbody>
+                    </table>
+                    <div class="px-6 py-4 border-t flex items-center justify-between">
+                        <span id="totalCount" class="text-sm text-gray-500">共 0 条记录</span>
+                        <div class="flex items-center gap-4">
+                            <select id="pageSizeSelect" onchange="changePageSize()" class="px-2 py-1 border rounded text-sm">
+                                <option value="10" selected>10条/页</option>
+                                <option value="20">20条/页</option>
+                                <option value="50">50条/页</option>
+                            </select>
+                            <div id="pagination" class="flex gap-2"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 任务详情弹窗 -->
+    <div id="taskDetailModal" class="modal fixed inset-0 bg-black/50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl w-[700px] max-h-[85vh] flex flex-col">
+            <div class="px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
+                <h3 class="font-bold text-lg">任务详情 <span id="detailTaskId">#1024</span></h3>
+                <button onclick="hideModal('taskDetailModal')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-6 space-y-5 overflow-y-auto flex-1">
+                <!-- 基本信息组 -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="text-xs font-medium text-gray-500 mb-3 uppercase tracking-wider"><i class="fas fa-info-circle mr-1"></i>基本信息</h4>
+                    <div class="grid grid-cols-4 gap-4">
+                        <div>
+                            <label class="text-xs text-gray-400">评分</label>
+                            <div class="font-medium text-sm" id="detailScore">-</div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">状态</label>
+                            <div id="detailStatus">-</div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">任务类型</label>
+                            <div id="detailTaskType">-</div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">触发方式</label>
+                            <div class="font-medium text-sm" id="detailTrigger">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MR信息组 -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="text-xs font-medium text-gray-500 mb-3 uppercase tracking-wider"><i class="fas fa-code-branch mr-1"></i>MR 信息</h4>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="text-xs text-gray-400">项目</label>
+                            <div class="font-medium text-sm" id="detailProject">-</div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">MR 编号</label>
+                            <div class="font-medium text-sm" id="detailMR">-</div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">作者</label>
+                            <div class="font-medium text-sm" id="detailAuthor">-</div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">源分支</label>
+                            <div class="font-mono text-xs text-blue-600" id="detailSourceBranch">-</div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">目标分支</label>
+                            <div class="font-mono text-xs text-blue-600" id="detailTargetBranch">-</div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">资源池/大模型</label>
+                            <div class="font-medium text-sm" id="detailPool">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 执行信息组 -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="text-xs font-medium text-gray-500 mb-3 uppercase tracking-wider"><i class="fas fa-clock mr-1"></i>执行信息</h4>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="text-xs text-gray-400">耗时</label>
+                            <div class="font-medium text-sm" id="detailDuration">-</div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">创建时间</label>
+                            <div class="font-medium text-sm" id="detailCreated">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="errorMsgContainer" class="hidden">
+                    <label class="text-xs text-gray-500 font-medium">错误信息</label>
+                    <div class="mt-2 p-3 bg-red-50 rounded-lg text-sm border border-red-100 text-red-700" id="detailErrorMsg">
+                        -
+                    </div>
+                </div>
+
+                <!-- AI 评审内容展示 -->
+                <div id="detailContentContainer" class="hidden">
+                    <label class="text-xs text-gray-500 font-medium">评审内容</label>
+                    <div class="mt-2 p-3 bg-gray-50 rounded-lg text-sm border border-gray-100 max-h-[400px] overflow-y-auto markdown-body" id="detailContentBody">-</div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end gap-3">
+                <button onclick="hideModal('taskDetailModal')" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">关闭</button>
+            </div>
+        </div>
+    </div>
+
+<!-- 查看详情弹窗 -->
+    <div id="logModal" class="modal fixed inset-0 bg-black/50 items-center justify-center z-50">
+        <div class="bg-gray-900 rounded-xl w-[900px] max-h-[80vh] flex flex-col">
+            <div class="px-6 py-4 border-b border-gray-700 flex items-center justify-between text-white">
+                <h3 class="font-bold">查看详情 #<span id="logTaskId"></span></h3>
+                <button onclick="hideModal('logModal')" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="flex-1 p-4 overflow-y-auto">
+                <div id="logContent" class="text-sm text-green-400 leading-relaxed"></div>
+            </div>
+            <div class="px-6 py-3 border-t border-gray-700 flex justify-end">
+                <button onclick="hideModal('logModal')" class="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-600">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查看对话弹窗 -->
+    <div id="messagesModal" class="modal fixed inset-0 bg-black/50 items-center justify-center z-50">
+        <div class="bg-gray-50 rounded-xl w-[900px] max-h-[92vh] flex flex-col shadow-2xl">
+            <div class="px-6 py-3 border-b bg-white flex items-center justify-between rounded-t-xl">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-comments text-blue-600 text-lg"></i>
+                    <h3 class="font-bold text-gray-800">AI 对话</h3>
+                    <span id="messagesMeta" class="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full"></span>
+                    <span id="messagesSessionId" class="text-xs text-gray-400"></span>
+                </div>
+                <button onclick="hideModal('messagesModal')" class="text-gray-400 hover:text-gray-600 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="messagesContent" class="flex-1 p-4 overflow-y-auto space-y-4">
+                <!-- 动态渲染 -->
+            </div>
+            <div class="px-6 py-3 border-t bg-white flex items-center gap-3 rounded-b-xl">
+                <textarea id="messageInput" rows="2" class="flex-1 px-3 py-2 border rounded-lg text-sm resize-none" placeholder="输入消息... (Shift+Enter换行，Enter发送)" onkeydown="handleMessageKeydown(event)"></textarea>
+                <button id="sendMessageBtn" onclick="sendMessage()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors">
+                    <i class="fas fa-paper-plane"></i> 发送
+                </button>
+                <span id="sendStatus" class="text-xs text-blue-500 ml-2"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+const API_BASE = '/api/v1';
+        let tasksData = [];
+        let currentPage = 1;
+        let pageSize = 10;
+        let totalPages = 1;
+        let totalCount = 0;
+
+        async function loadProjectFilter() {
+            try {
+                const resp = await apiFetch('/api/v1/projects?limit=999');
+                const result = await resp.json();
+                const data = result.data || [];
+                const select = document.getElementById('projectFilter');
+                // 保留第一项“所有项目”
+                select.innerHTML = '<option value="">所有项目</option>';
+                data.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = p.name;
+                    select.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('loadProjectFilter failed:', e);
+            }
+        }
+
+        async function loadTasks() {
+            const statusFilter = document.getElementById('statusFilter').value;
+            const projectFilter = document.getElementById('projectFilter').value;
+            const timeFilter = document.getElementById('timeFilter').value;
+            const authorFilter = document.getElementById('authorFilter').value.trim();
+            const mrFilter = document.getElementById('mrFilter').value.trim();
+            
+            let url = `/api/v1/tasks?page=${currentPage}&page_size=${pageSize}`;
+            if (statusFilter) url += `&status=${statusFilter}`;
+            if (projectFilter) url += `&project_id=${projectFilter}`;
+            if (timeFilter) url += `&time_filter=${timeFilter}`;
+            if (authorFilter) url += `&author=${encodeURIComponent(authorFilter)}`;
+            if (mrFilter) url += `&mr_iid=${encodeURIComponent(mrFilter)}`;
+
+            console.log('Loading tasks from:', url);
+            try {
+                const res = await apiFetch(url);
+                console.log('Response status:', res.status);
+                const data = await res.json();
+                console.log('Tasks data:', data);
+                tasksData = data.data || [];
+                totalCount = data.total || 0;
+                totalPages = Math.ceil(totalCount / pageSize) || 1;
+                renderTasks(tasksData);
+                renderPagination();
+                document.getElementById('totalCount').textContent = `共 ${totalCount} 条记录`;
+            } catch (e) {
+                console.error('加载失败:', e);
+            }
+        }
+
+        function renderPagination() {
+            const pagination = document.getElementById('pagination');
+            if (!pagination) return;
+
+            const page = currentPage;
+            const pages = totalPages;
+            if (pages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+            // 上一页
+            html += `<button class="px-3 py-1 border rounded text-sm ${page <= 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'}" ${page <= 1 ? 'disabled' : ''} onclick="goToPage(${page - 1})">上一页</button>`;
+
+            // 首页
+            if (page > 3) {
+                html += `<button class="px-3 py-1 border rounded text-sm text-gray-500 hover:bg-gray-50" onclick="goToPage(1)">1</button>`;
+                if (page > 4) {
+                    html += `<span class="px-2 py-1 text-gray-400">...</span>`;
+                }
+            }
+
+            // 中间页码（以当前页为中心，最多5个）
+            let start = Math.max(1, page - 2);
+            let end = Math.min(pages, page + 2);
+            if (end - start < 4) {
+                if (start === 1) {
+                    end = Math.min(pages, start + 4);
+                } else if (end === pages) {
+                    start = Math.max(1, end - 4);
+                }
+            }
+            for (let i = start; i <= end; i++) {
+                html += `<button class="px-3 py-1 border rounded text-sm ${i === page ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}" onclick="goToPage(${i})">${i}</button>`;
+            }
+
+            // 尾页
+            if (page < pages - 2) {
+                if (page < pages - 3) {
+                    html += `<span class="px-2 py-1 text-gray-400">...</span>`;
+                }
+                html += `<button class="px-3 py-1 border rounded text-sm text-gray-500 hover:bg-gray-50" onclick="goToPage(${pages})">${pages}</button>`;
+            }
+
+            // 下一页
+            html += `<button class="px-3 py-1 border rounded text-sm ${page >= pages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'}" ${page >= pages ? 'disabled' : ''} onclick="goToPage(${page + 1})">下一页</button>`;
+
+            pagination.innerHTML = html;
+        }
+
+        function goToPage(page) {
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            loadTasks();
+        }
+
+        function changePageSize() {
+            pageSize = parseInt(document.getElementById('pageSizeSelect').value);
+            currentPage = 1;
+            loadTasks();
+        }
+
+        async function loadStats() {
+            try {
+                const res = await apiFetch('/api/v1/dashboard/stats');
+                const data = await res.json();
+                document.getElementById('runningCount').textContent = data.running_tasks || 0;
+                document.getElementById('todayCount').textContent = data.today_tasks || 0;
+            } catch (e) {
+                console.error('加载统计失败:', e);
+            }
+        }
+
+function renderTasks(tasks) {
+            const tbody = document.getElementById('tasksBody');
+            if (tasks.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="12" class="px-4 py-8 text-center text-gray-500">暂无数据</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = tasks.map(t => {
+                const isReview = t.task_type === 'review';
+                return `<tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 text-sm font-mono text-gray-600 cursor-pointer" onclick="showTaskDetail(${t.id})">#${t.id}</td>
+                    <td class="px-4 py-3 text-center cursor-pointer" onclick="showTaskDetail(${t.id})"><span class="task-type-badge ${isReview ? 'review' : 'chat'}">${getTaskTypeText(t.task_type)}</span></td>
+                    <td class="px-4 py-3 text-center cursor-pointer" onclick="showTaskDetail(${t.id})">${getTriggerSourceBadge(t.trigger_source, t.score_value)}</td>
+                    <td class="px-4 py-3 text-sm cursor-pointer" onclick="showTaskDetail(${t.id})">${t.project?.name || '-'}</td>
+                    <td class="px-4 py-3 text-sm cursor-pointer" onclick="showTaskDetail(${t.id})">${t.mr_iid ? '<a href="' + (t.mr_url || '#') + '" target="_blank" class="text-blue-600 hover:underline">' + t.mr_iid + '</a>' : '-'}</td>
+                    <td class="px-4 py-3 text-sm cursor-pointer" onclick="showTaskDetail(${t.id})">${t.author || '-'}</td>
+                    <td class="px-4 py-3 text-sm font-mono text-xs text-blue-600 cursor-pointer" onclick="showTaskDetail(${t.id})">${t.source_branch || '-'}->${t.target_branch || '-'}</td>
+                    <td class="px-4 py-3 text-sm cursor-pointer" onclick="showTaskDetail(${t.id})">${isReview
+                        ? getModelTag(t.used_model) || (t.model_id > 0 ? '模型#' + t.model_id : '<span class="text-gray-400">--</span>')
+                        : (t.pool?.name || '-')}</td>
+                    <td class="px-4 py-3 text-sm cursor-pointer" onclick="showTaskDetail(${t.id})">${formatDuration(t.duration_sec)}</td>
+                    <td class="px-4 py-3 text-sm text-gray-500 cursor-pointer" onclick="showTaskDetail(${t.id})">${formatDate(t.created_at)}</td>
+                    <td class="px-4 py-3 text-center cursor-pointer" onclick="showTaskDetail(${t.id})"><span class="status-badge status-${t.status}">${getStatusText(t.status)}</span></td>
+                    <td class="px-4 py-3 text-center space-x-1">
+                        <button onclick="viewLogs(${t.id}); event.stopPropagation();" class="text-blue-600 hover:text-blue-700 text-sm">评审详情</button>
+                        ${!isReview && t.opencode_session_id ? `<button onclick="viewMessages(${t.id}); event.stopPropagation();" class="text-purple-600 hover:text-purple-700 text-sm">智能体</button>` : ''}
+                        ${!isReview && t.opencode_session_id ? `<button onclick="deleteTaskSession(${t.id}); event.stopPropagation();" class="text-red-500 hover:text-red-600 text-sm">删除会话</button>` : ''}
+                        ${t.status === 'running' ? `<button onclick="stopTask(${t.id}); event.stopPropagation();" class="text-red-600 hover:text-red-700 text-sm">停止</button>` : ''}
+                        ${(t.status === 'failed' || t.status === 'stopped' || t.status === 'timeout' || t.status === 'success') ? `<button onclick="retryTask(${t.id}); event.stopPropagation();" class="text-green-600 hover:text-green-700 text-sm">重试</button>` : ''}
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function getTaskTypeText(type) {
+            const map = { chat: '对话', review: 'AI评审' };
+            return map[type] || type || '对话';
+        }
+
+        function getStatusText(status) {
+            const map = { pending: '待处理', running: '运行中', success: '成功', failed: '失败', timeout: '超时', stopped: '已停止' };
+            return map[status] || status;
+        }
+
+        function getTriggerSourceBadge(source, score) {
+            if (source === 'score_threshold') {
+                return `<span class="bg-red-50 text-red-600 px-2 py-0.5 rounded text-xs">评分阈值${score ? ' · ' + score + '分' : ''}</span>`;
+            }
+            if (source === 'merge_request') {
+                return `<span class="bg-purple-50 text-purple-600 px-2 py-0.5 rounded text-xs">代码合并</span>`;
+            }
+            if (source === 'manual') {
+                return `<span class="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-xs">用户召唤</span>`;
+            }
+            return `<span class="bg-gray-50 text-gray-500 px-2 py-0.5 rounded text-xs">用户召唤</span>`;
+        }
+
+        function getModelTag(model) {
+            if (!model || !model.model_id) return '';
+            const purpleBadge = '<span class="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-xs font-medium">主</span>';
+            const orangeBadge = '<span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-xs font-medium">备用' + model.backup_order + '</span>';
+            if (model.is_primary) return `<span class="inline-flex items-center gap-1">${purpleBadge}<span class="text-gray-700">${model.model_id}</span></span>`;
+            if (model.backup_order > 0) return `<span class="inline-flex items-center gap-1">${orangeBadge}<span class="text-gray-700">${model.model_id}</span></span>`;
+            return model.model_id;
+        }
+
+        function formatDuration(sec) {
+            if (!sec) return '-';
+            if (sec < 60) return sec + 's';
+            const m = Math.floor(sec / 60);
+            const s = sec % 60;
+            return `${m}m ${s}s`;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            return d.toLocaleString('zh-CN');
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('active'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        async function showTaskDetail(id) {
+            try {
+                const res = await apiFetch(`${API_BASE}/tasks/${id}`);
+                const data = await res.json();
+                const t = data.data;
+                
+                const isReviewDetail = t.task_type === 'review';
+                document.getElementById('detailTaskId').textContent = '#' + t.id;
+                document.getElementById('detailProject').textContent = t.project?.name || '-';
+                document.getElementById('detailTaskType').innerHTML = `<span class="task-type-badge ${isReviewDetail ? 'review' : 'chat'}">${getTaskTypeText(t.task_type)}</span>`;
+                document.getElementById('detailMR').innerHTML = t.mr_iid ? `<a href="${t.mr_url}" target="_blank" class="text-blue-600 hover:underline">${t.mr_iid}</a>` : '-';
+                document.getElementById('detailAuthor').textContent = t.author || '-';
+                document.getElementById('detailStatus').innerHTML = `<span class="status-badge status-${t.status}">${getStatusText(t.status)}</span>`;
+                document.getElementById('detailScore').textContent = t.score_value > 0 ? t.score_value + '分' : '-';
+                document.getElementById('detailTrigger').innerHTML = getTriggerSourceBadge(t.trigger_source, t.score_value);
+                document.getElementById('detailSourceBranch').textContent = t.source_branch || '-';
+                document.getElementById('detailTargetBranch').textContent = t.target_branch || '-';
+                document.getElementById('detailPool').innerHTML = isReviewDetail
+                    ? getModelTag(t.used_model) || (t.model_id > 0 ? '模型#' + t.model_id : '--')
+                    : (t.pool?.name || '-');
+                document.getElementById('detailDuration').textContent = formatDuration(t.duration_sec);
+                document.getElementById('detailCreated').textContent = formatDate(t.created_at);
+                
+                // 显示错误信息
+                const errorContainer = document.getElementById('errorMsgContainer');
+                const errorMsgEl = document.getElementById('detailErrorMsg');
+                if (t.error_msg) {
+                    errorContainer.classList.remove('hidden');
+                    errorMsgEl.textContent = t.error_msg;
+                } else {
+                    errorContainer.classList.add('hidden');
+                }
+                
+                // 任务详情弹窗不展示评审内容
+                const contentContainer = document.getElementById('detailContentContainer');
+                contentContainer.classList.add('hidden');
+
+                showModal('taskDetailModal');
+            } catch (e) {
+                alert('加载失败: ' + e.message);
+            }
+        }
+
+        async function viewLogs(id) {
+            try {
+                const res = await apiFetch(`${API_BASE}/tasks/${id}`);
+                const data = await res.json();
+                const task = data.data;
+                
+                document.getElementById('logTaskId').textContent = id;
+                
+                let content = '';
+                
+                // 处理用户输入，过滤掉 @AI 前缀
+                let promptContent = task.ai_prompt || '';
+                if (promptContent) {
+                    promptContent = promptContent.replace(/^@AI\s*/i, '').trim();
+                }
+                
+                if (promptContent) {
+                    content += '<div class="mb-4"><div class="text-yellow-400 font-bold mb-2">【用户输入】</div><div class="text-white bg-gray-800 p-3 rounded">' + marked.parse(maskSensitive(promptContent)) + '</div></div>';
+                }
+                
+                // 显示 AI 回复
+                if (task.ai_response) {
+                    content += '<div class="mb-4"><div class="text-green-400 font-bold mb-2">【AI回复】</div><div class="text-white bg-gray-800 p-3 rounded">' + marked.parse(maskSensitive(task.ai_response)) + '</div></div>';
+                }
+                
+                // 任务失败时显示错误日志
+                if (task.status === 'failed' && task.error_msg) {
+                    content += '<div class="mt-4"><div class="text-red-400 font-bold mb-2">【失败日志】</div><div class="text-white bg-red-900 p-3 rounded">' + marked.parse(task.error_msg) + '</div></div>';
+                }
+                
+                if (!content) {
+                    content = '<div class="text-gray-500">暂无数据</div>';
+                }
+                
+                document.getElementById('logContent').innerHTML = content;
+                
+                // 高亮代码块
+                if (typeof hljs !== 'undefined') {
+                    document.getElementById('logContent').querySelectorAll('pre code').forEach(block => {
+                        hljs.highlightElement(block);
+                    });
+                }
+                
+                showModal('logModal');
+            } catch (e) {
+                alert('加载失败: ' + e.message);
+            }
+        }
+
+        // 查看 running 任务的实时对话消息（调用 OpenCode /session/session_id/message）
+        async function viewMessages(id) {
+            const contentEl = document.getElementById('messagesContent');
+            // 清理状态栏
+            const statusEl = document.getElementById('sendStatus');
+            if (statusEl) {
+                statusEl.textContent = '';
+                statusEl.className = 'text-xs text-blue-500 ml-2';
+            }
+            contentEl.innerHTML = '<div class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin mr-2"></i>加载对话中...</div>';
+            showModal('messagesModal');
+
+            // 先检查任务信息，确认是否有 session
+            let hasSession = false;
+            try {
+                const taskRes = await apiFetch(`${API_BASE}/tasks/${id}`);
+                const taskData = await taskRes.json();
+                const task = taskData.data;
+                if (task?.opencode_session_id) {
+                    hasSession = true;
+                    currentMessagesTaskId = id;
+                    document.getElementById('messagesSessionId').textContent = task.opencode_session_id;
+                } else {
+                    showToast('该任务没有关联的session记录', 'warning');
+                    contentEl.innerHTML = '<div class="text-center text-gray-400 py-8">该任务没有关联的 session 记录</div>';
+                    return;
+                }
+            } catch (e) {
+                showToast('获取任务信息失败: ' + e.message, 'error');
+                return;
+            }
+
+            try {
+                const res = await apiFetch(`${API_BASE}/tasks/${id}/messages`);
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || '加载失败');
+                }
+                const data = await res.json();
+                const messages = data.data || [];
+
+                if (messages.length === 0) {
+                    contentEl.innerHTML = '<div class="text-center text-gray-400 py-8">暂无对话记录</div>';
+                    document.getElementById('messagesMeta').textContent = '';
+                } else {
+                    renderMessages(messages);
+                }
+
+                // 无论是否有消息，都建立 SSE 实时连接
+                if (hasSession) {
+                    connectSSE(id);
+                }
+
+                // 滚动到底部
+                setTimeout(() => {
+                    contentEl.scrollTop = contentEl.scrollHeight;
+                }, 50);
+            } catch (e) {
+                contentEl.innerHTML = `<div class="text-center text-red-400 py-8"><i class="fas fa-exclamation-circle mr-2"></i>${e.message}</div>`;
+                document.getElementById('messagesMeta').textContent = '';
+            }
+        }
+
+        // 渲染 OpenCode 风格对话 (用户→右, AI→左, Markdown格式)
+        function renderMessages(messages) {
+            const contentEl = document.getElementById('messagesContent');
+            let totalInput = 0, totalOutput = 0;
+
+            const html = messages.map((msg, idx) => {
+                const role = msg.info?.role || 'unknown';
+                const isUser = role === 'user';
+
+                // 累计 token
+                if (msg.info?.tokens?.input) totalInput += msg.info.tokens.input;
+                if (msg.info?.tokens?.output) totalOutput += msg.info.tokens.output;
+
+                // ---- 头像与名称 ----
+                const avatar = isUser
+                    ? `<div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-xs shadow-sm flex-shrink-0"><i class="fas fa-user"></i></div>`
+                    : `<div class="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white text-xs shadow-sm flex-shrink-0"><i class="fas fa-robot"></i></div>`;
+                const name = isUser ? '你' : 'AI';
+
+                // ---- 解析 parts ----
+                const parts = msg.parts || [];
+                const sections = [];
+
+                parts.forEach(part => {
+                    switch (part.type) {
+                        case 'text':
+                            if (part.text) {
+                                sections.push({ type: 'text', html: marked.parse(part.text) });
+                            }
+                            break;
+                        case 'reasoning':
+                            if (part.text) {
+                                const rid = 'reasoning-' + idx + '-' + Math.random().toString(36).substr(2, 5);
+                                sections.push({
+                                    type: 'reasoning',
+                                    html: `<div class="my-2 rounded-lg overflow-hidden border border-yellow-200 w-full">
+                                        <div class="cursor-pointer bg-yellow-50 hover:bg-yellow-100 px-3 py-1.5 text-xs text-yellow-700 font-medium flex items-center justify-between transition-colors" onclick="toggleCollapse('${rid}')">
+                                            <span><i class="fas fa-brain mr-1"></i>思考过程</span>
+                                            <i class="fas fa-chevron-down text-yellow-500 transition-transform duration-200" id="${rid}-icon"></i>
+                                        </div>
+                                        <div id="${rid}" class="hidden">
+                                            <div class="p-3 text-sm text-gray-700 markdown-body">${marked.parse(part.text)}</div>
+                                        </div>
+                                    </div>`
+                                });
+                            }
+                            break;
+                        case 'tool': {
+                            const toolName = part.tool || 'tool';
+                            const tid = 'tool-' + idx + '-' + Math.random().toString(36).substr(2, 5);
+                            sections.push({
+                                type: 'tool',
+                                html: `<div class="my-1 rounded-lg overflow-hidden border border-gray-200 w-full">
+                                    <div class="cursor-pointer bg-gray-50 hover:bg-gray-100 px-3 py-1.5 text-xs text-gray-600 font-medium flex items-center justify-between transition-colors" onclick="toggleCollapse('${tid}')">
+                                        <span><i class="fas fa-wrench mr-1"></i>工具: ${escapeHtml(toolName)}</span>
+                                        <i class="fas fa-chevron-down text-gray-400 transition-transform duration-200" id="${tid}-icon"></i>
+                                    </div>
+                                    <div id="${tid}" class="hidden">
+                                        ${renderToolPart(part)}
+                                    </div>
+                                </div>`
+                            });
+                            break;
+                        }
+                        case 'step-start':
+                            sections.push({
+                                type: 'step-start',
+                                html: `<div class="my-1 flex items-center gap-2 text-xs text-gray-400"><i class="fas fa-play-circle text-blue-400"></i><span>步骤开始</span></div>`
+                            });
+                            break;
+                        case 'step-finish':
+                            sections.push({
+                                type: 'step-finish',
+                                html: `<div class="my-1 flex items-center gap-2 text-xs text-gray-400"><i class="fas fa-check-circle text-green-400"></i><span>步骤完成</span></div>`
+                            });
+                            break;
+                    }
+                });
+
+                // 如果没有任何内容，显示占位
+                if (sections.length === 0) {
+                    sections.push({ type: 'empty', html: '<span class="text-gray-400 italic text-sm">（无内容）</span>' });
+                }
+
+                // ---- 组装消息体 ----
+                const bodyHtml = sections.map(s => s.html).join('');
+
+                // 用户消息：右侧，蓝色；AI消息：左侧，白色卡片
+                // 注意：原先是 isUser ? justify-start : justify-end
+                // 现在反转为：isUser ? justify-end : justify-start
+                return `
+                    <div class="flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}">
+                        ${isUser ? '' : avatar}
+                        <div class="${isUser ? 'max-w-[720px] min-w-[80px]' : 'flex-1 min-w-0 max-w-[720px]'}">
+                            <div class="flex items-center gap-2 mb-1 ${isUser ? 'justify-end' : ''} text-xs text-gray-400">
+                                <span class="font-medium text-gray-600">${name}</span>
+                                ${msg.info?.finish ? `<span class="text-green-600 text-[10px] bg-green-50 px-1.5 py-0.5 rounded">${msg.info.finish}</span>` : ''}
+                            </div>
+                            <div class="bg-white text-gray-800 border border-gray-200 rounded-2xl ${isUser ? 'rounded-tr-sm' : 'rounded-tl-sm'} px-4 py-3 text-sm shadow-sm">
+                                <div class="markdown-body">${bodyHtml}</div>
+                            </div>
+                        </div>
+                        ${isUser ? avatar : ''}
+                    </div>
+                `;
+            }).join('');
+
+            contentEl.innerHTML = html;
+            document.getElementById('messagesMeta').textContent =
+                `${messages.length} 条 · In:${totalInput.toLocaleString()} · Out:${totalOutput.toLocaleString()}`;
+        }
+
+        // 渲染 tool 类型 part，根据 tool 名称不同展示不同格式
+        function renderToolPart(part) {
+            const tool = part.tool || '';
+            const state = part.state || {};
+            const title = state.title || '';
+
+            // 安全提取 input 值（处理对象/字符串/undefined 等）
+            const safeInput = state.input || {};
+            const inputStr = (typeof safeInput === 'string') ? safeInput : (safeInput.command || safeInput.pattern || safeInput.name || JSON.stringify(safeInput));
+
+            switch (tool) {
+                case 'read': {
+                    const output = state.output || '';
+                    return `
+                        <div class="my-2 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                            <div class="bg-gray-100 px-3 py-1.5 text-xs text-gray-600 flex items-center justify-between border-b border-gray-200">
+                                <span class="font-medium"><i class="fas fa-file-alt mr-1 text-blue-500"></i>读取文件${title ? ' · ' + escapeHtml(title) : ''}</span>
+                            </div>
+                            <pre class="bg-gray-900 text-gray-100 p-3 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(output)}</code></pre>
+                        </div>`;
+                }
+                case 'bash': {
+                    const output = state.output || '';
+                    const cmd = safeInput.command || inputStr || '';
+                    return `
+                        <div class="my-2 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                            <div class="bg-gray-800 px-3 py-1.5 text-xs text-gray-300 flex items-center justify-between">
+                                <span class="font-medium"><i class="fas fa-terminal mr-1 text-green-400"></i>Bash 终端</span>
+                                ${title ? `<span class="text-gray-500">${escapeHtml(title)}</span>` : ''}
+                            </div>
+                            <div class="p-0">
+                                <div class="bg-gray-900 border-b border-gray-700 px-3 py-1.5">
+                                    <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Input</div>
+                                    <pre class="text-gray-300 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(cmd)}</code></pre>
+                                </div>
+                                <div class="bg-gray-900 px-3 py-1.5">
+                                    <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Output</div>
+                                    <pre class="text-green-400 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(output)}</code></pre>
+                                </div>
+                            </div>
+                        </div>`;
+                }
+                case 'skill': {
+                    const output = state.output || '';
+                    const skillName = safeInput.name || 'Skill';
+                    return `
+                        <div class="my-2 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                            <div class="bg-purple-50 px-3 py-1.5 text-xs text-purple-700 flex items-center justify-between border-b border-purple-100">
+                                <span class="font-medium"><i class="fas fa-magic mr-1"></i>${escapeHtml(skillName)}</span>
+                                <span class="bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded text-[10px]">Skill</span>
+                            </div>
+                            <div class="bg-white p-3 text-sm text-gray-700 markdown-body">${marked.parse(output || '')}</div>
+                        </div>`;
+                }
+                case 'glob': {
+                    const output = state.output || '';
+                    const pattern = safeInput.pattern || inputStr || '';
+                    const path = safeInput.path || '';
+                    return `
+                        <div class="my-2 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                            <div class="bg-gray-100 px-3 py-1.5 text-xs text-gray-600 flex items-center justify-between border-b border-gray-200">
+                                <span class="font-medium"><i class="fas fa-search mr-1 text-orange-500"></i>文件搜索</span>
+                            </div>
+                            <div class="p-0">
+                                <div class="bg-white border-b border-gray-100 px-3 py-1.5">
+                                    <div class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Pattern</div>
+                                    <code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded text-gray-700">${escapeHtml(pattern)}</code>
+                                    ${path ? `<div class="mt-1 text-[10px] text-gray-400">Path: ${escapeHtml(path)}</div>` : ''}
+                                </div>
+                                <div class="bg-white px-3 py-1.5">
+                                    <div class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Matches</div>
+                                    <pre class="text-xs text-gray-700 overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(output)}</pre>
+                                </div>
+                            </div>
+                        </div>`;
+                }
+                case 'grep': {
+                    const output = state.output || '';
+                    const pattern = safeInput.pattern || inputStr || '';
+                    const path = safeInput.path || '';
+                    return `
+                        <div class="my-2 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                            <div class="bg-gray-800 px-3 py-1.5 text-xs text-gray-300 flex items-center justify-between border-b border-gray-700">
+                                <span class="font-medium"><i class="fas fa-search-plus mr-1 text-yellow-400"></i>内容搜索</span>
+                            </div>
+                            <div class="p-0">
+                                <div class="bg-gray-900 border-b border-gray-700 px-3 py-1.5">
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Pattern</div>
+                                            <code class="text-xs text-yellow-300 bg-gray-800 px-1.5 py-0.5 rounded">${escapeHtml(pattern)}</code>
+                                        </div>
+                                        <div>
+                                            <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Path</div>
+                                            <code class="text-xs text-blue-300 bg-gray-800 px-1.5 py-0.5 rounded">${escapeHtml(path)}</code>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-gray-900 px-3 py-1.5">
+                                    <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Matches</div>
+                                    <pre class="text-green-400 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(output)}</code></pre>
+                                </div>
+                            </div>
+                        </div>`;
+                }
+                case 'edit': {
+                    const output = state.output || '';
+                    const oldStr = safeInput.old_string || safeInput.oldString || '';
+                    const newStr = safeInput.new_string || safeInput.newString || '';
+                    const filePath = safeInput.path || safeInput.file || title || '';
+                    return `
+                        <div class="my-2 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                            <div class="bg-blue-50 px-3 py-1.5 text-xs text-blue-700 flex items-center justify-between border-b border-blue-100">
+                                <span class="font-medium"><i class="fas fa-edit mr-1 text-blue-500"></i>编辑文件${filePath ? ' · ' + escapeHtml(filePath) : ''}</span>
+                            </div>
+                            <div class="p-0">
+                                ${oldStr ? `
+                                <div class="bg-red-50 border-b border-red-100 px-3 py-1.5">
+                                    <div class="text-[10px] text-red-400 uppercase tracking-wider mb-1">移除</div>
+                                    <pre class="text-red-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(oldStr)}</pre>
+                                </div>` : ''}
+                                ${newStr ? `
+                                <div class="bg-green-50 border-b border-green-100 px-3 py-1.5">
+                                    <div class="text-[10px] text-green-400 uppercase tracking-wider mb-1">替换为</div>
+                                    <pre class="text-green-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(newStr)}</pre>
+                                </div>` : ''}
+                                ${output ? `
+                                <div class="bg-white px-3 py-1.5">
+                                    <div class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">结果</div>
+                                    <pre class="text-gray-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(output)}</pre>
+                                </div>` : ''}
+                            </div>
+                        </div>`;
+                }
+                case 'write': {
+                    const output = state.output || '';
+                    const content = safeInput.content || '';
+                    const filePath = safeInput.path || safeInput.file || title || '';
+                    return `
+                        <div class="my-2 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                            <div class="bg-indigo-50 px-3 py-1.5 text-xs text-indigo-700 flex items-center justify-between border-b border-indigo-100">
+                                <span class="font-medium"><i class="fas fa-file-code mr-1 text-indigo-500"></i>写入文件${filePath ? ' · ' + escapeHtml(filePath) : ''}</span>
+                            </div>
+                            <div class="p-0">
+                                ${content ? `
+                                <div class="bg-gray-50 border-b border-gray-100 px-3 py-1.5">
+                                    <div class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">内容</div>
+                                    <pre class="text-gray-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(content)}</code></pre>
+                                </div>` : ''}
+                                ${output ? `
+                                <div class="bg-white px-3 py-1.5">
+                                    <div class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">结果</div>
+                                    <pre class="text-gray-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(output)}</pre>
+                                </div>` : ''}
+                            </div>
+                        </div>`;
+                }
+                case 'patch': {
+                    const output = state.output || '';
+                    const diffContent = safeInput.diff || safeInput.patch || '';
+                    const filePath = safeInput.path || safeInput.file || title || '';
+                    return `
+                        <div class="my-2 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                            <div class="bg-teal-50 px-3 py-1.5 text-xs text-teal-700 flex items-center justify-between border-b border-teal-100">
+                                <span class="font-medium"><i class="fas fa-code-branch mr-1 text-teal-500"></i>应用 Patch${filePath ? ' · ' + escapeHtml(filePath) : ''}</span>
+                            </div>
+                            <div class="p-0">
+                                ${diffContent ? `
+                                <div class="bg-gray-900 border-b border-gray-700 px-3 py-1.5">
+                                    <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Diff</div>
+                                    <pre class="text-green-400 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-diff">${escapeHtml(diffContent)}</code></pre>
+                                </div>` : ''}
+                                ${output ? `
+                                <div class="bg-white px-3 py-1.5">
+                                    <div class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">结果</div>
+                                    <pre class="text-gray-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(output)}</pre>
+                                </div>` : ''}
+                            </div>
+                        </div>`;
+                }
+                default: {
+                    const output = state.output || JSON.stringify(state, null, 2);
+                    return `
+                        <div class="my-2 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                            <div class="bg-gray-100 px-3 py-1.5 text-xs text-gray-600 flex items-center justify-between border-b border-gray-200">
+                                <span class="font-medium"><i class="fas fa-cog mr-1 text-gray-500"></i>工具: ${escapeHtml(tool)}</span>
+                            </div>
+                            <pre class="bg-gray-900 text-gray-100 p-3 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(output)}</code></pre>
+                        </div>`;
+                }
+            }
+        }
+
+        // =============================================================================
+        // SSE 实时流式渲染（新增）
+        // =============================================================================
+
+        let currentMessagesTaskId = null;
+        let eventSource = null;
+
+        // 建立 SSE 连接订阅 OpenCode 实时事件
+        function connectSSE(taskId) {
+            // 关闭旧连接
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+
+            const token = localStorage.getItem('auth_token');
+            const url = `${API_BASE}/tasks/${taskId}/events`;
+            
+            eventSource = new EventSource(url + '?token=' + encodeURIComponent(token));
+            
+            // 维护 partID -> {type, tool, state} 映射，以及 partID -> accumulated text
+            const partTypeMap = {};
+            const partContentMap = {};
+
+            eventSource.onopen = () => {
+                console.log('SSE connected for task', taskId);
+                const statusEl = document.getElementById('sendStatus');
+                if (statusEl) {
+                    statusEl.textContent = '';
+                    statusEl.className = 'text-xs text-blue-500 ml-2';
+                }
+            };
+
+            // 连接确认事件
+            eventSource.addEventListener('connected', (e) => {
+                console.log('SSE channel confirmed for task', taskId);
+                const statusEl = document.getElementById('sendStatus');
+                if (statusEl) {
+                    statusEl.textContent = '';
+                    statusEl.className = 'text-xs text-blue-500 ml-2';
+                }
+            });
+
+            // 文本增量（reasoning / text）
+            eventSource.addEventListener('delta', (e) => {
+                let data;
+                try {
+                    data = JSON.parse(e.data);
+                } catch (err) {
+                    console.warn('delta fallback to plain text', err);
+                    appendStreamingMessage(e.data);
+                    return;
+                }
+
+                const { delta, partID, inferredType, tool, state } = data;
+                if (!partID) {
+                    appendStreamingMessage(delta);
+                    return;
+                }
+
+                // 缓存元数据
+                if (!partTypeMap[partID]) {
+                    partTypeMap[partID] = { type: inferredType || 'unknown', tool, state };
+                    console.log('part learned', partID, inferredType);
+                }
+
+                const meta = partTypeMap[partID];
+                partContentMap[partID] = (partContentMap[partID] || '') + delta;
+                appendStreamingDelta(delta, partID, meta, partContentMap);
+            });
+
+            // part_updated 事件（⭐ tool / reasoning 的完整元数据更新）
+            eventSource.addEventListener('part_updated', (e) => {
+                let data;
+                try {
+                    data = JSON.parse(e.data);
+                } catch (err) {
+                    console.warn('part_updated parse failed', e.data);
+                    return;
+                }
+
+                const { partID, type: inferredType, tool, state, text, time } = data;
+                if (!partID || !inferredType) return;
+
+                // 更新缓存（包含 time 信息）
+                partTypeMap[partID] = { type: inferredType, tool, state, time };
+
+                // reasoning 类型：如果 time.end 存在，标记为完成
+                if (inferredType === 'reasoning' && time && time.end > 0) {
+                    console.log('reasoning part completed', partID, 'duration:', time.end - time.start, 'ms');
+                    const indicator = document.getElementById('reasoning-stream-' + partID + '-indicator');
+                    if (indicator) {
+                        const durationMs = time.end - time.start;
+                        const durationSec = (durationMs / 1000).toFixed(1);
+                        indicator.innerHTML = `<i class="fas fa-check text-green-500 text-[10px]"></i><span class="text-green-500 text-[10px]">完成 · ${durationSec}s</span>`;
+                        indicator.classList.remove('reasoning-indicator'); // 移除 loading 检测类
+                    }
+                    return;
+                }
+
+                // tool 类型：立即渲染/更新工具卡片
+                if (inferredType === 'tool') {
+                    console.log('tool part_updated', partID, tool, state?.status);
+                    renderStreamingToolCard(partID, partTypeMap[partID]);
+                }
+                // reasoning/text：如果附带 text，更新内容
+                else if (text && (inferredType === 'reasoning' || inferredType === 'text')) {
+                    partContentMap[partID] = text;
+                    appendStreamingDelta('', partID, partTypeMap[partID], partContentMap);
+                }
+            });
+
+            // AI 回复完成
+            eventSource.addEventListener('finish', (e) => {
+                console.log('AI reply finished');
+                // 完成时移除 streaming-bubble id，使旧AI回复成为固定历史消息
+                const bubble = document.getElementById('streaming-bubble');
+                if (bubble) {
+                    bubble.removeAttribute('id');
+                    bubble.classList.add('ai-message-final');
+                    console.log('FINISH: bubble finalized, id removed');
+                }
+                // 将所有思考中的 reasoning indicator 替换为"完成"
+                document.querySelectorAll('.reasoning-indicator').forEach(indicator => {
+                    indicator.innerHTML = '<i class="fas fa-check text-green-500 text-[10px]"></i><span class="text-green-500 text-[10px]">完成</span>';
+                });
+                // 状态栏提示
+                const statusEl = document.getElementById('sendStatus');
+                if (statusEl) {
+                    statusEl.className = 'text-xs text-green-500 ml-2';
+                    statusEl.textContent = '';
+                }
+            });
+
+            // 错误
+            eventSource.addEventListener('error', (e) => {
+                console.error('SSE error event', e.data);
+                const statusEl = document.getElementById('sendStatus');
+                if (statusEl) {
+                    statusEl.textContent = '接收错误: ' + (e.data || '连接断开');
+                    statusEl.className = 'text-red-500';
+                }
+            });
+
+            eventSource.onerror = (e) => {
+                console.error('SSE connection error/closed', e);
+                // 兜底：如果 SSE 连接断开后仍有 reasoning 在 loading，标记为完成
+                const bubble = document.getElementById('streaming-bubble');
+                if (bubble) {
+                    console.log('SSE ended, finalizing reasoning indicators as fallback');
+                    bubble.querySelectorAll('.reasoning-indicator').forEach(indicator => {
+                        indicator.innerHTML = '<i class="fas fa-check text-green-500 text-[10px]"></i><span class="text-green-500 text-[10px]">完成</span>';
+                    });
+                    bubble.removeAttribute('id');
+                    bubble.classList.add('ai-message-final');
+                }
+            };
+        }
+
+        // ---- 简单纯文本追加（fallback） ----
+        function appendStreamingMessage(text) {
+            const contentEl = document.getElementById('messagesContent');
+            let bubble = document.getElementById('streaming-bubble');
+            if (!bubble) {
+                bubble = document.createElement('div');
+                bubble.id = 'streaming-bubble';
+                bubble.className = 'mb-4';
+                bubble.innerHTML = `
+                    <div class="flex gap-3 justify-start">
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white text-xs shadow-sm flex-shrink-0"><i class="fas fa-robot"></i></div>
+                        <div class="flex-1 min-w-0 max-w-[720px]">
+                            <div class="flex items-center gap-2 mb-1 text-xs text-gray-400">
+                                <span class="font-medium text-gray-600">AI</span>
+                            </div>
+                            <div class="p-4 bg-white rounded-lg border border-gray-200">
+                                <div class="streaming-content text-sm markdown-body"></div>
+                            </div>
+                        </div>
+                    </div>`;
+                contentEl.appendChild(bubble);
+            } else if (contentEl.lastElementChild !== bubble) {
+                // 强制移到末尾，确保在用户消息下方
+                contentEl.appendChild(bubble);
+            }
+            const div = bubble.querySelector('.streaming-content');
+            const tn = document.createTextNode(text);
+            div.appendChild(tn);
+            contentEl.scrollTop = contentEl.scrollHeight;
+        }
+
+        // ---- 增量文本渲染（reasoning / text） ----
+        function appendStreamingDelta(delta, partID, meta, partContentMap) {
+            const contentEl = document.getElementById('messagesContent');
+            let bubble = document.getElementById('streaming-bubble');
+
+            if (!bubble) {
+                bubble = document.createElement('div');
+                bubble.id = 'streaming-bubble';
+                bubble.className = 'mb-4';
+                bubble.innerHTML = `
+                    <div class="flex gap-3 justify-start">
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white text-xs shadow-sm flex-shrink-0"><i class="fas fa-robot"></i></div>
+                        <div class="flex-1 min-w-0 max-w-[720px]">
+                            <div class="flex items-center gap-2 mb-1 text-xs text-gray-400">
+                                <span class="font-medium text-gray-600">AI</span>
+                            </div>
+                            <div class="p-4 bg-white rounded-lg border border-gray-200">
+                                <div id="streaming-container" class="space-y-1 text-sm"></div>
+                            </div>
+                        </div>
+                    </div>`;
+                contentEl.appendChild(bubble);
+            } else if (contentEl.lastElementChild !== bubble) {
+                // ⭐ 关键：强制将气泡移到 contentEl 末尾，确保在用户最新消息下方
+                contentEl.appendChild(bubble);
+            }
+
+            const container = bubble.querySelector('#streaming-container');
+            const partElId = 'stream-part-' + partID;
+            let partEl = document.getElementById(partElId);
+            const inferredType = meta.type || 'unknown';
+            const fullText = partContentMap[partID] || '';
+
+            if (!partEl) {
+                partEl = document.createElement('div');
+                partEl.id = partElId;
+                partEl.className = 'mb-1';
+
+                if (inferredType === 'reasoning') {
+                    const rid = 'reasoning-stream-' + partID;
+                    partEl.innerHTML = `<div class="my-2 rounded-lg overflow-hidden border border-yellow-200 w-full">
+                        <div class="cursor-pointer bg-yellow-50 hover:bg-yellow-100 px-3 py-1.5 text-xs text-yellow-700 font-medium flex items-center justify-between transition-colors" onclick="toggleCollapse('${rid}')">
+                            <span class="flex items-center gap-2">
+                                <i class="fas fa-brain"></i>思考过程
+                                <span class="reasoning-indicator flex items-center gap-1" id="${rid}-indicator">
+                                    <i class="fas fa-circle-notch fa-spin text-yellow-400 text-[10px]"></i>
+                                    <span class="text-yellow-500 text-[10px]">思考中</span>
+                                </span>
+                            </span>
+                            <i class="fas fa-chevron-down text-yellow-500 transition-transform duration-200" id="${rid}-icon"></i>
+                        </div>
+                        <div id="${rid}" class="hidden">
+                            <div class="stream-body p-3 text-sm text-gray-700 markdown-body"></div>
+                        </div>
+                    </div>`;
+                } else {
+                    partEl.innerHTML = `<div class="markdown-body stream-body text-sm"></div>`;
+                }
+                container.appendChild(partEl);
+            }
+
+            const body = partEl.querySelector('.stream-body');
+            if (body) {
+                const diffHtml = maybeRenderDiff(fullText);
+                body.innerHTML = diffHtml || marked.parse(fullText);
+            }
+
+            contentEl.scrollTop = contentEl.scrollHeight;
+        }
+
+        // ---- 实时工具卡片渲染 ----
+        function renderStreamingToolCard(partID, meta) {
+            const contentEl = document.getElementById('messagesContent');
+            let bubble = document.getElementById('streaming-bubble');
+
+            if (!bubble) {
+                bubble = document.createElement('div');
+                bubble.id = 'streaming-bubble';
+                bubble.className = 'mb-4';
+                bubble.innerHTML = `
+                    <div class="flex gap-3 justify-start">
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white text-xs shadow-sm flex-shrink-0"><i class="fas fa-robot"></i></div>
+                        <div class="flex-1 min-w-0 max-w-[720px]">
+                            <div class="flex items-center gap-2 mb-1 text-xs text-gray-400">
+                                <span class="font-medium text-gray-600">AI</span>
+                            </div>
+                            <div class="p-4 bg-white rounded-lg border border-gray-200">
+                                <div id="streaming-container" class="space-y-1 text-sm"></div>
+                            </div>
+                        </div>
+                    </div>`;
+                contentEl.appendChild(bubble);
+            } else if (contentEl.lastElementChild !== bubble) {
+                // 强制移到末尾，确保在用户最新消息下方
+                contentEl.appendChild(bubble);
+            }
+
+            const container = bubble.querySelector('#streaming-container');
+            const partElId = 'stream-part-' + partID;
+            let partEl = document.getElementById(partElId);
+
+            const toolName = meta.tool || 'tool';
+            const state = meta.state || {};
+            const status = state.status || 'unknown';
+            const toolPart = { tool: toolName, state: state };
+
+            if (!partEl) {
+                partEl = document.createElement('div');
+                partEl.id = partElId;
+                partEl.className = 'mb-1';
+                container.appendChild(partEl);
+            }
+
+            const cid = 'tool-live-' + partID;
+            const statusIcon = status === 'completed' ? 'fa-check-circle text-green-500' :
+                              status === 'running' ? 'fa-spinner fa-spin text-blue-500' :
+                              status === 'error' ? 'fa-times-circle text-red-500' :
+                              'fa-wrench text-gray-400';
+            const statusLabel = status === 'completed' ? '完成' :
+                               status === 'running' ? '运行中...' :
+                               status === 'error' ? '失败' : '等待中...';
+            const statusClass = status === 'completed' ? 'text-green-600' :
+                               status === 'running' ? 'text-blue-600' :
+                               status === 'error' ? 'text-red-600' : 'text-gray-500';
+
+            partEl.innerHTML = `
+                <div class="my-1 rounded-lg overflow-hidden border border-gray-200 w-full">
+                    <div class="cursor-pointer bg-gray-50 hover:bg-gray-100 px-3 py-1.5 text-xs text-gray-600 font-medium flex items-center justify-between" onclick="toggleCollapse('${cid}')">
+                        <span class="flex items-center gap-1.5">
+                            <i class="fas ${statusIcon}"></i>
+                            <span>工具: ${escapeHtml(toolName)}</span>
+                            <span class="${statusClass} text-[10px] bg-white border border-gray-200 px-1 py-0.5 rounded">${statusLabel}</span>
+                        </span>
+                        <i class="fas fa-chevron-down text-gray-400 transition-transform duration-200" id="${cid}-icon"></i>
+                    </div>
+                    <div id="${cid}" class="hidden">
+                        ${renderToolPart(toolPart)}
+                    </div>
+                </div>`;
+
+            contentEl.scrollTop = contentEl.scrollHeight;
+        }
+
+        // 关闭弹窗时断开 SSE
+        const originalHideModalFunc = hideModal;
+        hideModal = function(id) {
+            if (id === 'messagesModal' && eventSource) {
+                eventSource.close();
+                eventSource = null;
+                console.log('SSE disconnected on modal close');
+            }
+            originalHideModalFunc(id);
+        };
+
+        // ---- 辅助函数：切换折叠 ----
+        function toggleCollapse(id) {
+            const el = document.getElementById(id);
+            const icon = document.getElementById(id + '-icon');
+            if (!el) return;
+            if (el.classList.contains('hidden')) {
+                el.classList.remove('hidden');
+                if (icon) icon.style.transform = 'rotate(180deg)';
+            } else {
+                el.classList.add('hidden');
+                if (icon) icon.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        // ---- 辅助函数：检测并渲染 git diff ----
+        function maybeRenderDiff(text) {
+            if (!text || !text.includes('@@') || !text.includes('diff --git')) {
+                return null;
+            }
+            return null; // 简化：让流式渲染回退到 marked.parse
+        }
+
+        // ---- 发送消息 ----
+        async function sendMessage() {
+            const inputEl = document.getElementById('messageInput');
+            const btnEl = document.getElementById('sendMessageBtn');
+            const statusEl = document.getElementById('sendStatus');
+            const content = inputEl.value.trim();
+            if (!content) return;
+            if (!currentMessagesTaskId) {
+                showToast('无法发送：未选择任务', 'error');
+                return;
+            }
+
+            // ****** 发送新消息前处理旧流式状态 ******
+            // 1. 关闭旧 SSE 连接
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+                console.log('SSE closed before new message');
+            }
+            // 2. 将旧的未完成气泡标记为固定历史（不要删除！保留旧AI回复）
+            const oldBubble = document.getElementById('streaming-bubble');
+            if (oldBubble) {
+                // 将所有未完成的 reasoning indicator 替换为"完成"
+                oldBubble.querySelectorAll('.reasoning-indicator').forEach(indicator => {
+                    indicator.innerHTML = '<i class="fas fa-check text-green-500 text-[10px]"></i><span class="text-green-500 text-[10px]">完成</span>';
+                });
+                // 移除 id，使其成为普通历史消息，不再被新消息操作影响
+                oldBubble.removeAttribute('id');
+                oldBubble.classList.add('ai-message-final');
+                console.log('Old streaming bubble finalized (kept in DOM)');
+            }
+            // 3. 重置状态栏
+            statusEl.textContent = '';
+            statusEl.className = 'text-xs text-blue-500 ml-2';
+
+            // 乐观更新：立即显示用户消息
+            const contentEl = document.getElementById('messagesContent');
+            const userHtml = `
+                <div class="flex gap-3 justify-end mb-4">
+                    <div class="max-w-[720px]">
+                        <div class="flex items-center gap-2 mb-1 justify-end text-xs text-gray-400">
+                            <span class="font-medium text-gray-600">你</span>
+                        </div>
+                        <div class="bg-white text-gray-800 border border-gray-200 rounded-2xl rounded-tr-sm px-4 py-3 text-sm shadow-sm">
+                            <div class="markdown-body">${escapeHtml(content)}</div>
+                        </div>
+                    </div>
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-xs shadow-sm flex-shrink-0">
+                        <i class="fas fa-user"></i>
+                    </div>
+                </div>`;
+            contentEl.insertAdjacentHTML('beforeend', userHtml);
+            inputEl.value = '';
+            contentEl.scrollTop = contentEl.scrollHeight;
+
+            btnEl.disabled = true;
+            statusEl.textContent = '发送中...';
+
+            try {
+                const res = await apiFetch(`${API_BASE}/tasks/${currentMessagesTaskId}/messages`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: content })
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || '发送失败');
+                }
+                
+                // 发送成功，立即重建 SSE 连接开始接收新回复
+                statusEl.textContent = '';
+                connectSSE(currentMessagesTaskId);
+                
+                btnEl.disabled = false;
+            } catch (e) {
+                statusEl.textContent = '发送失败: ' + e.message;
+                statusEl.className = 'text-xs text-red-500 ml-2';
+                btnEl.disabled = false;
+            }
+        }
+
+        // ---- 键盘事件 ----
+        function handleMessageKeydown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // ---- 刷新消息列表（从 /messages 获取完整） ----
+        async function refreshMessages() {
+            if (!currentMessagesTaskId) return;
+            try {
+                const res = await apiFetch(`${API_BASE}/tasks/${currentMessagesTaskId}/messages`);
+                if (!res.ok) return;
+                const data = await res.json();
+                const messages = data.data || [];
+                if (messages.length > 0) {
+                    renderMessages(messages);
+                }
+            } catch (e) {
+                console.log('refreshMessages failed', e);
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function retryTask(id) {
+            try {
+                const res = await apiFetch(`${API_BASE}/tasks/${id}/retry`, { method: 'POST' });
+                if (!res.ok) throw new Error('重试失败');
+                showToast('任务已重新触发', 'success');
+                loadTasks();
+            } catch (e) {
+                showToast('重试失败: ' + e.message, 'error');
+            }
+        }
+
+        async function stopTask(id) {
+            try {
+                const res = await apiFetch(`${API_BASE}/tasks/${id}/stop`, { method: 'POST' });
+                if (!res.ok) throw new Error('停止失败');
+                showToast('任务已停止', 'success');
+                loadTasks();
+            } catch (e) {
+                showToast('停止失败: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteTaskSession(id) {
+            if (!confirm('确定删除此任务的 OpenCode session 吗？对话记录将不可恢复。')) return;
+
+            try {
+                const res = await apiFetch(`${API_BASE}/tasks/${id}/session`, { method: 'DELETE' });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || '删除失败');
+                }
+                showToast('Session 已删除', 'success');
+                loadTasks();
+            } catch (e) {
+                showToast('删除失败: ' + e.message, 'error');
+            }
+        }
+
+        function maskSensitive(text) {
+            if (!text || typeof text !== 'string') return text;
+            return text
+                // GitLab OAuth2: oauth2:glpat-xxx@host → oauth2:****@host
+                .replace(/(oauth2:)[^@]+(@)/g, '$1****$2')
+                // GitLab personal access tokens: glpat-xxx → glpat-****
+                .replace(/(glpat-)[a-zA-Z0-9_-]+/gi, '$1****')
+                // URL Basic Auth: https://user:password@host → https://user:****@host
+                .replace(/([a-zA-Z0-9_-]+:)[a-zA-Z0-9_-]+(@[a-zA-Z0-9._:-]+)/g, '$1****$2')
+                // Bearer token headers
+                .replace(/(Bearer\s+)[a-zA-Z0-9_.-]{10,}/gi, '$1****')
+                // SK keys: sk-xxx → sk-****
+                .replace(/(\bsk-)[a-zA-Z0-9]{20,}/g, '$1****')
+                // API key patterns
+                .replace(/(api[_-]?key\s*[:=]\s*)\S+/gi, '$1****')
+                // Password patterns
+                .replace(/(password\s*[:=]\s*)\S+/gi, '$1****')
+                .replace(/(passwd\s*[:=]\s*)\S+/gi, '$1****')
+                // Secret patterns
+                .replace(/(secret\s*[:=]\s*)\S+/gi, '$1****');
+        }
+
+        function showToast(message, type = 'info') {
+            const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+            const toast = document.createElement('div');
+            toast.className = `fixed top-4 right-4 ${colors[type] || colors.info} text-white px-4 py-2 rounded-lg shadow-lg z-50 transition-opacity duration-300`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+        }
+
+        function filterTasks() {
+            currentPage = 1;
+            loadTasks();
+        }
+
+        function refreshTasks() {
+            currentPage = 1;
+            loadTasks();
+            loadStats();
+        }
+
+        loadProjectFilter(); // 先加载项目列表到筛选下拉框
+        loadTasks();
+        loadStats();
+    </script>
+</body>
+</html>

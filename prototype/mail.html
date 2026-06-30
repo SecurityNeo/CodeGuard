@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>邮件通知 - CodeGuard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/auth.js?v=4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        .sidebar-item:hover { background-color: rgba(255,255,255,0.1); }
+        .sidebar-item.active { background-color: rgba(255,255,255,0.15); border-left: 3px solid #3b82f6; }
+        .toast { position: fixed; top: 20px; right: 20px; z-index: 9999; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .toast-success { background-color: #10b981; }
+        .toast-error { background-color: #ef4444; }
+        .toast-info { background-color: #3b82f6; }
+        .group-tag { transition: all 0.15s; }
+        .group-tag.active { background-color: #3b82f6; color: white; }
+        .group-combobox { position: relative; }
+        .group-combobox .group-dropdown {
+            position: absolute; top: 100%; left: 0; min-width: 120px; max-width: 100%;
+            background: white; border: 1px solid #e2e8f0; border-radius: 6px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-height: 200px; overflow-y: auto;
+            z-index: 50; margin-top: 2px; display: none;
+        }
+        .group-combobox .group-dropdown.show { display: block; }
+        .group-combobox .group-dropdown-item {
+            padding: 6px 12px; font-size: 13px; color: #334155; cursor: pointer;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .group-combobox .group-dropdown-item:hover { background: #f1f5f9; }
+        .group-combobox .group-dropdown-item.active { background: #eff6ff; color: #2563eb; font-weight: 500; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <div id="toastContainer"></div>
+    <div class="flex h-screen">
+        <aside class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
+            <div class="p-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-robot text-xl"></i>
+                    </div>
+                    <div><h1 class="font-bold text-lg">CodeGuard</h1><p class="text-xs text-gray-400">代码智能门禁</p></div>
+                </div>
+            </div>
+            <nav class="flex-1 px-3 py-4 space-y-1">
+                <a href="statistics.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-chart-line w-5"></i><span>首页</span>
+                </a>
+                <a href="mr-stats.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-code-branch w-5"></i><span>代码提交统计</span>
+                </a>
+                <a href="projects.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-folder-open w-5"></i><span>项目管理</span>
+                </a>
+                <a href="tasks.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-tasks w-5"></i><span>任务列表</span>
+                </a>
+                <a href="pools.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-server w-5"></i><span>任务资源池</span>
+                </a>
+                <a href="models.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-brain w-5"></i><span>大模型管理</span>
+                </a>
+                <div class="space-y-1">
+                    <div class="flex items-center justify-between px-4 py-3 rounded-lg text-sm cursor-pointer" onclick="toggleNotifyMenu()">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-bell w-5"></i><span>通知管理</span>
+                        </div>
+                        <i class="fas fa-chevron-down text-xs transition-transform" id="notifyMenuIcon"></i>
+                    </div>
+                    <div id="notifyMenu" class="hidden pl-10 space-y-1">
+                        <a href="notifiers.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">企业微信</a>
+                        <a href="mail.html" class="sidebar-item active flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">邮件</a>
+                        <a href="member-mappings.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">成员映射</a>
+                        <a href="report.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">报告管理</a>
+                    </div>
+                </div>
+                <a href="settings.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-cog w-5"></i><span>系统管理</span>
+                </a>
+            </nav>
+            <div class="p-4 border-t border-slate-700">
+                <div class="flex items-center gap-3 cursor-pointer" id="userMenuTrigger" onclick="toggleUserMenu()">
+                    <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center"><i class="fas fa-user text-sm"></i></div>
+                    <div class="text-sm flex-1">
+                        <div class="font-medium" id="currentUser">管理员</div>
+                        <div class="text-xs text-gray-400">管理后台</div>
+                    </div>
+                    <i class="fas fa-chevron-down text-xs text-gray-400"></i>
+                </div>
+                <div id="userMenu" class="hidden mt-2 bg-slate-800 rounded-lg py-1">
+                    <button onclick="showChangePasswordModal()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
+                        <i class="fas fa-key w-5"></i>修改密码
+                    </button>
+                    <button onclick="logout()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
+                        <i class="fas fa-sign-out-alt w-5"></i>退出登录
+                    </button>
+                </div>
+            </div>
+        </aside>
+        <main class="flex-1 overflow-y-auto">
+            <header class="bg-white border-b px-8 py-4 sticky top-0 z-10">
+                <h2 class="text-xl font-bold text-gray-800">邮件通知</h2>
+                <p class="text-sm text-gray-500 mt-1">SMTP 配置与接收人管理</p>
+            </header>
+            <div class="p-8">
+                <div class="bg-white rounded-xl border p-6 space-y-6">
+                    <div class="mb-6">
+                        <h3 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <i class="fas fa-envelope text-blue-500"></i>SMTP 服务器配置
+                        </h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">服务器地址</label>
+                                <input type="text" id="smtpHost" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="smtp.company.com">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">端口</label>
+                                <input type="number" id="smtpPort" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="587" value="587">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">发件人邮箱</label>
+                                <input type="email" id="smtpFromEmail" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="noreply@company.com">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">发件人名称</label>
+                                <input type="text" id="smtpFromName" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="AI CodeGuard">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">登录账号</label>
+                                <input type="text" id="smtpUsername" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="robot@company.com">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">登录密码</label>
+                                <div class="relative">
+                                    <input type="password" id="smtpPassword" class="w-full px-3 py-2 pr-10 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="密码">
+                                    <button type="button" onclick="togglePasswordVisibility()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer">
+                                        <i class="fas fa-eye" id="passwordEyeIcon"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4 mt-3">
+                            <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                                <input type="checkbox" id="smtpUseTLS" checked class="w-4 h-4 text-blue-600 rounded">
+                                <span>启用 TLS</span>
+                            </label>
+                            <button onclick="testSMTP()" class="text-blue-600 text-sm hover:text-blue-700 flex items-center gap-1">
+                                <i class="fas fa-paper-plane"></i>测试连接
+                            </button>
+                        </div>
+                        <div class="flex justify-end pt-4">
+                            <button onclick="saveSMTPConfig()" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 shadow-sm">
+                                <i class="fas fa-save mr-1"></i>保存 SMTP 配置
+                            </button>
+                        </div>
+                    </div>
+                    <hr class="my-6 border-gray-200">
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-base font-bold text-gray-800 flex items-center gap-2">
+                                <i class="fas fa-users text-orange-500"></i>接收人管理
+                            </h3>
+                        </div>
+                        <div class="flex flex-wrap gap-2 mb-3" id="groupFilter"></div>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="bg-gray-50 text-gray-600">
+                                    <th class="px-4 py-2 text-left font-medium">姓名</th>
+                                    <th class="px-4 py-2 text-left font-medium">邮箱</th>
+                                    <th class="px-4 py-2 text-left font-medium">分组</th>
+                                    <th class="px-4 py-2 text-center font-medium" style="width: 80px;">状态</th>
+                                    <th class="px-4 py-2 text-center font-medium" style="width: 120px;">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recipientTable">
+                                <tr><td colspan="5" class="text-center text-gray-400 py-6">暂无接收人</td></tr>
+                            </tbody>
+                        </table>
+                        <div class="mt-3">
+                            <button onclick="startAddRecipient()" class="text-blue-600 text-sm hover:text-blue-700 flex items-center gap-1">
+                                <i class="fas fa-plus-circle"></i>添加接收人
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+        const API_BASE = '/api/v1';
+        function showToast(message, type = 'info') {
+            const colors = { success: 'toast-success', error: 'toast-error', info: 'toast-info' };
+            const icons = { success: 'fa-check-circle', error: 'fa-times-circle', info: 'fa-info-circle' };
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + colors[type] + ' text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3';
+            toast.innerHTML = '<i class="fas ' + icons[type] + '"></i><span>' + message + '</span>';
+            document.getElementById('toastContainer').appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+        function togglePasswordVisibility() {
+            var input = document.getElementById('smtpPassword');
+            var icon = document.getElementById('passwordEyeIcon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        }
+        async function loadSMTPConfig() {
+            try {
+                const res = await apiFetch(API_BASE + '/reports/smtp');
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data.data) {
+                    document.getElementById('smtpHost').value = data.data.host || '';
+                    document.getElementById('smtpPort').value = data.data.port || '587';
+                    document.getElementById('smtpFromEmail').value = data.data.from_email || '';
+                    document.getElementById('smtpFromName').value = data.data.from_name || '';
+                    document.getElementById('smtpUsername').value = data.data.username || '';
+                    document.getElementById('smtpPassword').value = data.data.password || '';
+                    document.getElementById('smtpUseTLS').checked = data.data.use_tls !== false;
+                }
+            } catch (e) { console.error('load smtp failed', e); }
+        }
+        async function saveSMTPConfig() {
+            const data = {
+                host: document.getElementById('smtpHost').value,
+                port: parseInt(document.getElementById('smtpPort').value) || 587,
+                from_email: document.getElementById('smtpFromEmail').value,
+                from_name: document.getElementById('smtpFromName').value,
+                username: document.getElementById('smtpUsername').value,
+                password: document.getElementById('smtpPassword').value,
+                use_tls: document.getElementById('smtpUseTLS').checked,
+            };
+            try {
+                const res = await apiFetch(API_BASE + '/reports/smtp', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.error);
+                showToast('SMTP 配置已保存', 'success');
+            } catch (e) { showToast('保存失败: ' + e.message, 'error'); }
+        }
+        async function testSMTP() {
+            const data = {
+                host: document.getElementById('smtpHost').value,
+                port: parseInt(document.getElementById('smtpPort').value) || 587,
+                from_email: document.getElementById('smtpFromEmail').value,
+                from_name: document.getElementById('smtpFromName').value,
+                username: document.getElementById('smtpUsername').value,
+                password: document.getElementById('smtpPassword').value,
+                use_tls: document.getElementById('smtpUseTLS').checked,
+            };
+            try {
+                const res = await apiFetch(API_BASE + '/reports/smtp/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.error);
+                showToast(result.message || '测试邮件已发送', 'success');
+            } catch (e) { showToast('测试失败: ' + e.message, 'error'); }
+        }
+        let allRecipients = [];
+        let currentGroupFilter = '';
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function getExistingGroups() {
+            var groups = Array.from(new Set(allRecipients.map(function(r) { return r.group_name || '默认分组'; })));
+            groups.sort();
+            return groups;
+        }
+        async function loadRecipients() {
+            try {
+                const res = await apiFetch(API_BASE + '/reports/recipients');
+                if (!res.ok) return;
+                const data = await res.json();
+                allRecipients = data.data || [];
+                renderGroupFilter();
+                filterAndRenderTable();
+            } catch (e) { console.error('load recipients failed', e); }
+        }
+
+        function renderGroupFilter() {
+            const container = document.getElementById('groupFilter');
+            if (!container) return;
+            const groups = Array.from(new Set(allRecipients.map(r => r.group_name || '默认分组')));
+            groups.sort();
+            const total = allRecipients.length;
+            let html = '<button onclick="setGroupFilter(\'\')" class="group-tag px-2.5 py-1 text-xs rounded-full border ' + (currentGroupFilter === '' ? 'active border-blue-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50') + '">全部(' + total + ')</button>';
+            groups.forEach(function(g) {
+                var count = allRecipients.filter(function(r) { return (r.group_name || '默认分组') === g; }).length;
+                var isActive = currentGroupFilter === g;
+                var cls = isActive ? 'active border-blue-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50';
+                html += '<button onclick="setGroupFilter(\'' + g.replace(/'/g, "\\'") + '\')" class="group-tag px-2.5 py-1 text-xs rounded-full border ' + cls + '">' + escapeHtml(g) + '(' + count + ')</button>';
+            });
+            container.innerHTML = html;
+        }
+
+        function setGroupFilter(group) {
+            currentGroupFilter = group;
+            renderGroupFilter();
+            filterAndRenderTable();
+        }
+
+        function filterAndRenderTable() {
+            const tbody = document.getElementById('recipientTable');
+            var filtered = allRecipients;
+            if (currentGroupFilter !== '') {
+                filtered = allRecipients.filter(function(r) { return (r.group_name || '默认分组') === currentGroupFilter; });
+            }
+            var html = '';
+            if (filtered.length > 0) {
+                html = filtered.map(function(r) { return renderRecipientRow(r); }).join('');
+            }
+            html += '<tr id="addRecipientRow" style="display:none;" class="bg-blue-50">' +
+                '<td class="px-2 py-2"><input type="text" id="newRecName" placeholder="姓名" class="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"></td>' +
+                '<td class="px-2 py-2"><input type="email" id="newRecEmail" placeholder="email@example.com" class="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"></td>' +
+                '<td class="px-2 py-2">' + createGroupComboboxHTML('newRecGroup', '') + '</td>' +
+                '<td class="px-2 py-2 text-center"><select id="newRecEnabled" class="px-2 py-1 border rounded text-xs"><option value="true">启用</option><option value="false">禁用</option></select></td>' +
+                '<td class="px-2 py-2 text-center"><button onclick="submitAddRecipient()" class="text-green-600 hover:text-green-800 text-xs mr-2 font-medium">保存</button><button onclick="cancelAddRecipient()" class="text-gray-500 hover:text-gray-700 text-xs">取消</button></td></tr>';
+            if (filtered.length === 0) {
+                var emptyMsg = currentGroupFilter === '' ? '暂无接收人，点击下方按钮添加' : '该分组下暂无接收人';
+                html = '<tr id="noRecHint"><td colspan="5" class="text-center text-gray-400 py-6">' + emptyMsg + '</td></tr>' + html;
+            }
+            tbody.innerHTML = html;
+        }
+        function renderRecipientRow(r, editing) {
+            if (editing) {
+                var selTrue = (r.enabled ? ' selected' : '');
+                var selFalse = (!r.enabled ? ' selected' : '');
+                return '<tr id="editRow-' + r.id + '" class="bg-blue-50">' +
+                    '<td class="px-2 py-2"><input type="text" id="editRecName-' + r.id + '" value="' + (r.name || '') + '" class="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"></td>' +
+                    '<td class="px-2 py-2"><input type="email" id="editRecEmail-' + r.id + '" value="' + r.email + '" class="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"></td>' +
+                    '<td class="px-2 py-2">' + createGroupComboboxHTML('editRecGroup-' + r.id, r.group_name) + '</td>' +
+                    '<td class="px-2 py-2 text-center"><select id="editRecEnabled-' + r.id + '" class="px-2 py-1 border rounded text-xs"><option value="true"' + selTrue + '>启用</option><option value="false"' + selFalse + '>禁用</option></select></td>' +
+                    '<td class="px-2 py-2 text-center"><button onclick="submitEditRecipient(' + r.id + ')" class="text-green-600 hover:text-green-800 text-xs mr-2 font-medium">保存</button><button onclick="cancelEditRecipient(' + r.id + ')" class="text-gray-500 hover:text-gray-700 text-xs">取消</button></td></tr>';
+            }
+            var statusColor = r.enabled ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200';
+            var statusLabel = r.enabled ? '启用' : '禁用';
+            return '<tr class="border-b">' +
+                '<td class="px-4 py-2">' + (r.name || '') + '</td>' +
+                '<td class="px-4 py-2">' + r.email + '</td>' +
+                '<td class="px-4 py-2"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-600 border border-blue-200">' + (r.group_name || '默认分组') + '</span></td>' +
+                '<td class="px-4 py-2 text-center"><button onclick="toggleRecipientEnabled(' + r.id + ',' + !r.enabled + ')" title="点击切换" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs ' + statusColor + ' cursor-pointer hover:opacity-80">' + statusLabel + '</button></td>' +
+                '<td class="px-4 py-2 text-center"><button onclick="editRecipient(' + r.id + ')" class="text-blue-600 hover:text-blue-800 text-xs mr-2">编辑</button><button onclick="deleteRecipient(' + r.id + ')" class="text-red-600 hover:text-red-800 text-xs">删除</button></td></tr>';
+        }
+        function startAddRecipient() {
+            var hint = document.getElementById('noRecHint');
+            if (hint) hint.remove();
+            document.getElementById('addRecipientRow').style.display = '';
+            document.getElementById('newRecName').focus();
+        }
+        function cancelAddRecipient() { document.getElementById('addRecipientRow').style.display = 'none'; }
+        async function submitAddRecipient() {
+            var name = document.getElementById('newRecName').value.trim();
+            var email = document.getElementById('newRecEmail').value.trim();
+            var group_name = document.getElementById('newRecGroup').value.trim();
+            var enabled = document.getElementById('newRecEnabled').value === 'true';
+            if (!email) return showToast('邮箱不能为空', 'error');
+            try {
+                const res = await apiFetch(API_BASE + '/reports/recipients', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, email, group_name, enabled }) });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.error);
+                document.getElementById('newRecName').value = '';
+                document.getElementById('newRecEmail').value = '';
+                document.getElementById('newRecGroup').value = '';
+                document.getElementById('newRecEnabled').value = 'true';
+                document.getElementById('addRecipientRow').style.display = 'none';
+                showToast('添加成功', 'success');
+                loadRecipients();
+            } catch (e) { showToast('添加失败: ' + e.message, 'error'); }
+        }
+        function editRecipient(id) {
+            document.querySelectorAll('[id^="editRow-"]').forEach(el => el.remove());
+            var row = document.querySelector('button[onclick="editRecipient(' + id + ')"]').closest('tr');
+            if (!row) return;
+            var cells = row.querySelectorAll('td');
+            var name = cells[0].textContent;
+            var email = cells[1].textContent;
+            var group = cells[2].textContent.trim();
+            var isEnabled = cells[3].textContent.trim() === '启用';
+            row.insertAdjacentHTML('afterend',
+                '<tr id="editRow-' + id + '" class="bg-blue-50">' +
+                '<td class="px-2 py-2"><input type="text" id="editRecName-' + id + '" value="' + name + '" class="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"></td>' +
+                '<td class="px-2 py-2"><input type="email" id="editRecEmail-' + id + '" value="' + email + '" class="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none"></td>' +
+                '<td class="px-2 py-2">' + createGroupComboboxHTML('editRecGroup-' + id, group) + '</td>' +
+                '<td class="px-2 py-2 text-center"><select id="editRecEnabled-' + id + '" class="px-2 py-1 border rounded text-xs"><option value="true"' + (isEnabled ? ' selected' : '') + '>启用</option><option value="false"' + (!isEnabled ? ' selected' : '') + '>禁用</option></select></td>' +
+                '<td class="px-2 py-2 text-center"><button onclick="submitEditRecipient(' + id + ')" class="text-green-600 hover:text-green-800 text-xs mr-2 font-medium">保存</button><button onclick="cancelEditRecipient(' + id + ')" class="text-gray-500 hover:text-gray-700 text-xs">取消</button></td></tr>');
+            row.style.display = 'none';
+        }
+        function cancelEditRecipient(id) {
+            var el = document.getElementById('editRow-' + id);
+            if (el) el.remove();
+            loadRecipients();
+        }
+        async function submitEditRecipient(id) {
+            var name = document.getElementById('editRecName-' + id).value.trim();
+            var email = document.getElementById('editRecEmail-' + id).value.trim();
+            var group_name = document.getElementById('editRecGroup-' + id).value.trim();
+            var enabled = document.getElementById('editRecEnabled-' + id).value === 'true';
+            try {
+                const res = await apiFetch(API_BASE + '/reports/recipients/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, email, group_name, enabled }) });
+                if (!res.ok) throw new Error((await res.json()).error);
+                showToast('修改成功', 'success');
+                loadRecipients();
+            } catch (e) { showToast('修改失败: ' + e.message, 'error'); }
+        }
+        async function deleteRecipient(id) {
+            if (!confirm('确认删除该接收人吗？')) return;
+            try {
+                const res = await apiFetch(API_BASE + '/reports/recipients/' + id, { method: 'DELETE' });
+                if (!res.ok) throw new Error((await res.json()).error);
+                showToast('删除成功', 'success');
+                loadRecipients();
+            } catch (e) { showToast('删除失败: ' + e.message, 'error'); }
+        }
+        async function toggleRecipientEnabled(id, enabled) {
+            try {
+                var label = enabled ? '启用' : '禁用';
+                const res = await apiFetch(API_BASE + '/reports/recipients/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: enabled }) });
+                if (!res.ok) throw new Error((await res.json()).error);
+                showToast(label + '成功', 'success');
+                loadRecipients();
+            } catch (e) { showToast('切换失败: ' + e.message, 'error'); }
+        }
+        // ---- 自定义分组 Combobox 组件 ----
+        function createGroupComboboxHTML(inputId, value) {
+            var groups = getExistingGroups();
+            var v = value || '';
+            var items = groups.map(function(g) {
+                var active = (g === v) ? ' active' : '';
+                return '<div class="group-dropdown-item' + active + '" data-group="' + escapeHtml(g) + '" onclick="selectGroupCombobox(\'' + inputId + '\', this)">' + escapeHtml(g) + '</div>';
+            }).join('');
+            return '<div class="group-combobox" id="groupComboBox-' + inputId + '">' +
+                '<div class="flex items-center border rounded text-sm focus-within:ring-2 focus-within:ring-blue-500">' +
+                '<input type="text" id="' + inputId + '" value="' + escapeHtml(v) + '" placeholder="选择或输入分组" class="flex-1 w-full px-2 py-1 outline-none bg-transparent" ' +
+                'onfocus="showGroupDropdown(\'' + inputId + '\')" oninput="filterGroupDropdown(\'' + inputId + '\')" onkeydown="handleGroupDropdownKeydown(event, \'' + inputId + '\')">' +
+                '<button type="button" tabindex="-1" onclick="toggleGroupDropdown(\'' + inputId + '\')" class="px-2 text-gray-400 hover:text-gray-600"><i class="fas fa-chevron-down text-xs"></i></button>' +
+                '</div>' +
+                '<div class="group-dropdown" id="groupDropdown-' + inputId + '">' + items + '</div>' +
+                '</div>';
+        }
+
+        function showGroupDropdown(inputId) {
+            var dropdown = document.getElementById('groupDropdown-' + inputId);
+            if (!dropdown) return;
+            // onfocus 时展开所有分组（不要过滤）
+            dropdown.querySelectorAll('.group-dropdown-item').forEach(function(item) {
+                item.style.display = '';
+            });
+            dropdown.classList.add('show');
+            // 点击外部关闭
+            setTimeout(function() {
+                function docClick(e) {
+                    var combo = document.getElementById('groupComboBox-' + inputId);
+                    if (combo && !combo.contains(e.target)) {
+                        dropdown.classList.remove('show');
+                        document.removeEventListener('click', docClick);
+                    }
+                }
+                document.addEventListener('click', docClick);
+            }, 0);
+        }
+
+        function toggleGroupDropdown(inputId) {
+            var dropdown = document.getElementById('groupDropdown-' + inputId);
+            if (!dropdown) return;
+            if (dropdown.classList.contains('show')) {
+                dropdown.classList.remove('show');
+            } else {
+                showGroupDropdown(inputId);
+            }
+        }
+
+        function filterGroupDropdown(inputId) {
+            var input = document.getElementById(inputId);
+            var dropdown = document.getElementById('groupDropdown-' + inputId);
+            if (!input || !dropdown) return;
+            var keyword = input.value.toLowerCase().trim();
+            var items = dropdown.querySelectorAll('.group-dropdown-item');
+            // 先清理上次插入的"创建新分组"提示（非 data-group 的项）
+            dropdown.querySelectorAll('.group-dropdown-item:not([data-group])').forEach(function(el) { el.remove(); });
+            var hasVisible = false;
+            items.forEach(function(item) {
+                if (!item.hasAttribute('data-group')) return;
+                var text = item.textContent.toLowerCase();
+                var match = keyword === '' || text.indexOf(keyword) >= 0;
+                item.style.display = match ? '' : 'none';
+                if (match) hasVisible = true;
+            });
+            if (!hasVisible && keyword !== '') {
+                dropdown.insertAdjacentHTML('beforeend', '<div class="group-dropdown-item" onclick="selectGroupCombobox(\'' + inputId + '\', this)">按 <b>' + escapeHtml(input.value) + '</b> 创建新分组</div>');
+            }
+            dropdown.classList.add('show');
+        }
+
+        function selectGroupCombobox(inputId, el) {
+            var input = document.getElementById(inputId);
+            var dropdown = document.getElementById('groupDropdown-' + inputId);
+            if (!input || !dropdown) return;
+            var group = el.getAttribute('data-group');
+            if (group !== null && group !== '') {
+                input.value = group;
+            } else {
+                // 创建新分组：从文本中提取用户输入的值
+                var bTag = el.querySelector('b');
+                if (bTag) input.value = bTag.textContent;
+            }
+            dropdown.classList.remove('show');
+            // 更新高亮
+            dropdown.querySelectorAll('.group-dropdown-item[data-group]').forEach(function(item) {
+                item.classList.toggle('active', item.getAttribute('data-group') === input.value);
+            });
+        }
+
+        function handleGroupDropdownKeydown(e, inputId) {
+            var dropdown = document.getElementById('groupDropdown-' + inputId);
+            if (!dropdown || !dropdown.classList.contains('show')) return;
+            var items = Array.from(dropdown.querySelectorAll('.group-dropdown-item')).filter(function(el) { return el.style.display !== 'none'; });
+            var idx = items.findIndex(function(el) { return el.classList.contains('active'); });
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (idx >= 0) items[idx].classList.remove('active');
+                idx = (idx + 1) % items.length;
+                items[idx].classList.add('active');
+                items[idx].scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (idx >= 0) items[idx].classList.remove('active');
+                idx = (idx - 1 + items.length) % items.length;
+                items[idx].classList.add('active');
+                items[idx].scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (idx >= 0) selectGroupCombobox(inputId, items[idx]);
+            } else if (e.key === 'Escape') {
+                dropdown.classList.remove('show');
+            }
+        }
+
+        function refreshGroupCombobox(dropdownId, value) {
+            var groups = getExistingGroups();
+            var dropdown = document.getElementById(dropdownId);
+            if (!dropdown) return;
+            dropdown.innerHTML = groups.map(function(g) {
+                var active = (g === value) ? ' active' : '';
+                var inputId = dropdownId.replace('groupDropdown-', '');
+                return '<div class="group-dropdown-item' + active + '" data-group="' + escapeHtml(g) + '" onclick="selectGroupCombobox(\'' + inputId + '\', this)">' + escapeHtml(g) + '</div>';
+            }).join('');
+        }
+
+        loadSMTPConfig();
+        loadRecipients();
+    </script>
+</body>
+</html>

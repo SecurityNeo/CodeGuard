@@ -1,0 +1,36 @@
+# 快速构建模式：使用本地预编译的二进制文件
+# 需要先在本机编译: cd backend && go build -o ai-optimizer ./cmd/main.go
+# 构建命令: docker build -t ai-optimizer:v1.2.0 .
+
+FROM alpine:latest
+
+# 安装基础依赖
+RUN apk --no-cache add ca-certificates tzdata
+
+# 设置时区
+ENV TZ=Asia/Shanghai
+
+WORKDIR /app
+
+# 复制预编译的后端二进制
+COPY backend/ai-optimizer /app/ai-optimizer
+
+# 复制前端静态文件
+COPY prototype/ /app/prototype/
+
+# 前端路径环境变量（指向容器内路径）
+ENV FRONTEND_PATH=/app/prototype
+
+# 默认配置
+ENV PORT=8080
+ENV PROJECT_BASE_DIR=/app/projects
+
+# 暴露端口
+EXPOSE 8080
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+
+# 启动命令
+CMD ["/app/ai-optimizer"]

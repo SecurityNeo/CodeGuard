@@ -1,0 +1,38 @@
+# Git
+.git
+.gitignore
+*.md
+!docs/*.md
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Build artifacts
+backend/build/
+*.exe
+
+# But KEEP the compiled binary for Docker builds
+!backend/ai-optimizer
+
+# Test files
+*_test.go
+backend/coverage.out
+
+# Local env files
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temp files
+*.tmp
+tmp/
+temp/

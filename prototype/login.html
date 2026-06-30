@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - CodeGuard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/auth.js?v=4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+            min-height: 100vh;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .input-glow:focus {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+        }
+    </style>
+</head>
+<body class="gradient-bg flex items-center justify-center">
+    <div class="w-full max-w-md px-6">
+        <!-- Logo -->
+        <div class="text-center mb-8">
+            <div class="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-robot text-3xl text-white"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-white mb-2">CodeGuard</h1>
+            <p class="text-gray-400 text-sm">代码智能门禁</p>
+        </div>
+
+        <!-- Login Card -->
+        <div class="glass-card rounded-2xl p-8">
+            <h2 class="text-xl font-bold text-white mb-6 text-center">管理员登录</h2>
+            
+            <form id="loginForm" onsubmit="return doLogin(event)">
+                <div class="space-y-5">
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-2">用户名</label>
+                        <div class="relative">
+                            <i class="fas fa-user absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                            <input type="text" id="username" placeholder="admin" 
+                                   class="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 input-glow transition-all">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-2">密码</label>
+                        <div class="relative">
+                            <i class="fas fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                            <input type="password" id="password" placeholder="请输入密码" 
+                                   class="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 input-glow transition-all">
+                        </div>
+                    </div>
+                    
+                    <div id="errorMsg" class="hidden text-red-400 text-sm text-center">
+                        <i class="fas fa-exclamation-circle mr-1"></i><span id="errorText"></span>
+                    </div>
+                    
+                    <button type="submit" id="loginBtn" 
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2">
+                        <i class="fas fa-sign-in-alt"></i>
+                        <span>登录</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Footer -->
+        <p class="text-center text-gray-500 text-xs mt-6">
+            默认账号: admin / 默认密码: admin123
+        </p>
+    </div>
+
+    <script>
+        const API_BASE = '/api/v1';
+
+        // 检查是否已登录
+        function checkAuth() {
+            const token = localStorage.getItem('auth_token');
+            if (token) {
+                // 验证token是否有效
+                fetch(`${API_BASE}/users/me`, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                }).then(res => {
+                    if (res.ok) {
+                        window.location.href = '/index.html';
+                    } else {
+                        localStorage.removeItem('auth_token');
+                        localStorage.removeItem('user_info');
+                    }
+                }).catch(() => {});
+            }
+        }
+
+        async function doLogin(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const btn = document.getElementById('loginBtn');
+            const errorMsg = document.getElementById('errorMsg');
+            const errorText = document.getElementById('errorText');
+            
+            if (!username || !password) {
+                errorText.textContent = '请输入用户名和密码';
+                errorMsg.classList.remove('hidden');
+                return false;
+            }
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>登录中...</span>';
+            errorMsg.classList.add('hidden');
+            
+            try {
+                const res = await apiFetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok && data.data && data.data.token) {
+                    localStorage.setItem('auth_token', data.data.token);
+                    localStorage.setItem('user_info', JSON.stringify(data.data));
+                    window.location.href = '/index.html';
+                } else {
+                    errorText.textContent = data.error || '登录失败';
+                    errorMsg.classList.remove('hidden');
+                }
+            } catch (e) {
+                errorText.textContent = '网络错误，请稍后重试';
+                errorMsg.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sign-in-alt"></i><span>登录</span>';
+            }
+            
+            return false;
+        }
+
+        // 页面加载时检查
+        checkAuth();
+    </script>
+</body>
+</html>

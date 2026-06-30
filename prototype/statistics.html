@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>首页 - CodeGuard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/vendor/echarts.min.js"></script>
+    <script src="js/auth.js?v=4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        .sidebar-item:hover { background-color: rgba(255,255,255,0.1); }
+        .sidebar-item.active { background-color: rgba(255,255,255,0.15); border-left: 3px solid #3b82f6; }
+        .chart-card { transition: all 0.3s ease; }
+        .chart-card:hover { box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
+        .score-badge-excellent { background: #e8f5e9; color: #2e7d32; }
+        .score-badge-good { background: #e3f2fd; color: #1565c0; }
+        .score-badge-pass { background: #fff3e0; color: #ef6c00; }
+        .score-badge-fail { background: #ffebee; color: #c62828; }
+        .kpi-card { transition: transform 0.2s, box-shadow 0.2s; }
+        .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
+        .toast { position: fixed; top: 20px; right: 20px; z-index: 9999; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .data-table tr:hover { background: #f8f9ff; }
+        .data-table th {
+            padding: 12px 16px;
+            font-weight: 600;
+            color: #555;
+            border-bottom: 2px solid #e0e0e0;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+        }
+        .data-table td { padding: 12px 16px; border-bottom: 1px solid #f0f0f0; color: #333; }
+        .project-tag { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 6px; font-size: 12px; background: #f5f5f5; color: #555; }
+        /* 雷达图项目选择器样式 */
+        .project-selector { position: relative; }
+        .project-selector-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 8px;
+            background: white; font-size: 13px; color: #374151; cursor: pointer; transition: all 0.2s;
+        }
+        .project-selector-btn:hover { border-color: #3b82f6; color: #3b82f6; }
+        .project-selector-panel {
+            position: absolute; right: 0; top: calc(100% + 6px);
+            width: 300px; max-height: 360px;
+            background: white; border: 1px solid #e5e7eb; border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.12); z-index: 50;
+            display: none; flex-direction: column;
+        }
+        .project-selector-panel.active { display: flex; }
+        .project-selector-panel .panel-header {
+            padding: 12px 14px; border-bottom: 1px solid #f3f4f6;
+            font-weight: 600; font-size: 13px; color: #1f2937;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .project-selector-panel .panel-search {
+            padding: 10px 14px; border-bottom: 1px solid #f3f4f6;
+        }
+        .project-selector-panel .panel-search input {
+            width: 100%; padding: 6px 10px; border: 1px solid #e5e7eb;
+            border-radius: 6px; font-size: 13px; outline: none;
+        }
+        .project-selector-panel .panel-search input:focus { border-color: #3b82f6; }
+        .project-selector-panel .panel-list {
+            flex: 1; overflow-y: auto; padding: 4px 0;
+        }
+        .project-selector-panel .panel-list .panel-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 7px 14px; font-size: 13px; cursor: pointer; transition: background 0.15s;
+        }
+        .project-selector-panel .panel-list .panel-item:hover { background: #f9fafb; }
+        .project-selector-panel .panel-list .panel-item input[type="checkbox"] {
+            width: 14px; height: 14px; accent-color: #3b82f6; flex-shrink: 0;
+        }
+        .project-selector-panel .panel-footer {
+            padding: 10px 14px; border-top: 1px solid #f3f4f6;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .project-selector-panel .panel-footer .text-hint { font-size: 12px; color: #9ca3af; }
+        .project-selector-panel .panel-footer button {
+            padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; border: none;
+        }
+        .project-selector-panel .panel-footer .btn-confirm { background: #3b82f6; color: white; }
+        .project-selector-panel .panel-footer .btn-confirm:hover { background: #2563eb; }
+        .project-selector-panel .panel-footer .btn-clear { background: #f3f4f6; color: #6b7280; margin-right: 6px; }
+        .project-selector-panel .panel-footer .btn-clear:hover { background: #e5e7eb; }
+        .selected-tags {
+            display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; min-height: 22px;
+        }
+        .selected-tag {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 2px 8px; border-radius: 4px; font-size: 11px;
+            background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;
+            max-width: 140px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+        }
+        .selected-tag .tag-remove {
+            cursor: pointer; font-size: 10px; color: #93c5fd; line-height: 1;
+        }
+        .selected-tag .tag-remove:hover { color: #1d4ed8; }
+        .selected-count { font-size: 11px; color: #9ca3af; margin-top: 6px; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <div id="toastContainer"></div>
+    <div class="flex h-screen">
+        <!-- 侧边栏 -->
+        <aside class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
+            <div class="p-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-robot text-xl"></i>
+                    </div>
+                    <div><h1 class="font-bold text-lg">CodeGuard</h1><p class="text-xs text-gray-400">代码智能门禁</p></div>
+                </div>
+            </div>
+            <nav class="flex-1 px-3 py-4 space-y-1">
+                <a href="statistics.html" class="sidebar-item active flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-chart-line w-5"></i><span>首页</span>
+                </a>
+                <a href="mr-stats.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-code-branch w-5"></i><span>代码提交统计</span>
+                </a>
+                <a href="projects.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-folder-open w-5"></i><span>项目管理</span>
+                </a>
+                <a href="tasks.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-tasks w-5"></i><span>任务列表</span>
+                </a>
+                <a href="pools.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-server w-5"></i><span>任务资源池</span>
+                </a>
+                <a href="models.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-brain w-5"></i><span>大模型管理</span>
+                </a>
+                <div class="space-y-1">
+                    <div class="flex items-center justify-between px-4 py-3 rounded-lg text-sm cursor-pointer" onclick="toggleNotifyMenu()">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-bell w-5"></i><span>通知管理</span>
+                        </div>
+                        <i class="fas fa-chevron-down text-xs transition-transform" id="notifyMenuIcon"></i>
+                    </div>
+                    <div id="notifyMenu" class="hidden pl-10 space-y-1">
+                        <a href="notifiers.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">企业微信</a>
+                        <a href="mail.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">邮件</a>
+                        <a href="member-mappings.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">成员映射</a>
+                        <a href="report.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">报告管理</a>
+                    </div>
+                </div>
+                <a href="settings.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
+                    <i class="fas fa-cog w-5"></i><span>系统管理</span>
+                </a>
+            </nav>
+            <div class="p-4 border-t border-slate-700">
+                <div class="flex items-center gap-3 cursor-pointer" id="userMenuTrigger" onclick="toggleUserMenu()">
+                    <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center"><i class="fas fa-user text-sm"></i></div>
+                    <div class="text-sm flex-1">
+                        <div class="font-medium" id="currentUser">管理员</div>
+                        <div class="text-xs text-gray-400">管理后台</div>
+                    </div>
+                    <i class="fas fa-chevron-down text-xs text-gray-400"></i>
+                </div>
+                <div id="userMenu" class="hidden mt-2 bg-slate-800 rounded-lg py-1">
+                    <button onclick="showChangePasswordModal()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
+                        <i class="fas fa-key w-5"></i>修改密码
+                    </button>
+                    <button onclick="logout()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
+                        <i class="fas fa-sign-out-alt w-5"></i>退出登录
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="flex-1 overflow-y-auto">
+                <header class="bg-white border-b px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-800">📊 首页</h2>
+                    <p class="text-sm text-gray-500 mt-1">全面洞察团队代码质量与开发活跃度</p>
+                </div>
+            </header>
+
+            <div class="p-8">
+                <!-- 筛选栏 -->
+                <div class="bg-white rounded-xl p-4 border mb-6 flex items-center gap-4 flex-wrap">
+                    <div class="flex items-center gap-2">
+                        <select id="projectFilter" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" onchange="loadStatistics()">
+                            <option value="">所有项目</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <select id="authorFilter" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" onchange="loadStatistics()">
+                            <option value="">所有作者</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <select id="timeFilter" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" onchange="handleTimeFilter()">
+                            <option value="0" selected>全部时间</option>
+                            <option value="7">近 7 天</option>
+                            <option value="30">近 30 天</option>
+                            <option value="90">近 90 天</option>
+                            <option value="365">近 1 年</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="date" id="startDate" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <span class="text-gray-400">至</span>
+                        <input type="date" id="endDate" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div class="flex items-center gap-2 ml-auto">
+                        <button onclick="applyCustomRange()" class="bg-blue-50 text-blue-600 px-3 py-2 rounded-lg text-sm hover:bg-blue-100">
+                            <i class="fas fa-sync-alt mr-1"></i>刷新数据
+                        </button>
+                    </div>
+                </div>
+
+                <!-- KPI 卡片 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                    <div class="kpi-card bg-white rounded-xl p-6 border flex items-center gap-5">
+                        <div class="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-2xl">📝</div>
+                        <div>
+                            <div class="text-3xl font-bold text-gray-800" id="kpiTotalMRs">-</div>
+                            <div class="text-sm text-gray-500 mt-1">MR 总数</div>
+                        </div>
+                    </div>
+                    <div class="kpi-card bg-white rounded-xl p-6 border flex items-center gap-5">
+                        <div class="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center text-2xl">⭐</div>
+                        <div>
+                            <div class="text-3xl font-bold text-gray-800" id="kpiAvgScore">-</div>
+                            <div class="text-sm text-gray-500 mt-1">平均评分</div>
+                        </div>
+                    </div>
+                    <div class="kpi-card bg-white rounded-xl p-6 border flex items-center gap-5">
+                        <div class="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-2xl">📈</div>
+                        <div>
+                            <div class="text-3xl font-bold text-gray-800" id="kpiTotalChanges">-</div>
+                            <div class="text-sm text-gray-500 mt-1">总变更行数</div>
+                        </div>
+                    </div>
+                    <div class="kpi-card bg-white rounded-xl p-6 border flex items-center gap-5">
+                        <div class="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center text-2xl">🏢</div>
+                        <div>
+                            <div class="text-3xl font-bold text-gray-800">
+                                <span id="kpiActiveProjects">-</span>
+                                <span class="text-lg text-gray-400 font-normal">/</span>
+                                <span id="kpiTotalProjects" class="text-2xl text-gray-500">-</span>
+                            </div>
+                            <div class="text-sm text-gray-500 mt-1">活跃项目数 / 项目总数</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 第一行：项目活跃度 + 开发者提交 -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="chart-card bg-white rounded-xl p-6 border">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-800">项目活跃度 TOP10</h3>
+                                <p class="text-xs text-gray-400 mt-1">按 MR 数量排名</p>
+                            </div>
+                        </div>
+                        <div id="projectActivityChart" style="height: 320px;"></div>
+                    </div>
+
+                    <div class="chart-card bg-white rounded-xl p-6 border">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-800">开发者提交统计</h3>
+                                <p class="text-xs text-gray-400 mt-1">按提交 MR 数量排名</p>
+                            </div>
+                        </div>
+                        <div id="developerCommitChart" style="height: 320px;"></div>
+                    </div>
+                </div>
+
+                <!-- 第二行：散点图 -->
+                <div class="mb-6">
+                    <div class="chart-card bg-white rounded-xl p-6 border">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-800">代码变更与质量散点图</h3>
+                                <p class="text-xs text-gray-400 mt-1">横轴：变更行数，纵轴：评分，气泡大小：Review 次数</p>
+                            </div>
+                        </div>
+                        <div id="scatterChart" style="height: 420px;"></div>
+                    </div>
+                </div>
+
+                <!-- 第三行：评分分布 + 人员代码变更 -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="chart-card bg-white rounded-xl p-6 border">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-800">评分分布</h3>
+                                <p class="text-xs text-gray-400 mt-1">所有 MR 评分段位统计</p>
+                            </div>
+                        </div>
+                        <div id="scoreDistributionChart" style="height: 320px;"></div>
+                    </div>
+
+                    <div class="chart-card bg-white rounded-xl p-6 border">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-800">人员代码变更统计</h3>
+                                <p class="text-xs text-gray-400 mt-1">新增 vs 删除行数对比</p>
+                            </div>
+                        </div>
+                        <div id="codeChangeChart" style="height: 320px;"></div>
+                    </div>
+                </div>
+
+                <!-- 第四行：MR 状态分布 + 低质量 MR TOP10 -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="chart-card bg-white rounded-xl p-6 border">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-800">MR 状态分布</h3>
+                                <p class="text-xs text-gray-400 mt-1">Opened / Merged / Closed 占比</p>
+                            </div>
+                        </div>
+                        <div id="mrStatusChart" style="height: 320px;"></div>
+                    </div>
+
+                    <div class="chart-card bg-white rounded-xl p-6 border">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-800">低质量 MR TOP10</h3>
+                                <p class="text-xs text-gray-400 mt-1">评分低于 60 分的合并请求</p>
+                            </div>
+                        </div>
+                        <div style="height: 320px; overflow-y: auto;" id="lowQualityContainer">
+                            <table class="data-table w-full">
+                                <thead>
+                                    <tr>
+                                        <th>项目</th>
+                                        <th>标题</th>
+                                        <th>作者</th>
+                                        <th style="text-align: center;">评分</th>
+                                        <th style="text-align: right;">变更量</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="lowQualityTable">
+                                    <tr><td colspan="5" class="text-center text-gray-400 py-8">暂无数据</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 第五行：开发者平均得分 + 项目质量雷达图 -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="chart-card bg-white rounded-xl p-6 border">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-800">开发者平均得分</h3>
+                                <p class="text-xs text-gray-400 mt-1">按 MR 平均分排名</p>
+                            </div>
+                        </div>
+                        <div id="developerScoreChart" style="height: 320px;"></div>
+                    </div>
+
+                    <div class="chart-card bg-white rounded-xl p-6 border">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-800">项目质量多维对比</h3>
+                                <p class="text-xs text-gray-400 mt-1">平均分 × 变更效率 × Review 频次 × 合入率</p>
+                            </div>
+                            <div class="project-selector">
+                                <button class="project-selector-btn" onclick="toggleProjectSelector()">
+                                    <i class="fas fa-layer-group text-xs"></i>
+                                    <span id="selectorBtnText">选择对比项目</span>
+                                    <i class="fas fa-chevron-down text-xs text-gray-400"></i>
+                                </button>
+                                <div class="project-selector-panel" id="projectSelectorPanel">
+                                    <div class="panel-header">
+                                        <span>选择对比项目</span>
+                                        <button onclick="toggleProjectSelector()" style="background:none;border:none;font-size:14px;color:#9ca3af;cursor:pointer;"><i class="fas fa-times"></i></button>
+                                    </div>
+                                    <div class="panel-search">
+                                        <input type="text" id="projectSearchInput" placeholder="搜索项目..." oninput="filterProjectList()">
+                                    </div>
+                                    <div class="panel-list" id="projectList">
+                                    </div>
+                                    <div class="panel-footer">
+                                        <span class="text-hint" id="selectorHint">已选 0 个</span>
+                                        <div>
+                                            <button class="btn-clear" onclick="resetRadarProjectsFromPanel()">恢复默认</button>
+                                            <button class="btn-clear" onclick="clearProjectSelection()">清空</button>
+                                            <button class="btn-confirm" onclick="confirmProjectSelection()">确定</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="selected-tags" id="selectedTags"></div>
+                        <div id="radarChart" style="height: 320px;"></div>
+                    </div>
+                </div>
+
+                <!-- 第六行：时间趋势 -->
+                <div class="mb-6">
+                    <div class="chart-card bg-white rounded-xl p-6 border">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-800">质量趋势分析</h3>
+                                <p class="text-xs text-gray-400 mt-1">近 90 天平均评分与提交量趋势</p>
+                            </div>
+                        </div>
+                        <div id="trendChart" style="height: 420px;"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_BASE = '/api/v1';
+        let chartInstances = {};
+
+        function showToast(message, type = 'success') {
+            const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+            const icons = { success: 'fa-check', error: 'fa-times', info: 'fa-info' };
+            const toast = document.createElement('div');
+            toast.className = `toast ${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3`;
+            toast.innerHTML = `<i class="fas ${icons[type]}"></i><span>${message}</span>`;
+            document.getElementById('toastContainer').appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function getScoreBadgeClass(score) {
+            if (score >= 90) return 'score-badge-excellent';
+            if (score >= 80) return 'score-badge-good';
+            if (score >= 60) return 'score-badge-pass';
+            return 'score-badge-fail';
+        }
+
+        function getScoreLabel(score) {
+            if (score >= 90) return '优秀';
+            if (score >= 80) return '良好';
+            if (score >= 60) return '及格';
+            return '不及格';
+        }
+
+        function handleTimeFilter() {
+            const days = parseInt(document.getElementById('timeFilter').value);
+            if (days > 0) {
+                const end = new Date();
+                const start = new Date();
+                start.setDate(end.getDate() - days);
+                document.getElementById('endDate').value = end.toISOString().split('T')[0];
+                document.getElementById('startDate').value = start.toISOString().split('T')[0];
+            } else {
+                // 全部时间：清空日期范围
+                document.getElementById('startDate').value = '';
+                document.getElementById('endDate').value = '';
+            }
+            loadStatistics();
+        }
+
+        function applyCustomRange() {
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            if (start && end && new Date(start) > new Date(end)) {
+                showToast('开始日期不能晚于结束日期', 'error');
+                return;
+            }
+            loadStatistics();
+        }
+
+        let allProjects = [];
+        let selectedRadarProjects = [];
+
+        async function loadFilterOptions() {
+            try {
+                const projectRes = await apiFetch(`${API_BASE}/mr-review-logs/projects`);
+                if (projectRes.ok) {
+                    const json = await projectRes.json();
+                    allProjects = json.data || [];
+                    const sel = document.getElementById('projectFilter');
+                    sel.innerHTML = '<option value="">所有项目</option>' +
+                        allProjects.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+                    // 同时初始化雷达图项目选择器
+                    initRadarProjectSelect(allProjects);
+                }
+                const authorRes = await apiFetch(`${API_BASE}/mr-review-logs/authors`);
+                if (authorRes.ok) {
+                    const json = await authorRes.json();
+                    const sel = document.getElementById('authorFilter');
+                    sel.innerHTML = '<option value="">所有作者</option>' +
+                        (json.data || []).map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('');
+                }
+            } catch (e) {
+                console.error('加载筛选选项失败:', e);
+            }
+        }
+
+        function initRadarProjectSelect(projects) {
+            if (!projects || projects.length === 0) return;
+            renderProjectList(projects);
+            updateSelectedTags();
+        }
+
+        function renderProjectList(projects) {
+            const list = document.getElementById('projectList');
+            if (!list) return;
+            list.innerHTML = projects.map(p => {
+                const checked = selectedRadarProjects.includes(p) ? 'checked' : '';
+                return `<label class="panel-item">
+                    <input type="checkbox" value="${escapeHtml(p)}" ${checked} onchange="onProjectItemChange(this)">
+                    <span class="truncate">${escapeHtml(p)}</span>
+                </label>`;
+            }).join('');
+        }
+
+        function onProjectItemChange(checkbox) {
+            const val = checkbox.value;
+            if (checkbox.checked) {
+                if (!selectedRadarProjects.includes(val)) selectedRadarProjects.push(val);
+            } else {
+                selectedRadarProjects = selectedRadarProjects.filter(p => p !== val);
+            }
+            updateSelectorHint();
+        }
+
+        function filterProjectList() {
+            const keyword = document.getElementById('projectSearchInput').value.trim().toLowerCase();
+            const items = document.querySelectorAll('#projectList .panel-item');
+            items.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                item.style.display = text.includes(keyword) ? 'flex' : 'none';
+            });
+        }
+
+        function toggleProjectSelector() {
+            const panel = document.getElementById('projectSelectorPanel');
+            panel.classList.toggle('active');
+            if (panel.classList.contains('active')) {
+                updateSelectorHint();
+                document.getElementById('projectSearchInput').focus();
+            }
+        }
+
+        function updateSelectorHint() {
+            const hint = document.getElementById('selectorHint');
+            if (hint) hint.textContent = `已选 ${selectedRadarProjects.length} 个`;
+        }
+
+        function updateSelectorBtnText() {
+            const btnText = document.getElementById('selectorBtnText');
+            const count = selectedRadarProjects.length;
+            if (count === 0) {
+                btnText.textContent = '选择对比项目';
+            } else {
+                btnText.textContent = `已选${count}个项目`;
+            }
+        }
+
+        function updateSelectedTags() {
+            const container = document.getElementById('selectedTags');
+            if (!container) return;
+            if (selectedRadarProjects.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+            container.innerHTML = selectedRadarProjects.map(p =>
+                `<span class="selected-tag" title="${escapeHtml(p)}">
+                    ${escapeHtml(p)}
+                    <span class="tag-remove" onclick="removeProjectTag('${escapeHtml(p)}')">&times;</span>
+                </span>`
+            ).join('');
+            updateSelectorBtnText();
+        }
+
+        function removeProjectTag(projectName) {
+            selectedRadarProjects = selectedRadarProjects.filter(p => p !== projectName);
+            // 同步更新面板中的复选框
+            const checkbox = document.querySelector(`#projectList input[value="${projectName}"]`);
+            if (checkbox) checkbox.checked = false;
+            updateSelectedTags();
+            updateSelectorHint();
+            loadStatistics();
+        }
+
+        function clearProjectSelection() {
+            selectedRadarProjects = [];
+            document.querySelectorAll('#projectList input[type="checkbox"]').forEach(cb => cb.checked = false);
+            updateSelectedTags();
+            updateSelectorHint();
+            updateSelectorBtnText();
+        }
+
+        function confirmProjectSelection() {
+            toggleProjectSelector();
+            updateSelectedTags();
+            loadStatistics();
+        }
+
+        function resetRadarProjectsFromPanel() {
+            clearProjectSelection();
+            toggleProjectSelector();
+            loadStatistics();
+        }
+
+        function resetRadarProjects() {
+            clearProjectSelection();
+            loadStatistics();
+        }
+
+        // 点击面板外部关闭选择器
+        document.addEventListener('click', function(e) {
+            const selector = document.querySelector('.project-selector');
+            const panel = document.getElementById('projectSelectorPanel');
+            if (selector && panel && !selector.contains(e.target)) {
+                panel.classList.remove('active');
+            }
+        });
+
+        async function loadStatistics() {
+            const projectName = document.getElementById('projectFilter').value;
+            const author = document.getElementById('authorFilter').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const days = document.getElementById('timeFilter').value;
+
+            let url = `${API_BASE}/mr-review-logs/statistics`;
+            const params = [];
+            if (days && days !== '0') params.push(`days=${days}`);
+            if (projectName) params.push(`project_name=${encodeURIComponent(projectName)}`);
+            if (author) params.push(`author=${encodeURIComponent(author)}`);
+            if (startDate) params.push(`start_date=${startDate}`);
+            if (endDate) params.push(`end_date=${endDate}`);
+            if (selectedRadarProjects.length > 0) {
+                params.push(`projects=${encodeURIComponent(selectedRadarProjects.join(','))}`);
+            }
+            if (params.length > 0) url += '?' + params.join('&');
+
+            try {
+                const res = await apiFetch(url);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const json = await res.json();
+                const d = json.data;
+                renderAll(d);
+            } catch (e) {
+                console.error('加载统计失败:', e);
+                showToast('加载统计失败: ' + e.message, 'error');
+            }
+        }
+
+        function renderAll(d) {
+            d = d || {};
+            renderKPI(d.kpi || {});
+            renderProjectActivity(d.project_activity || []);
+            renderDeveloperCommits(d.developer_commits || []);
+            renderScatter(d.scatter || []);
+            renderScoreDistribution(d.score_distribution || {});
+            renderCodeChanges(d.code_changes || []);
+            renderMRStatus(d.mr_status || []);
+            renderLowQuality(d.low_quality_mrs || []);
+            renderDeveloperScores(d.developer_scores || [], d.trend || {});
+            renderRadar(d.radar || {});
+            renderTrend(d.trend || {});
+        }
+
+        function renderKPI(kpi) {
+            document.getElementById('kpiTotalMRs').textContent = formatNumber(kpi.total_mrs || 0);
+            document.getElementById('kpiAvgScore').textContent = (kpi.avg_score || 0).toFixed(1);
+            document.getElementById('kpiTotalChanges').textContent = formatNumber(kpi.total_changes || 0);
+            document.getElementById('kpiActiveProjects').textContent = kpi.active_projects || 0;
+            document.getElementById('kpiTotalProjects').textContent = kpi.total_projects || 0;
+        }
+
+        function renderProjectActivity(data) {
+            const dom = document.getElementById('projectActivityChart');
+            if (!dom) return;
+            if (chartInstances.projectActivity) chartInstances.projectActivity.dispose();
+            const chart = echarts.init(dom);
+            chartInstances.projectActivity = chart;
+            const sorted = [...data].sort((a, b) => a.count - b.count);
+            chart.setOption({
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                grid: { left: '3%', right: '4%', bottom: '3%', top: '5%', containLabel: true },
+                xAxis: { type: 'value', axisLine: { lineStyle: { color: '#e0e0e0' } }, axisLabel: { color: '#666' } },
+                yAxis: {
+                    type: 'category',
+                    data: sorted.map(s => s.project),
+                    axisLine: { lineStyle: { color: '#e0e0e0' } },
+                    axisLabel: { color: '#666', fontSize: 12 }
+                },
+                series: [{
+                    type: 'bar',
+                    data: sorted.map(s => s.count),
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                            { offset: 0, color: '#667eea' },
+                            { offset: 1, color: '#764ba2' }
+                        ]),
+                        borderRadius: [0, 8, 8, 0]
+                    },
+                    barWidth: '60%'
+                }]
+            });
+        }
+
+        function renderDeveloperCommits(data) {
+            const dom = document.getElementById('developerCommitChart');
+            if (!dom) return;
+            if (chartInstances.devCommits) chartInstances.devCommits.dispose();
+            const chart = echarts.init(dom);
+            chartInstances.devCommits = chart;
+            chart.setOption({
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                grid: { left: '3%', right: '4%', bottom: '3%', top: '5%', containLabel: true },
+                xAxis: {
+                    type: 'category',
+                    data: data.map(s => s.author),
+                    axisLabel: { color: '#666', rotate: 30, fontSize: 11 }
+                },
+                yAxis: { type: 'value', axisLine: { lineStyle: { color: '#e0e0e0' } }, axisLabel: { color: '#666' } },
+                series: [{
+                    type: 'bar',
+                    data: data.map(s => s.count),
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: '#43e97b' },
+                            { offset: 1, color: '#38f9d7' }
+                        ]),
+                        borderRadius: [8, 8, 0, 0]
+                    },
+                    barWidth: '50%'
+                }]
+            });
+        }
+
+        function renderScatter(data) {
+            const dom = document.getElementById('scatterChart');
+            if (!dom) return;
+            if (chartInstances.scatter) chartInstances.scatter.dispose();
+            const chart = echarts.init(dom);
+            chartInstances.scatter = chart;
+            const colors = ['#667eea', '#f093fb', '#4facfe', '#43e97b', '#fa709a', '#fee140', '#30cfd0', '#ff9a9e'];
+            const projects = [...new Set(data.map(d => d.project))];
+
+            // 阈值：最大变更量的一半 + 下限，避免贴左轴线
+            const xVals = data.map(d => d.x).sort((a, b) => a - b);
+            const maxX = xVals.length > 0 ? xVals[xVals.length - 1] : 0;
+            const changeMid = maxX > 0 ? Math.max(Math.round(maxX / 2), 100) : 300;
+            const scoreLine = 60;
+
+            const series = projects.map((proj, idx) => ({
+                name: proj,
+                type: 'scatter',
+                data: data.filter(d => d.project === proj).map(d => [d.x, d.y, d.review_count, d.author, d.mr_title]),
+                symbolSize: d => Math.max(6, Math.min(28, d[2] * 3.5)),
+                itemStyle: { color: colors[idx % colors.length], opacity: 0.8 },
+                emphasis: { itemStyle: { opacity: 1, borderColor: '#333', borderWidth: 2 } }
+            }));
+
+            chart.setOption({
+                tooltip: {
+                    trigger: 'item',
+                    formatter: function(params) {
+                        var d = params.data;
+                        var tag = '';
+                        if (d[0] <= changeMid && d[1] >= scoreLine) tag = '<span style="color:#4caf50;font-weight:bold;">[小变更高质量]</span><br/>';
+                        else if (d[0] >= changeMid && d[1] >= scoreLine) tag = '<span style="color:#2196f3;font-weight:bold;">[大变更高质量]</span><br/>';
+                        else if (d[0] <= changeMid && d[1] < scoreLine) tag = '<span style="color:#ff9800;font-weight:bold;">[小变更低质量]</span><br/>';
+                        else tag = '<span style="color:#f44336;font-weight:bold;">[大变更高风险]</span><br/>';
+                        var title = d[4] || '未命名 MR';
+                        return tag + '<strong>' + title + '</strong><br/>变更: ' + d[0] + ' 行<br/>评分: ' + d[1] + '<br/>Review: ' + d[2] + ' 次';
+                    }
+                },
+                grid: { left: '5%', right: '8%', bottom: '15%', top: '15%' },
+                legend: [
+                    {
+                        type: 'scroll',
+                        top: 0,
+                        right: 10,
+                        data: projects,
+                        textStyle: { color: '#666', fontSize: 11 }
+                    },
+                    {
+                        bottom: 10,
+                        right: 10,
+                        data: ['象限分区'],
+                        textStyle: { color: '#999', fontSize: 11, fontStyle: 'italic' }
+                    }
+                ],
+                xAxis: {
+                    name: '变更行数',
+                    nameLocation: 'middle',
+                    nameGap: 36,
+                    nameTextStyle: { color: '#1a1a1a', fontWeight: 'bold', fontSize: 13 },
+                    axisLine: { lineStyle: { color: '#ccc' } },
+                    axisLabel: { color: '#444', fontWeight: 500 },
+                    splitLine: { lineStyle: { color: '#f0f0f0' } }
+                },
+                yAxis: {
+                    name: '评分',
+                    min: 0,
+                    max: 100,
+                    nameTextStyle: { color: '#1a1a1a', fontWeight: 'bold', fontSize: 13 },
+                    axisLine: { lineStyle: { color: '#ccc' } },
+                    axisLabel: { color: '#444', fontWeight: 500 },
+                    splitLine: { lineStyle: { color: '#f0f0f0' } }
+                },
+                series: [
+                    // 象限背景层：极淡色 + 0.08 透明度，不压字
+                    {
+                        name: '象限分区',
+                        type: 'scatter',
+                        data: [],
+                        markArea: {
+                            silent: true,
+                            itemStyle: { opacity: 0.08 },
+                            data: [
+                                // 左上：小变更高质量（浅绿）
+                                [{
+                                    xAxis: 0,
+                                    yAxis: 100,
+                                    itemStyle: { color: '#4caf50' }
+                                }, {
+                                    xAxis: changeMid,
+                                    yAxis: scoreLine
+                                }],
+                                // 右上：大变更高质量（浅蓝）
+                                [{
+                                    xAxis: changeMid,
+                                    yAxis: 100,
+                                    itemStyle: { color: '#2196f3' }
+                                }, {
+                                    xAxis: 'max',
+                                    yAxis: scoreLine
+                                }],
+                                // 左下：小变更低质量（浅橙）
+                                [{
+                                    xAxis: 0,
+                                    yAxis: scoreLine,
+                                    itemStyle: { color: '#ff9800' }
+                                }, {
+                                    xAxis: changeMid,
+                                    yAxis: 0
+                                }],
+                                // 右下：大变更高风险（浅红）
+                                [{
+                                    xAxis: changeMid,
+                                    yAxis: scoreLine,
+                                    itemStyle: { color: '#f44336' }
+                                }, {
+                                    xAxis: 'max',
+                                    yAxis: 0
+                                }]
+                            ]
+                        },
+                        // 十字分界线：深色实线，确保左右上下绝对分隔开
+                        markLine: {
+                            silent: true,
+                            symbol: ['none', 'none'],
+                            lineStyle: { type: 'solid', color: '#555', width: 2 },
+                            label: {
+                                show: true,
+                                formatter: '{b}',
+                                fontSize: 11,
+                                color: '#fff',
+                                backgroundColor: '#555',
+                                padding: [2, 6],
+                                borderRadius: 3
+                            },
+                            data: [
+                                { xAxis: changeMid, name: '变更中位数 ' + changeMid, label: { position: 'insideEndTop' } },
+                                { yAxis: scoreLine, name: '合格线 ' + scoreLine, label: { position: 'end' } }
+                            ]
+                        }
+                    },
+                    ...series
+                ],
+                graphic: [
+                    { type: 'text', left: '6%', top: '16%', style: { text: '小变更高质量', fill: '#2e7d32', fontSize: 13, fontWeight: 'bold' } },
+                    { type: 'text', right: '10%', top: '16%', style: { text: '大变更高质量', fill: '#1565c0', fontSize: 13 } },
+                    { type: 'text', left: '6%', bottom: '16%', style: { text: '小变更低质量', fill: '#e65100', fontSize: 13 } },
+                    { type: 'text', right: '10%', bottom: '16%', style: { text: '大变更高风险', fill: '#c62828', fontSize: 13, fontWeight: 'bold' } }
+                ]
+            });
+        }
+
+        function renderScoreDistribution(dist) {
+            const dom = document.getElementById('scoreDistributionChart');
+            if (!dom) return;
+            if (chartInstances.scoreDist) chartInstances.scoreDist.dispose();
+            const chart = echarts.init(dom);
+            chartInstances.scoreDist = chart;
+            const data = [
+                { name: '优秀 (90-100)', value: dist.excellent || 0 },
+                { name: '良好 (80-89)', value: dist.good || 0 },
+                { name: '及格 (60-79)', value: dist.pass || 0 },
+                { name: '不及格 (<60)', value: dist.fail || 0 }
+            ];
+            chart.setOption({
+                tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+                legend: { orient: 'vertical', left: 'left', top: 'center', textStyle: { color: '#666' } },
+                series: [{
+                    type: 'pie',
+                    radius: ['45%', '70%'],
+                    center: ['60%', '50%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+                    label: { show: true, formatter: '{b}\n{d}%', fontSize: 11 },
+                    emphasis: { label: { show: true, fontSize: 13, fontWeight: 'bold' } },
+                    data: data,
+                    color: ['#4caf50', '#2196f3', '#ff9800', '#f44336']
+                }]
+            });
+        }
+
+        function renderCodeChanges(data) {
+            const dom = document.getElementById('codeChangeChart');
+            if (!dom) return;
+            if (chartInstances.codeChange) chartInstances.codeChange.dispose();
+            const chart = echarts.init(dom);
+            chartInstances.codeChange = chart;
+            chart.setOption({
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                legend: { data: ['新增行数', '删除行数'], top: 0, textStyle: { color: '#666' } },
+                grid: { left: '3%', right: '4%', bottom: '3%', top: '12%', containLabel: true },
+                xAxis: {
+                    type: 'category',
+                    data: data.map(s => s.author),
+                    axisLabel: { color: '#666', rotate: 30, fontSize: 11 }
+                },
+                yAxis: { type: 'value', axisLine: { lineStyle: { color: '#e0e0e0' } }, axisLabel: { color: '#666' } },
+                series: [
+                    {
+                        name: '新增行数',
+                        type: 'bar',
+                        stack: 'total',
+                        data: data.map(s => s.additions),
+                        itemStyle: { color: '#43e97b', borderRadius: [4, 4, 0, 0] }
+                    },
+                    {
+                        name: '删除行数',
+                        type: 'bar',
+                        stack: 'total',
+                        data: data.map(s => s.deletions),
+                        itemStyle: { color: '#fa709a', borderRadius: [4, 4, 0, 0] }
+                    }
+                ]
+            });
+        }
+
+        function renderMRStatus(data) {
+            const dom = document.getElementById('mrStatusChart');
+            if (!dom) return;
+            if (chartInstances.mrStatus) chartInstances.mrStatus.dispose();
+            const chart = echarts.init(dom);
+            chartInstances.mrStatus = chart;
+            const statusColors = { opened: '#2196f3', merged: '#4caf50', closed: '#f44336', draft: '#9e9e9e' };
+            chart.setOption({
+                tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+                legend: { orient: 'vertical', left: 'left', top: 'center', textStyle: { color: '#666' } },
+                series: [{
+                    type: 'pie',
+                    radius: ['40%', '65%'],
+                    center: ['60%', '50%'],
+                    itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 2 },
+                    label: { show: true, formatter: '{b}\n{d}%', fontSize: 12 },
+                    emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
+                    data: data.map(s => ({ name: s.status, value: s.count })),
+                    color: data.map(s => statusColors[s.status] || '#999')
+                }]
+            });
+        }
+
+        function renderLowQuality(data) {
+            const tbody = document.getElementById('lowQualityTable');
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-400 py-8">暂无低质量 MR</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.map(mr => `
+                <tr>
+                    <td><span class="project-tag">${escapeHtml(mr.project || '-')}</span></td>
+                    <td title="${escapeHtml(mr.title || '')}" class="truncate max-w-[200px]">${escapeHtml(mr.title || '-')}</td>
+                    <td>${escapeHtml(mr.author || '-')}</td>
+                    <td style="text-align: center;"><span class="score-badge-fail inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold">${mr.score}</span></td>
+                    <td style="text-align: right;" class="text-sm text-gray-600">+${formatNumber(mr.additions)} / -${formatNumber(mr.deletions)}</td>
+                </tr>
+            `).join('');
+        }
+
+        // 开发者平均得分视图模式：scatter / trend
+        let devScoreMode = 'scatter'; // 'scatter' = 柱状图(平均分), 'trend' = 折线图(趋势)
+
+        function renderDeveloperScores(data, trend) {
+            const dom = document.getElementById('developerScoreChart');
+            if (!dom) return;
+            if (chartInstances.devScores) chartInstances.devScores.dispose();
+            const chart = echarts.init(dom);
+            chartInstances.devScores = chart;
+
+            if (devScoreMode === 'scatter') {
+                _renderDevScoreScatter(chart, data);
+            } else {
+                _renderDevScoreTrend(chart, trend);
+            }
+        }
+
+        function _renderDevScoreScatter(chart, data) {
+            chart.setOption({
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: params => {
+                        const p = params[0];
+                        const d = data[p.dataIndex];
+                        return `${d.author}<br/>平均分: ${d.avg.toFixed(1)}<br/>MR数量: ${d.count}`;
+                    }
+                },
+                grid: { left: '3%', right: '4%', bottom: '3%', top: '5%', containLabel: true },
+                xAxis: {
+                    type: 'category',
+                    data: data.map(d => d.author),
+                    axisLabel: { color: '#666', rotate: 30, fontSize: 11 }
+                },
+                yAxis: {
+                    type: 'value', min: 0, max: 100,
+                    axisLine: { lineStyle: { color: '#e0e0e0' } },
+                    axisLabel: { color: '#666' },
+                    splitLine: { lineStyle: { color: '#f0f0f0' } }
+                },
+                series: [{
+                    type: 'bar',
+                    data: data.map(d => ({
+                        value: d.avg,
+                        itemStyle: {
+                            color: d.avg >= 80
+                                ? new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    { offset: 0, color: '#43e97b' },
+                                    { offset: 1, color: '#38f9d7' }
+                                ])
+                                : d.avg >= 60
+                                    ? new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                        { offset: 0, color: '#fee140' },
+                                        { offset: 1, color: '#fa709a' }
+                                    ])
+                                    : new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                        { offset: 0, color: '#ff9a9e' },
+                                        { offset: 1, color: '#fecfef' }
+                                    ]),
+                            borderRadius: [8, 8, 0, 0]
+                        }
+                    })),
+                    barWidth: '50%',
+                    markLine: {
+                        data: [{ yAxis: 60, name: '及格线' }],
+                        lineStyle: { color: '#f44336', type: 'dashed' },
+                        label: {
+                            formatter: '及格线 60',
+                            color: '#f44336',
+                            position: 'insideEndTop',
+                            distance: 5
+                        }
+                    }
+                }]
+            }, true); // true = not merge
+        }
+
+        function _renderDevScoreTrend(chart, trend) {
+            const dates = trend.dates || [];
+            const devScores = trend.developer_scores || {};
+            const authors = Object.keys(devScores);
+            if (authors.length === 0 || dates.length === 0) {
+                chart.setOption({
+                    title: { text: '暂无趋势数据', left: 'center', top: 'center', textStyle: { color: '#999' } },
+                    xAxis: { type: 'category', data: [] },
+                    yAxis: { type: 'value', min: 0, max: 100 },
+                    series: []
+                }, true);
+                return;
+            }
+            const colors = ['#667eea', '#43e97b', '#fa709a', '#fee140', '#4facfe', '#ff9800', '#30cfd0', '#ff9a9e'];
+            const series = authors.map((author, idx) => ({
+                name: author,
+                type: 'line',
+                smooth: true,
+                data: devScores[author] || [],
+                itemStyle: { color: colors[idx % colors.length] },
+                showSymbol: false,
+                symbolSize: 4
+            }));
+            chart.setOption({
+                title: {},
+                tooltip: { trigger: 'axis' },
+                legend: { type: 'scroll', top: 0, right: 0, textStyle: { fontSize: 10 }, data: authors },
+                grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: dates,
+                    axisLine: { lineStyle: { color: '#e0e0e0' } },
+                    axisLabel: { color: '#666', interval: Math.floor(dates.length / 6), fontSize: 10 }
+                },
+                yAxis: {
+                    type: 'value', min: 0, max: 100,
+                    axisLine: { lineStyle: { color: '#e0e0e0' } },
+                    axisLabel: { color: '#666' },
+                    splitLine: { lineStyle: { color: '#f0f0f0' } }
+                },
+                series: series
+            }, true);
+        }
+
+        function toggleDevScoreMode() {
+            devScoreMode = devScoreMode === 'scatter' ? 'trend' : 'scatter';
+            // 重新加载统计触发刷新
+            loadStatistics();
+        }
+
+        function renderRadar(radar) {
+            const dom = document.getElementById('radarChart');
+            if (!dom) return;
+            if (chartInstances.radar) chartInstances.radar.dispose();
+            const chart = echarts.init(dom);
+            chartInstances.radar = chart;
+            if (!radar || !radar.indicators || radar.indicators.length === 0) {
+                dom.innerHTML = '<div class="flex items-center justify-center h-full text-gray-400">暂无足够项目数据</div>';
+                return;
+            }
+            const colors = ['#667eea', '#43e97b', '#ff9800', '#f44336', '#2196f3'];
+            chart.setOption({
+                tooltip: {},
+                legend: { data: radar.series.map(s => s.name), bottom: 0, textStyle: { color: '#666' } },
+                radar: {
+                    indicator: radar.indicators.map(i => ({ name: i.name, max: i.max })),
+                    radius: '60%',
+                    axisName: { color: '#666', fontSize: 12 }
+                },
+                series: [{
+                    type: 'radar',
+                    data: radar.series.map((s, idx) => ({
+                        name: s.name,
+                        value: s.value,
+                        itemStyle: { color: colors[idx % colors.length] },
+                        areaStyle: { color: colors[idx % colors.length], opacity: 0.2 }
+                    }))
+                }]
+            });
+        }
+
+        function renderTrend(trend) {
+            const dom = document.getElementById('trendChart');
+            if (!dom) return;
+            if (chartInstances.trend) chartInstances.trend.dispose();
+            const chart = echarts.init(dom);
+            chartInstances.trend = chart;
+            chart.setOption({
+                tooltip: { trigger: 'axis' },
+                legend: { data: ['平均评分', 'MR数量', '变更行数'], selected: { 'MR数量': false }, top: 0, textStyle: { color: '#666' } },
+                grid: { left: '5%', right: '5%', bottom: '3%', top: '12%', containLabel: true },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: trend.dates,
+                    axisLine: { lineStyle: { color: '#e0e0e0' } },
+                    axisLabel: { color: '#666', interval: Math.floor(trend.dates.length / 8) }
+                },
+                yAxis: [
+                    {
+                        type: 'value', name: '评分', min: 0, max: 100,
+                        axisLine: { lineStyle: { color: '#e0e0e0' } },
+                        axisLabel: { color: '#666' },
+                        splitLine: { lineStyle: { color: '#f0f0f0' } }
+                    },
+                    {
+                        type: 'value', name: '数量/行数',
+                        axisLine: { lineStyle: { color: '#e0e0e0' } },
+                        axisLabel: { color: '#666' },
+                        splitLine: { show: false }
+                    }
+                ],
+                series: [
+                    {
+                        name: '平均评分',
+                        type: 'line',
+                        smooth: true,
+                        data: trend.scores,
+                        itemStyle: { color: '#667eea' },
+                        areaStyle: { color: 'rgba(102, 126, 234, 0.15)' }
+                    },
+                    {
+                        name: 'MR数量',
+                        type: 'bar',
+                        data: trend.mr_counts,
+                        itemStyle: { color: 'rgba(67, 233, 123, 0.7)' },
+                        yAxisIndex: 1
+                    },
+                    {
+                        name: '变更行数',
+                        type: 'line',
+                        smooth: true,
+                        data: trend.changes,
+                        itemStyle: { color: '#fa709a' },
+                        lineStyle: { type: 'dashed' },
+                        yAxisIndex: 1
+                    }
+                ]
+            });
+        }
+
+        // 初始化默认日期范围（全部时间：不设置日期）
+        function initDateRange() {
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            document.getElementById('timeFilter').value = '0';
+        }
+
+        window.addEventListener('resize', () => {
+            Object.values(chartInstances).forEach(c => c.resize());
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initDateRange();
+            loadFilterOptions();
+            loadStatistics();
+        });
+    </script>
+</body>
+</html>
