@@ -269,13 +269,6 @@
                             </div>
                         </div>
 
-                        <!-- 测试连接按钮 -->
-                        <div class="pt-2">
-                            <button onclick="testCreateConfig()" class="px-4 py-2 border-2 border-blue-600 text-blue-600 rounded-lg text-sm hover:bg-blue-50 transition-colors flex items-center gap-2">
-                                <i class="fas fa-stethoscope text-xs"></i>测试连接
-                            </button>
-                        </div>
-
                         <!-- 角色与链路配置 -->
                         <div class="-ml-7">
                             <div class="flex items-center gap-2 mb-2">
@@ -308,11 +301,16 @@
                     </div>
                 </section>
             </div>
-            <div class="px-6 py-4 border-t bg-gray-50 rounded-b-xl flex justify-end gap-3">
-                <button onclick="closeModal('createModal')" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-white hover:border-gray-400 transition-colors">取消</button>
-                <button onclick="createModel()" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 shadow-sm hover:shadow transition-all flex items-center gap-2">
-                    <i class="fas fa-save text-xs"></i>创建模型
+            <div class="px-6 py-4 border-t bg-gray-50 rounded-b-xl flex justify-between gap-3">
+                <button onclick="testCreateConfig()" class="px-4 py-2 border-2 border-blue-600 text-blue-600 rounded-lg text-sm hover:bg-blue-50 transition-colors flex items-center gap-2">
+                    <i class="fas fa-stethoscope text-xs"></i>测试连接
                 </button>
+                <div class="flex gap-3">
+                    <button onclick="closeModal('createModal')" class="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-white hover:border-gray-400 transition-colors">取消</button>
+                    <button onclick="createModel()" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 shadow-sm hover:shadow transition-all flex items-center gap-2">
+                        <i class="fas fa-save text-xs"></i>创建模型
+                    </button>
+                </div>
             </div>
         </div>
     </div>
