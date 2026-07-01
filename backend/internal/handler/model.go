@@ -139,6 +139,16 @@ func (h *ModelHandler) Update(c *gin.Context) {
 		return
 	}
 
+	m, err := h.service.Get(uint(id))
+	if err != nil {
+		if err == service.ErrModelNotFound {
+			c.JSON(404, gin.H{"error": "模型不存在"})
+			return
+		}
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
 	var req service.UpdateModelRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": "参数错误: " + err.Error()})
@@ -160,7 +170,6 @@ func (h *ModelHandler) Update(c *gin.Context) {
 		return
 	}
 
-	m, _ := h.service.Get(uint(id))
 	model.RecordOpLog("模型更新", fmt.Sprintf("%s-%s", m.Provider, m.ModelID), uint(id), "success", "", c.ClientIP())
 
 	c.JSON(200, gin.H{"message": "模型更新成功"})
@@ -172,6 +181,12 @@ func (h *ModelHandler) Delete(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		c.JSON(400, gin.H{"error": "无效的模型ID"})
+		return
+	}
+
+	m, err := h.service.Get(uint(id))
+	if err != nil {
+		c.JSON(404, gin.H{"error": "模型不存在"})
 		return
 	}
 
@@ -190,7 +205,6 @@ func (h *ModelHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	m, _ := h.service.Get(uint(id))
 	model.RecordOpLog("模型删除", fmt.Sprintf("%s-%s", m.Provider, m.ModelID), uint(id), "success", "", c.ClientIP())
 
 	c.JSON(200, gin.H{"message": "模型删除成功"})
@@ -205,6 +219,16 @@ func (h *ModelHandler) SetDefault(c *gin.Context) {
 		return
 	}
 
+	m, err := h.service.Get(uint(id))
+	if err != nil {
+		if err == service.ErrModelNotFound {
+			c.JSON(404, gin.H{"error": "模型不存在"})
+			return
+		}
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
 	err = h.service.SetDefault(uint(id))
 	if err != nil {
 		if err == service.ErrModelNotFound {
@@ -216,7 +240,6 @@ func (h *ModelHandler) SetDefault(c *gin.Context) {
 		return
 	}
 
-	m, _ := h.service.Get(uint(id))
 	model.RecordOpLog("设为默认模型", fmt.Sprintf("%s-%s", m.Provider, m.ModelID), uint(id), "success", "", c.ClientIP())
 
 	c.JSON(200, gin.H{"message": "已设为默认模型"})
@@ -231,6 +254,16 @@ func (h *ModelHandler) UnsetDefault(c *gin.Context) {
 		return
 	}
 
+	m, err := h.service.Get(uint(id))
+	if err != nil {
+		if err == service.ErrModelNotFound {
+			c.JSON(404, gin.H{"error": "模型不存在"})
+			return
+		}
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
 	err = h.service.UnsetDefault(uint(id))
 	if err != nil {
 		if err == service.ErrModelNotFound {
@@ -242,7 +275,6 @@ func (h *ModelHandler) UnsetDefault(c *gin.Context) {
 		return
 	}
 
-	m, _ := h.service.Get(uint(id))
 	model.RecordOpLog("取消默认模型", fmt.Sprintf("%s-%s", m.Provider, m.ModelID), uint(id), "success", "", c.ClientIP())
 
 	c.JSON(200, gin.H{"message": "已取消默认模型"})
