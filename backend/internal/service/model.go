@@ -301,10 +301,13 @@ func (s *ModelService) runModelHealthChecks() {
 		if interval <= 0 {
 			interval = 5
 		}
-        shouldCheck := m.LastCheckAt == nil || now.After(m.LastCheckAt.Add(time.Duration(interval)*time.Second))
+		shouldCheck := m.LastCheckAt == nil || now.After(m.LastCheckAt.Add(time.Duration(interval)*time.Second))
 		if !shouldCheck {
 			continue
 		}
+		// 提前更新 last_check_at，避免 CheckConnectivity 阻塞期间其他 tick 重复检查同一模型
+		model.DB.Model(&m).Update("last_check_at", now)
+
 		connected, err := s.CheckConnectivity(m.ID)
 		errMsg := ""
 		if !connected && err != nil {
@@ -319,7 +322,6 @@ func (s *ModelService) runModelHealthChecks() {
 		updates := map[string]interface{}{
 			"status":        newStatus,
 			"check_error":   errMsg,
-			"last_check_at": now,
 		}
 		statusChanged := prevStatus != newStatus
 		if statusChanged {

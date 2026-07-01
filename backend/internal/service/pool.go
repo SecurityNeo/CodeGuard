@@ -167,6 +167,9 @@ func (s *PoolService) runPoolHealthChecks() {
 		if !shouldCheck {
 			continue
 		}
+		// 提前更新 last_check_at，避免 CheckConnectivity 阻塞期间其他 tick 重复检查同一资源池
+		model.DB.Model(&pool).Update("last_check_at", now)
+
 		connected, errMsg, version, _ := s.CheckConnectivity(pool.ID)
 		prevStatus := pool.Status
 		newStatus := model.PoolActive
@@ -175,9 +178,8 @@ func (s *PoolService) runPoolHealthChecks() {
 		}
 
 		updates := map[string]interface{}{
-			"status":        newStatus,
-			"check_error":   errMsg,
-			"last_check_at": now,
+			"status":      newStatus,
+			"check_error": errMsg,
 		}
 		if connected && version != "" {
 			updates["opencode_version"] = version
