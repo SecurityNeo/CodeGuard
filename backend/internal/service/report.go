@@ -118,12 +118,6 @@ type sysStatus struct {
 	AvgReviewTime     string
 }
 
-// highlight 亮点
-type highlight struct {
-	Text  string
-	Bold  string
-	After string
-}
 
 func buildPeriod(reportType string) periodInfo {
 	now := time.Now()
@@ -545,8 +539,6 @@ func (s *ReportService) GenerateHTML(reportType string) (string, error) {
 	// 获取本周/本月总MR数用于百分比计算
 	if dist.Total == 0 { dist.Total = 1 }
 
-	// 生成亮点
-	highlights := buildHighlights(curKpi, projectRanks, devRanks, p.Days)
 
 	data := map[string]interface{}{
 		"Title":           p.Title,
@@ -581,41 +573,12 @@ func (s *ReportService) GenerateHTML(reportType string) (string, error) {
 		"LowQualityList":   lowQuality,
 		"DevChanges":       devChanges,
 		"SysStatus":        sys,
-		"Highlights":       highlights,
 		"Now":              time.Now().Format("2006-01-02 15:04"),
 	}
 
 	return s.renderTemplate(data)
 }
 
-func buildHighlights(kpi kpiData, projects []projectRank, devs []devRank, days int) []highlight {
-	var h []highlight
-	if kpi.AvgScore >= 80 {
-		h = append(h, highlight{Text: "整体平均评分 ", Bold: fmt.Sprintf("%.1f", kpi.AvgScore), After: fmt.Sprintf("，代码质量表现"+func() string {
-			if kpi.AvgScore >= 90 { return "优秀" }
-			return "良好"
-		}())})
-	}
-	for _, pr := range projects {
-		if pr.LowQualityNum == 0 && pr.Count >= 3 {
-			h = append(h, highlight{Text: "项目 ", Bold: pr.Project, After: fmt.Sprintf(" %s 个 MR 全部及格，质量稳定", func() string {
-				if pr.Count >= 10 { return "共提交" + fmt.Sprintf("%d", pr.Count) }
-				return "本周" + fmt.Sprintf("%d", pr.Count)
-			}())})
-			break // 只取一个
-		}
-	}
-	for _, d := range devs {
-		if d.AvgScore >= 90 && d.MRCount >= 2 {
-			h = append(h, highlight{Text: "开发者 ", Bold: d.Author, After: fmt.Sprintf(" 平均评分 %.1f，提交质量持续优秀", d.AvgScore)})
-			break
-		}
-	}
-	if kpi.TotalMRs > 0 {
-		h = append(h, highlight{Text: "AI CodeReview 已覆盖本周全部 ", Bold: fmt.Sprintf("%d", kpi.TotalMRs), After: " 个 MR"})
-	}
-	return h
-}
 
 // SendEmail 发送邮件
 func (s *ReportService) SendEmail(reportType string, html string, groupNames []string) error {
@@ -960,17 +923,6 @@ const reportTemplate = `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitiona
 <font face="Arial,Helvetica,sans-serif" size="2" color="#c62828"><b>&#128680; 低质量 MR 列表（评分 &lt; 60）</b></font><br><br>
 {{range .LowQualityList}}
 <font face="Arial,Helvetica,sans-serif" size="2" color="#666666">&nbsp;&nbsp;&nbsp;&nbsp;&#8226; <b>{{.Project}}</b> — {{.Title}} — {{.Author}} — <b>评分 {{printf "%.0f" .Score}}</b> — +{{.Additions}} / -{{.Deletions}}</font><br>
-{{end}}
-</td></tr></table>
-<br>
-{{end}}
-
-<!-- Highlights -->
-{{if .Highlights}}
-<table cellpadding="0" cellspacing="0" border="0" width="852" bgcolor="#f1f8e9"><tr><td style="padding:20px 28px;border:1px solid #c5e1a5;">
-<font face="Arial,Helvetica,sans-serif" size="2" color="#2e7d32"><b>&#127775; 值得表扬</b></font><br><br>
-{{range .Highlights}}
-<font face="Arial,Helvetica,sans-serif" size="2" color="#666666">&nbsp;&nbsp;&nbsp;&nbsp;&#8226; {{.Text}}<b>{{.Bold}}</b>{{.After}}</font><br>
 {{end}}
 </td></tr></table>
 <br>
