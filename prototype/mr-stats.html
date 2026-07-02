@@ -629,6 +629,11 @@
             loadFilterOptions();
             loadMRLogs();
             renderSidebar('mr-stats');
+            // 普通用户隐藏作者筛选框（数据已由后端按用户过滤）
+            if (isUser()) {
+                const authorFilter = document.getElementById('authorFilter');
+                if (authorFilter) authorFilter.closest('.flex').style.display = 'none';
+            }
         });
     </script>
 </body>
