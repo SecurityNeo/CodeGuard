@@ -13,13 +13,13 @@ import (
 )
 
 type MRStats struct {
-	TotalAdditions   int64 `json:"total_additions"`
-	TotalDeletions   int64 `json:"total_deletions"`
-	TotalReviewCount int64 `json:"total_review_count"`
+	TotalAdditions   int64   `json:"total_additions"`
+	TotalDeletions   int64   `json:"total_deletions"`
+	TotalReviewCount int64   `json:"total_review_count"`
 	AvgScore         float64 `json:"avg_score"`
-	MergedCount      int64 `json:"merged_count"`
-	OpenedCount      int64 `json:"opened_count"`
-	ClosedCount      int64 `json:"closed_count"`
+	MergedCount      int64   `json:"merged_count"`
+	OpenedCount      int64   `json:"opened_count"`
+	ClosedCount      int64   `json:"closed_count"`
 }
 
 type MRReviewLogHandler struct{}

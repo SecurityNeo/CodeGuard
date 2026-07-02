@@ -14,7 +14,7 @@ import (
 // GenerateToken 生成新 token（数据库持久化）
 func GenerateToken(userID uint, username string) string {
 	token := generateRandomToken()
-	
+
 	// 保存到数据库
 	tokenModel := model.Token{
 		UserID:    userID,
@@ -23,7 +23,7 @@ func GenerateToken(userID uint, username string) string {
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 	}
 	model.DB.Create(&tokenModel)
-	
+
 	return token
 }
 
@@ -32,13 +32,13 @@ func ValidateToken(token string) (uint, bool) {
 	if token == "" {
 		return 0, false
 	}
-	
+
 	var tokenModel model.Token
 	// 使用当前时间（带系统时区）与数据库比较
 	if err := model.DB.Where("token = ? AND expires_at > ?", token, time.Now()).First(&tokenModel).Error; err != nil {
 		return 0, false
 	}
-	
+
 	return tokenModel.UserID, true
 }
 
@@ -68,14 +68,14 @@ func Auth() gin.HandlerFunc {
 			"/api/v1/auth/gitlab/callback",
 			"/health",
 		}
-		
+
 		for _, path := range whiteList {
 			if c.Request.URL.Path == path {
 				c.Next()
 				return
 			}
 		}
-		
+
 		// 静态文件也不需要认证
 		if !strings.HasPrefix(c.Request.URL.Path, "/api/") {
 			c.Next()
@@ -146,4 +146,3 @@ func GetUser(c *gin.Context) (model.User, bool) {
 	user, ok := v.(model.User)
 	return user, ok
 }
-

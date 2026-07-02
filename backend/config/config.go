@@ -7,10 +7,10 @@ import (
 )
 
 type Config struct {
-	Debug           bool   `yaml:"debug"`
-	Port            int    `yaml:"port"`
-	DSN             string `yaml:"dsn"`
-	Database        string `yaml:"database"`
+	Debug    bool   `yaml:"debug"`
+	Port     int    `yaml:"port"`
+	DSN      string `yaml:"dsn"`
+	Database string `yaml:"database"`
 
 	// Database connection details (alternative to DSN)
 	DBHost     string `yaml:"db_host"`
@@ -21,27 +21,27 @@ type Config struct {
 
 	EncryptKey      string `yaml:"encrypt_key"`
 	SyncInterval    int    `yaml:"sync_interval"`
-	GitlabToken    string `yaml:"gitlab_token"`
+	GitlabToken     string `yaml:"gitlab_token"`
 	TaskTimeoutMin  int    `yaml:"task_timeout_min"`
 	MaxParallelTask int    `yaml:"max_parallel_task"`
 	ProjectBaseDir  string `yaml:"project_base_dir"`
 	FrontendPath    string `yaml:"frontend_path"`
 
 	// GitLab OAuth 配置
-	GitlabOAuthEnabled       bool   `yaml:"gitlab_oauth_enabled"`
-	GitlabBaseURL            string `yaml:"gitlab_base_url"`
-	GitlabOAuthClientID      string `yaml:"gitlab_oauth_client_id"`
-	GitlabOAuthClientSecret  string `yaml:"gitlab_oauth_client_secret"`
-	GitlabOAuthRedirectURI   string `yaml:"gitlab_oauth_redirect_uri"`
+	GitlabOAuthEnabled        bool   `yaml:"gitlab_oauth_enabled"`
+	GitlabBaseURL             string `yaml:"gitlab_base_url"`
+	GitlabOAuthClientID       string `yaml:"gitlab_oauth_client_id"`
+	GitlabOAuthClientSecret   string `yaml:"gitlab_oauth_client_secret"`
+	GitlabOAuthRedirectURI    string `yaml:"gitlab_oauth_redirect_uri"`
 	GitlabOAuthAutoCreateUser bool   `yaml:"gitlab_oauth_auto_create_user"`
 }
 
 func Load() *Config {
 	cfg := &Config{
-		Debug:           getEnvBool("DEBUG", false),
-		Port:            getEnvInt("PORT", 8080),
-		DSN:             getEnv("DSN", ""),
-		Database:        getEnv("DATABASE", "mysql"),
+		Debug:    getEnvBool("DEBUG", false),
+		Port:     getEnvInt("PORT", 8080),
+		DSN:      getEnv("DSN", ""),
+		Database: getEnv("DATABASE", "mysql"),
 
 		DBHost:     getEnv("DB_HOST", "127.0.0.1"),
 		DBPort:     getEnvInt("DB_PORT", 3306),
@@ -51,18 +51,18 @@ func Load() *Config {
 
 		EncryptKey:      getEnv("ENCRYPTION_KEY", ""),
 		SyncInterval:    getEnvInt("SYNC_INTERVAL", 60),
-		GitlabToken:    getEnv("GITLAB_TOKEN", ""),
+		GitlabToken:     getEnv("GITLAB_TOKEN", ""),
 		TaskTimeoutMin:  getEnvInt("TASK_TIMEOUT_MIN", 30),
 		MaxParallelTask: getEnvInt("MAX_PARALLEL_TASK", 20),
 		ProjectBaseDir:  getEnv("PROJECT_BASE_DIR", "/data/gitlab/"),
 		FrontendPath:    getEnv("FRONTEND_PATH", "/app/prototype"),
 
 		// GitLab OAuth
-		GitlabOAuthEnabled:       getEnvBool("GITLAB_OAUTH_ENABLED", false),
-		GitlabBaseURL:            getEnv("GITLAB_BASE_URL", ""),
-		GitlabOAuthClientID:      getEnv("GITLAB_OAUTH_CLIENT_ID", ""),
-		GitlabOAuthClientSecret:  getEnv("GITLAB_OAUTH_CLIENT_SECRET", ""),
-		GitlabOAuthRedirectURI:   getEnv("GITLAB_OAUTH_REDIRECT_URI", ""),
+		GitlabOAuthEnabled:        getEnvBool("GITLAB_OAUTH_ENABLED", false),
+		GitlabBaseURL:             getEnv("GITLAB_BASE_URL", ""),
+		GitlabOAuthClientID:       getEnv("GITLAB_OAUTH_CLIENT_ID", ""),
+		GitlabOAuthClientSecret:   getEnv("GITLAB_OAUTH_CLIENT_SECRET", ""),
+		GitlabOAuthRedirectURI:    getEnv("GITLAB_OAUTH_REDIRECT_URI", ""),
 		GitlabOAuthAutoCreateUser: getEnvBool("GITLAB_OAUTH_AUTO_CREATE_USER", true),
 	}
 	return cfg

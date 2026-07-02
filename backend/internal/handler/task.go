@@ -148,7 +148,7 @@ func (h *TaskHandler) Messages(c *gin.Context) {
 
 func (h *TaskHandler) SendMessage(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	
+
 	var req struct {
 		Content string `json:"content" binding:"required"`
 	}
@@ -168,7 +168,7 @@ func (h *TaskHandler) SendMessage(c *gin.Context) {
 // SubscribeEvents SSE 流式订阅 OpenCode 全局事件（仅过滤当前 session）
 func (h *TaskHandler) SubscribeEvents(c *gin.Context) {
 	taskID, _ := strconv.Atoi(c.Param("id"))
-	
+
 	// 获取任务信息
 	var task model.Task
 	if err := model.DB.First(&task, taskID).Error; err != nil {

@@ -73,7 +73,7 @@
 
                 html += `
                 <div class="space-y-1">
-                    <div class="flex items-center justify-between px-4 py-3 rounded-lg text-sm cursor-pointer ${groupActiveClass}" onclick="toggleGroup('${menu.id}')">
+                    <div class="flex items-center justify-between px-4 py-3 rounded-lg text-sm select-none cursor-pointer ${groupActiveClass}" onclick="toggleGroup('${menu.id}')">
                         <div class="flex items-center gap-3">
                             <i class="fas ${menu.icon} w-5"></i><span>${menu.name}</span>
                         </div>

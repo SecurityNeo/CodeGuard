@@ -6,8 +6,8 @@
     <title>系统管理 - CodeGuard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="js/auth.js?v=5"></script>
-    <script src="js/menu-config.js?v=1"></script>
-    <script src="js/sidebar.js?v=1"></script>
+    <script src="js/menu-config.js?v=2"></script>
+    <script src="js/sidebar.js?v=2"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         .sidebar-item:hover { background-color: rgba(255,255,255,0.1); }
@@ -896,6 +896,12 @@ function previewTemplate() {
         // 页面加载时根据 hash 初始化
         initTabFromHash();
         renderSidebar(getSettingsActiveId());
+
+        // 监听 hash 变化（从侧边栏点击子菜单时浏览器不会刷新页面）
+        window.addEventListener('hashchange', function() {
+            initTabFromHash();
+            renderSidebar(getSettingsActiveId());
+        });
     </script>
 </body>
 </html>

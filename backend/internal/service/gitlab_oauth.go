@@ -80,12 +80,12 @@ func (s *GitLabOAuthService) ExchangeCode(code string) (string, error) {
 
 // GitLabUserInfo GitLab API /api/v4/user 返回的结构
 type GitLabUserInfo struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
 	AvatarURL string `json:"avatar_url"`
-	State    string `json:"state"`
+	State     string `json:"state"`
 }
 
 // GetUserInfo 用 access_token 获取 GitLab 用户信息

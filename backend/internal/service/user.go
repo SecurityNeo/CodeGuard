@@ -20,17 +20,17 @@ func NewUserService() *UserService {
 func (s *UserService) InitAdmin() error {
 	var user model.User
 	result := model.DB.Where("username = ?", "admin").First(&user)
-	
+
 	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("query admin user failed: %w", result.Error)
 	}
-	
+
 	// 用户已存在
 	if result.Error == nil {
 		zap.L().Info("admin user already exists")
 		return nil
 	}
-	
+
 	// 创建默认 admin 用户
 	hashedPassword, err := encrypt.HashPassword("admin123")
 	if err != nil {

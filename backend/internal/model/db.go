@@ -34,7 +34,7 @@ func InitDB(cfg *config.Config) error {
 	}
 
 	db, err := gorm.Open(dialector, &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Warn),
+		Logger:                                   logger.Default.LogMode(logger.Warn),
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {

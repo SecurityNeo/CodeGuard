@@ -89,7 +89,7 @@ func (s *TaskService) Create(data map[string]interface{}) (*model.Task, error) {
 	if m, ok := data["model_id"].(float64); ok {
 		modelID = uint(m)
 	}
-	
+
 	mrURL := ""
 	if v, ok := data["mr_url"].(string); ok {
 		mrURL = v
@@ -118,7 +118,7 @@ func (s *TaskService) Create(data map[string]interface{}) (*model.Task, error) {
 	if v, ok := data["note_id"].(float64); ok {
 		noteID = int(v)
 	}
-	
+
 	triggerSource := ""
 	if v, ok := data["trigger_source"].(string); ok && v != "" {
 		triggerSource = v
@@ -129,23 +129,23 @@ func (s *TaskService) Create(data map[string]interface{}) (*model.Task, error) {
 	}
 
 	task := model.Task{
-		ProjectID:     uint(data["project_id"].(float64)),
-		PoolID:        0,
-		UsedModelID:   modelID,
-		MRMergeID:     int(data["mr_iid"].(float64)),
-		MRTitle:       mrTitle,
-		MRURL:         mrURL,
-		MRAuthor:      mrAuthor,
+		ProjectID:           uint(data["project_id"].(float64)),
+		PoolID:              0,
+		UsedModelID:         modelID,
+		MRMergeID:           int(data["mr_iid"].(float64)),
+		MRTitle:             mrTitle,
+		MRURL:               mrURL,
+		MRAuthor:            mrAuthor,
 		MRAuthorDisplayName: authorDisplayName,
-		SourceBranch:  sourceBranch,
-		TargetBranch:  targetBranch,
-		NoteID:        noteID,
-		AIPrompt:      data["ai_prompt"].(string),
-		TaskType:      "chat",
-		Status:        model.TaskPending,
-		TriggerType:   data["trigger_type"].(string),
-		TriggerSource: triggerSource,
-		ScoreValue:    scoreValue,
+		SourceBranch:        sourceBranch,
+		TargetBranch:        targetBranch,
+		NoteID:              noteID,
+		AIPrompt:            data["ai_prompt"].(string),
+		TaskType:            "chat",
+		Status:              model.TaskPending,
+		TriggerType:         data["trigger_type"].(string),
+		TriggerSource:       triggerSource,
+		ScoreValue:          scoreValue,
 	}
 	// pool_id 可选（AI 评审任务无资源池）
 	if v, ok := data["pool_id"].(float64); ok {
@@ -179,9 +179,9 @@ func (s *TaskService) Execute(taskID uint) error {
 	var runningCount int64
 	model.DB.Model(&model.Task{}).Where("project_id = ? AND status = ? AND id != ?", task.ProjectID, model.TaskRunning, taskID).Count(&runningCount)
 	if runningCount > 0 {
-		zap.L().Info("project has running task, task queued in pending", 
-			zap.Uint("task_id", taskID), 
-			zap.Uint("project_id", task.ProjectID), 
+		zap.L().Info("project has running task, task queued in pending",
+			zap.Uint("task_id", taskID),
+			zap.Uint("project_id", task.ProjectID),
 			zap.Int64("running_count", runningCount))
 		return nil
 	}
@@ -203,11 +203,11 @@ func (s *TaskService) Execute(taskID uint) error {
 	)
 	if err != nil {
 		zap.L().Error("ExecuteTaskWithSession failed", zap.Error(err))
-		
+
 		// 重新查询获取最新的 started_at
 		var currentTask model.Task
 		model.DB.First(&currentTask, taskID)
-		
+
 		currentTask.Status = model.TaskFailed
 		currentTask.ErrorMsg = err.Error()
 		now := time.Now()
@@ -216,8 +216,8 @@ func (s *TaskService) Execute(taskID uint) error {
 			currentTask.DurationSec = int(now.Sub(*currentTask.StartedAt).Seconds())
 		}
 		model.DB.Save(&currentTask)
-		
-	// 发送 GitLab MR 评论告知失败
+
+		// 发送 GitLab MR 评论告知失败
 		go func() {
 			failComment := "❌ 任务运行失败，请联系管理员处理。"
 			if postMRComment(task.Project.ProjectPath, task.Project.AccessToken, task.MRMergeID, failComment, task.NoteID) != nil {
@@ -226,17 +226,17 @@ func (s *TaskService) Execute(taskID uint) error {
 				zap.L().Info("fail comment posted to MR", zap.Uint("task_id", taskID))
 			}
 		}()
-		
+
 		// 任务失败后，触发队列中的下一个 pending 任务
 		s.startNextPendingTask(task.ProjectID)
-		
+
 		return err
 	}
 
 	task.OpencodeSessionID = sessionID
 	task.AIResponse = aiResponse
 	task.Status = model.TaskSuccess
-	
+
 	var startedAt time.Time
 	if err := model.DB.Model(&model.Task{}).Where("id = ?", task.ID).Pluck("started_at", &startedAt).Error; err == nil && !startedAt.IsZero() {
 		now := time.Now()
@@ -245,12 +245,11 @@ func (s *TaskService) Execute(taskID uint) error {
 		task.DurationSec = int(now.Sub(startedAt).Seconds())
 		zap.L().Info("task completed, calculating duration", zap.Uint("task_id", task.ID), zap.Int("duration_sec", task.DurationSec), zap.Time("started_at", startedAt), zap.Time("completed_at", *task.CompletedAt))
 	}
-	
+
 	model.DB.Model(&task).Select("OpencodeSessionID", "AIResponse", "Status", "CompletedAt", "DurationSec").Where("status = ?", model.TaskRunning).Updates(task)
 	zap.L().Info("task saved to DB", zap.Uint("task_id", task.ID), zap.Int("duration_sec", task.DurationSec))
 
 	zap.L().Info("task completed", zap.Uint("task_id", task.ID), zap.String("session_id", sessionID))
-
 
 	// 发送成功评论到 MR（检查任务是否被停止）
 	go func() {
@@ -346,20 +345,20 @@ func (s *TaskService) Abort(taskID uint) error {
 	}
 
 	opencodeSvc := NewOpencodeService()
-	
+
 	// 如果有 session ID，尝试终止
 	if task.OpencodeSessionID != "" {
 		zap.L().Info("aborting opencode session", zap.String("session_id", task.OpencodeSessionID))
 		if err := opencodeSvc.AbortTask(task.PoolID, task.OpencodeSessionID); err != nil {
 			zap.L().Error("abort task failed", zap.Error(err))
 		}
-	// 任务停止时也不删除session，保留供查看对话历史
-	// if task.OpencodeSessionID != "" {
-	// 	zap.L().Info("deleting stopped session", zap.String("session_id", task.OpencodeSessionID))
-	// 	if err := opencodeSvc.DeleteSession(task.PoolID, task.OpencodeSessionID); err != nil {
-	// 		zap.L().Error("delete session failed", zap.Error(err))
-	// 	}
-	// }
+		// 任务停止时也不删除session，保留供查看对话历史
+		// if task.OpencodeSessionID != "" {
+		// 	zap.L().Info("deleting stopped session", zap.String("session_id", task.OpencodeSessionID))
+		// 	if err := opencodeSvc.DeleteSession(task.PoolID, task.OpencodeSessionID); err != nil {
+		// 		zap.L().Error("delete session failed", zap.Error(err))
+		// 	}
+		// }
 	} else {
 		zap.L().Warn("abort task: no session_id found", zap.Uint("task_id", taskID))
 	}
@@ -420,7 +419,7 @@ func (s *TaskService) TimeoutCheck() {
 	if err := model.DB.First(&sysConfig).Error; err == nil && sysConfig.TaskTimeoutMin > 0 {
 		timeoutMin = sysConfig.TaskTimeoutMin
 	}
-	
+
 	var tasks []model.Task
 	if err := model.DB.Where("status = ? AND started_at < ?",
 		model.TaskRunning,
@@ -448,7 +447,7 @@ func (s *TaskService) TimeoutCheck() {
 			currentTask.DurationSec = int(now.Sub(*currentTask.StartedAt).Seconds())
 		}
 		model.DB.Save(&currentTask)
-		
+
 		// 超时后触发队列中的下一个 pending 任务
 		s.startNextPendingTask(currentTask.ProjectID)
 	}
@@ -609,6 +608,7 @@ func (s *TaskService) SendTaskMessage(taskID uint, content string) error {
 	zap.L().Info("task async message sent", zap.Uint("task_id", taskID), zap.String("session_id", task.OpencodeSessionID), zap.String("directory", projectDir))
 	return nil
 }
+
 // 1. 调用 OpenCode API 删除 session
 // 2. 清空数据库中的 opencode_session_id
 func (s *TaskService) DeleteTaskSession(taskID uint) error {
@@ -653,6 +653,7 @@ func (s *TaskService) DeleteTaskSession(taskID uint) error {
 
 	return nil
 }
+
 // ========== AI 评审任务 ==========
 
 const (
@@ -725,7 +726,7 @@ func (s *TaskService) ExecuteAIReviewTask(taskID uint) error {
 	task.Status = model.TaskSuccess
 	task.AIResponse = reviewReport
 	task.ScoreValue = score
-	task.UsedModelID = actualModelID  // 写入实际使用的模型ID
+	task.UsedModelID = actualModelID // 写入实际使用的模型ID
 	task.StartedAt = &startedAt
 	task.CompletedAt = &now
 	task.DurationSec = int(now.Sub(startedAt).Seconds())
@@ -1017,19 +1018,19 @@ func (s *TaskService) triggerDeepReview(reviewTask model.Task, threshold int) {
 	aiPrompt = strings.ReplaceAll(aiPrompt, "{{AI_BRANCH}}", "AI-"+generateRandomString(4))
 
 	taskData := map[string]interface{}{
-		"project_id":      float64(reviewTask.ProjectID),
-		"pool_id":         float64(reviewTask.Project.PoolID),
-		"mr_iid":          float64(reviewTask.MRMergeID),
-		"mr_title":        reviewTask.MRTitle,
-		"mr_url":          reviewTask.MRURL,
-		"author":          reviewTask.MRAuthor,
-		"source_branch":   reviewTask.SourceBranch,
-		"target_branch":   reviewTask.TargetBranch,
-		"ai_prompt":       aiPrompt,
-		"task_type":       "chat",
-		"trigger_type":    "auto",
-		"trigger_source":  "score_threshold",
-		"score_value":     float64(reviewTask.ScoreValue),
+		"project_id":     float64(reviewTask.ProjectID),
+		"pool_id":        float64(reviewTask.Project.PoolID),
+		"mr_iid":         float64(reviewTask.MRMergeID),
+		"mr_title":       reviewTask.MRTitle,
+		"mr_url":         reviewTask.MRURL,
+		"author":         reviewTask.MRAuthor,
+		"source_branch":  reviewTask.SourceBranch,
+		"target_branch":  reviewTask.TargetBranch,
+		"ai_prompt":      aiPrompt,
+		"task_type":      "chat",
+		"trigger_type":   "auto",
+		"trigger_source": "score_threshold",
+		"score_value":    float64(reviewTask.ScoreValue),
 	}
 
 	deepTask, err := s.Create(taskData)
@@ -1102,8 +1103,6 @@ func splitIntoBatches(files []gitlab.DiffFile, maxTokens int) [][]gitlab.DiffFil
 	}
 	return batches
 }
-
-
 
 func extractScoreFromReport(report string) (int, bool) {
 	re := regexp.MustCompile(`AI评分\s*[:：]\s*(\d+(?:\.\d+)?)\s*分`)

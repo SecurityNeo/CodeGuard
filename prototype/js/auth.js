@@ -15,6 +15,19 @@
         setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
     };
 
+    // ========== Token 相关函数 ==========
+    window.getToken = function() {
+        return localStorage.getItem(TOKEN_KEY);
+    };
+
+    window.redirectToLogin = function() {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+        if (window.location.pathname !== '/login.html') {
+            window.location.href = '/login.html';
+        }
+    };
+
     // ========== 角色权限检查 ==========
     window.isAdmin = function() {
         try {
