@@ -1553,10 +1553,9 @@ function renderTasks(tasks) {
         loadTasks();
         loadStats();
         renderSidebar('tasks');
-        // 普通用户隐藏作者筛选框（数据已由后端按用户过滤）
+        // 普通用户：作者筛选框只显示自己（数据已由后端过滤）
         if (isUser()) {
-            const authorFilter = document.getElementById('authorFilter');
-            if (authorFilter) authorFilter.style.display = 'none';
+            restrictAuthorFilterToSelf();
         }
     </script>
 </body>

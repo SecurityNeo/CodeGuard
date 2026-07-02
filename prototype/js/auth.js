@@ -55,6 +55,20 @@
             }
         });
     };
+    // 普通用户：限制作者筛选框仅显示当前用户（数据已由后端过滤，前端无需筛选他人）
+    window.restrictAuthorFilterToSelf = function() {
+        try {
+            const info = JSON.parse(localStorage.getItem(USER_KEY) || '{}');
+            if (info.role !== 'user' || !info.gitlab_username) return;
+            const filter = document.getElementById('authorFilter');
+            if (!filter) return;
+            // 清空并只添加当前用户选项
+            filter.innerHTML = `<option value="${info.gitlab_username}">${info.gitlab_username}</option>`;
+            filter.disabled = true;
+            filter.title = '仅显示您自己的数据';
+        } catch(e) {}
+    };
+
     window.checkAuth = function() {
         if (!getToken()) {
             redirectToLogin();
