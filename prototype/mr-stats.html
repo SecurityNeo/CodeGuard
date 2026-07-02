@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>代码提交统计 - CodeGuard</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="js/auth.js?v=4"></script>
+    <script src="js/auth.js?v=5"></script>
+    <script src="js/menu-config.js?v=1"></script>
+    <script src="js/sidebar.js?v=1"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         .sidebar-item:hover { background-color: rgba(255,255,255,0.1); }
@@ -94,71 +96,7 @@
     <div id="toastContainer"></div>
     <div class="flex h-screen">
         <!-- 侧边栏 -->
-        <aside class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
-            <div class="p-6">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                        <i class="fas fa-robot text-xl"></i>
-                    </div>
-                    <div><h1 class="font-bold text-lg">CodeGuard</h1><p class="text-xs text-gray-400">代码智能门禁</p></div>
-                </div>
-            </div>
-            <nav class="flex-1 px-3 py-4 space-y-1">
-                <a href="statistics.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
-                    <i class="fas fa-chart-line w-5"></i><span>首页</span>
-                </a>
-                <a href="mr-stats.html" class="sidebar-item active flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
-                    <i class="fas fa-code-branch w-5"></i><span>代码提交统计</span>
-                </a>
-                <a href="projects.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
-                    <i class="fas fa-folder-open w-5"></i><span>项目管理</span>
-                </a>
-                <a href="tasks.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
-                    <i class="fas fa-tasks w-5"></i><span>任务列表</span>
-                </a>
-                <a href="pools.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
-                    <i class="fas fa-server w-5"></i><span>任务资源池</span>
-                </a>
-                <a href="models.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
-                    <i class="fas fa-brain w-5"></i><span>大模型管理</span>
-                </a>
-                <div class="space-y-1">
-                    <div class="flex items-center justify-between px-4 py-3 rounded-lg text-sm cursor-pointer" onclick="toggleNotifyMenu()">
-                        <div class="flex items-center gap-3">
-                            <i class="fas fa-bell w-5"></i><span>通知管理</span>
-                        </div>
-                        <i class="fas fa-chevron-down text-xs transition-transform" id="notifyMenuIcon"></i>
-                    </div>
-                    <div id="notifyMenu" class="hidden pl-10 space-y-1">
-                        <a href="notifiers.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">企业微信</a>
-                        <a href="mail.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">邮件</a>
-                        <a href="member-mappings.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">成员映射</a>
-                        <a href="report.html" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white">报告管理</a>
-                    </div>
-                </div>
-                <a href="settings.html" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm">
-                    <i class="fas fa-cog w-5"></i><span>系统管理</span>
-                </a>
-            </nav>
-            <div class="p-4 border-t border-slate-700">
-                <div class="flex items-center gap-3 cursor-pointer" id="userMenuTrigger" onclick="toggleUserMenu()">
-                    <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center"><i class="fas fa-user text-sm"></i></div>
-                    <div class="text-sm flex-1">
-                        <div class="font-medium" id="currentUser">管理员</div>
-                        <div class="text-xs text-gray-400">管理后台</div>
-                    </div>
-                    <i class="fas fa-chevron-down text-xs text-gray-400"></i>
-                </div>
-                <div id="userMenu" class="hidden mt-2 bg-slate-800 rounded-lg py-1">
-                    <button onclick="showChangePasswordModal()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
-                        <i class="fas fa-key w-5"></i>修改密码
-                    </button>
-                    <button onclick="logout()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
-                        <i class="fas fa-sign-out-alt w-5"></i>退出登录
-                    </button>
-                </div>
-            </div>
-        </aside>
+        <aside id="sidebar" class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col"></aside>
 
         <!-- 主内容 -->
         <main class="flex-1 overflow-y-auto">
@@ -690,6 +628,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadFilterOptions();
             loadMRLogs();
+            renderSidebar('mr-stats');
         });
     </script>
 </body>

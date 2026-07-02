@@ -15,19 +15,33 @@
         setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
     };
 
-    // ========== Token 相关 ==========
-    window.getToken = function() {
-        return localStorage.getItem(TOKEN_KEY);
+    // ========== 角色权限检查 ==========
+    window.isAdmin = function() {
+        try {
+            const info = JSON.parse(localStorage.getItem(USER_KEY) || '{}');
+            return info.role === 'admin';
+        } catch(e) {
+            return false;
+        }
     };
-
-    window.redirectToLogin = function() {
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(USER_KEY);
-        if (window.location.pathname !== '/login.html') {
-            window.location.href = '/login.html';
+    window.isUser = function() {
+        try {
+            const info = JSON.parse(localStorage.getItem(USER_KEY) || '{}');
+            return info.role === 'user';
+        } catch(e) {
+            return true; // 默认假设为普通用户
         }
     };
 
+    // ========== 页面加载后自动隐藏无权限元素 ==========
+    window.applyAdminVisibility = function() {
+        const adminEls = document.querySelectorAll('[data-admin-only]');
+        adminEls.forEach(el => {
+            if (!isAdmin()) {
+                el.style.display = 'none';
+            }
+        });
+    };
     window.checkAuth = function() {
         if (!getToken()) {
             redirectToLogin();
@@ -232,9 +246,57 @@
     }
 
     // 初始化
+    // OAuth 回调处理：URL 带有 ?token=xxx 时自动保存
+    function handleOAuthCallback() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        if (token) {
+            localStorage.setItem(TOKEN_KEY, token);
+            // 清理 URL 中的 token
+            window.history.replaceState({}, document.title, window.location.pathname);
+            // 刷新用户信息
+            refreshUserInfo();
+            return true;
+        }
+        return false;
+    }
+
+    // 从后端拉取最新用户信息（含 role）
+    async function refreshUserInfo() {
+        try {
+            const token = getToken();
+            if (!token) return;
+            const res = await _origFetch('/api/v1/users/me', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.data) {
+                    // 合并现有缓存（保留 token）
+                    const existing = JSON.parse(localStorage.getItem(USER_KEY) || '{}');
+                    const merged = Object.assign({}, existing, data.data);
+                    merged.token = token; // 确保 token 不被覆盖
+                    localStorage.setItem(USER_KEY, JSON.stringify(merged));
+        // 隐藏所有 admin-only 元素
+        applyAdminVisibility();
+    }
+            }
+        } catch(e) {}
+    }
+
     function init() {
         if (window.location.pathname === '/login.html') return;
-        if (!checkAuth()) return;
+
+        // 优先处理 OAuth 回调
+        if (handleOAuthCallback()) {
+            // 不需要 redirectToLogin，直接继续
+        } else if (!checkAuth()) {
+            return;
+        }
+
+        // 每次页面加载时刷新用户信息（最多5分钟内不重复）
+        refreshUserInfo();
+
         try {
             const info = JSON.parse(localStorage.getItem(USER_KEY) || '{}');
             const el = document.getElementById('currentUser');

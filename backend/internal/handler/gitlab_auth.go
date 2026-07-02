@@ -145,13 +145,7 @@ func (h *GitLabAuthHandler) Callback(c *gin.Context) {
 		zap.String("gitlab_username", user.GitlabUsername),
 	)
 
-	c.JSON(200, gin.H{
-		"message": "登录成功",
-		"data": gin.H{
-			"token":    token,
-			"id":       user.ID,
-			"username": user.Username,
-			"role":     user.Role,
-		},
-	})
+	// 设置 Cookie + 重定向到首页，URL 附带 token 供前端 localStorage 使用
+	c.SetCookie("auth_token", token, 7*24*3600, "/", "", false, false)
+	c.Redirect(http.StatusFound, "/index.html?token="+token)
 }

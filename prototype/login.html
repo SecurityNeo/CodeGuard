@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>登录 - CodeGuard</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="js/auth.js?v=4"></script>
+    <script src="js/auth.js?v=5"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         .gradient-bg {
@@ -35,33 +35,45 @@
 
         <!-- Login Card -->
         <div class="glass-card rounded-2xl p-8">
-            <h2 class="text-xl font-bold text-white mb-6 text-center">管理员登录</h2>
-            
+            <h2 class="text-xl font-bold text-white mb-6 text-center">登录</h2>
+
+            <!-- GitLab 登录 -->
+            <a href="/api/v1/auth/gitlab" class="w-full flex items-center justify-center gap-2 bg-[#fc6d26] hover:bg-[#e65c19] text-white py-3 rounded-lg text-sm font-medium transition-all mb-4">
+                <i class="fab fa-gitlab"></i>
+                <span>使用 GitLab 登录</span>
+            </a>
+
+            <div class="flex items-center gap-3 my-4">
+                <div class="flex-1 h-px bg-gray-700"></div>
+                <span class="text-gray-500 text-xs">或</span>
+                <div class="flex-1 h-px bg-gray-700"></div>
+            </div>
+
             <form id="loginForm" onsubmit="return doLogin(event)">
                 <div class="space-y-5">
                     <div>
                         <label class="block text-sm text-gray-300 mb-2">用户名</label>
                         <div class="relative">
                             <i class="fas fa-user absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                            <input type="text" id="username" placeholder="admin" 
+                            <input type="text" id="username" placeholder="admin"
                                    class="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 input-glow transition-all">
                         </div>
                     </div>
-                    
+
                     <div>
                         <label class="block text-sm text-gray-300 mb-2">密码</label>
                         <div class="relative">
                             <i class="fas fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                            <input type="password" id="password" placeholder="请输入密码" 
+                            <input type="password" id="password" placeholder="请输入密码"
                                    class="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 input-glow transition-all">
                         </div>
                     </div>
-                    
+
                     <div id="errorMsg" class="hidden text-red-400 text-sm text-center">
                         <i class="fas fa-exclamation-circle mr-1"></i><span id="errorText"></span>
                     </div>
-                    
-                    <button type="submit" id="loginBtn" 
+
+                    <button type="submit" id="loginBtn"
                             class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2">
                         <i class="fas fa-sign-in-alt"></i>
                         <span>登录</span>
@@ -72,7 +84,7 @@
 
         <!-- Footer -->
         <p class="text-center text-gray-500 text-xs mt-6">
-            默认账号: admin / 默认密码: admin123
+            默认本地账号: admin / 默认密码: admin123
         </p>
     </div>
 

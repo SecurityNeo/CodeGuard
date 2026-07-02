@@ -68,10 +68,10 @@ const MENU_CONFIG = [
         icon: 'fa-cog',
         role: ['admin'],
         children: [
-            { id: 'settings-config',   name: '系统配置',     href: 'settings-config.html',     icon: 'fa-sliders-h' },
-            { id: 'settings-ai',       name: 'AI对话模板',   href: 'settings-ai.html',         icon: 'fa-robot' },
-            { id: 'settings-review',   name: '代码审查模板', href: 'settings-review.html',       icon: 'fa-code' },
-            { id: 'settings-logs',     name: '操作日志',     href: 'settings-logs.html',         icon: 'fa-history' },
+            { id: 'settings-config',   name: '系统配置',     href: 'settings.html#config',       icon: 'fa-sliders-h' },
+            { id: 'settings-ai',       name: 'AI对话模板',   href: 'settings.html#aitemplate',   icon: 'fa-robot' },
+            { id: 'settings-review',   name: '代码审查模板', href: 'settings.html#reviewtemplate', icon: 'fa-code' },
+            { id: 'settings-logs',     name: '操作日志',     href: 'settings.html#logs',         icon: 'fa-history' },
             { id: 'settings-info',     name: '系统信息',     href: 'settings-info.html',         icon: 'fa-server' },
         ]
     },
