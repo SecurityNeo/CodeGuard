@@ -113,7 +113,7 @@ func (h *MRReviewLogHandler) List(c *gin.Context) {
 	}
 
 	// 状态分组统计（merged / opened / closed）
-	// 与主列表共享 project / author / mr_state / 日期 筛选条件
+	// 与主列表共享 project / author / mr_state / 日期 + FilterByUser 筛选条件
 	var stateResults []struct {
 		MRState string
 		Count   int64
@@ -121,6 +121,8 @@ func (h *MRReviewLogHandler) List(c *gin.Context) {
 	stateDB := model.DB.Model(&model.MergeRequestReviewLog{}).
 		Select("mr_state, COUNT(*) as count").
 		Where("mr_state IN ?", []string{"merged", "opened", "closed"})
+	// 关键：状态统计也必须按用户角色过滤，否则 user 会看到全表状态分布
+	stateDB = model.FilterByUser(stateDB, user, "author")
 	if projectName != "" {
 		stateDB = stateDB.Where("project_name = ?", projectName)
 	}
