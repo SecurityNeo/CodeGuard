@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ai-optimizer/backend/config"
 	"github.com/ai-optimizer/backend/internal/middleware"
 	"github.com/ai-optimizer/backend/internal/service"
 	"github.com/gin-gonic/gin"
@@ -76,7 +75,7 @@ func (c *stateCache) cleanup() {
 
 func NewGitLabAuthHandler() *GitLabAuthHandler {
 	return &GitLabAuthHandler{
-		oauthSvc: service.NewGitLabOAuthService(config.Load()),
+		oauthSvc: service.NewGitLabOAuthService(),
 	}
 }
 
@@ -93,7 +92,11 @@ func generateState() string {
 func (h *GitLabAuthHandler) Redirect(c *gin.Context) {
 	state := generateState()
 	cache.add(state, c.ClientIP(), time.Now().Add(5*time.Minute))
-	authURL := h.oauthSvc.BuildAuthURL(state)
+	authURL, err := h.oauthSvc.BuildAuthURL(state)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "GitLab OAuth 未启用或配置不完整: " + err.Error()})
+		return
+	}
 	c.Redirect(http.StatusFound, authURL)
 }
 
@@ -134,7 +137,13 @@ func (h *GitLabAuthHandler) Callback(c *gin.Context) {
 
 	user, _, err := h.oauthSvc.FindOrCreateUser(userInfo)
 	if err != nil {
-		c.JSON(403, gin.H{"error": err.Error()})
+		// 区分"未启用"和"用户不存在"两种错误
+		errMsg := err.Error()
+		status := 403
+		if errMsg == "gitlab oauth not enabled" {
+			errMsg = "GitLab OAuth 未启用"
+		}
+		c.JSON(status, gin.H{"error": errMsg})
 		return
 	}
 

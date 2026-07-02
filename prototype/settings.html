@@ -138,6 +138,46 @@
                         </div>
                     </div>
 
+                    <!-- GitLab SSO 配置卡片 -->
+                    <div class="bg-gray-50 rounded-lg p-5 border mt-5">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                            <i class="fab fa-gitlab text-orange-500"></i>GitLab 单点登录
+                        </h4>
+                        <div class="grid grid-cols-1 gap-5">
+                            <div class="flex items-center gap-4">
+                                <label class="text-sm font-medium text-gray-700">启用 GitLab OAuth</label>
+                                <input type="checkbox" id="gitlabOAuthEnabled" class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+                                <span class="text-xs text-gray-400">开启后登录页将显示"使用 GitLab 登录"按钮</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-5" id="gitlabOAuthFields">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">GitLab 地址</label>
+                                    <input type="text" id="gitlabBaseURL" placeholder="https://gitlab.company.com" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                    <p class="text-xs text-gray-400 mt-1">GitLab 实例地址，需包含 https://</p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Client ID</label>
+                                    <input type="text" id="gitlabOAuthClientID" placeholder="在 GitLab Application 中获取" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                    <p class="text-xs text-gray-400 mt-1">GitLab 应用 ID</p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Client Secret</label>
+                                    <input type="password" id="gitlabOAuthClientSecret" placeholder="在 GitLab Application 中获取" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                    <p class="text-xs text-gray-400 mt-1">GitLab 应用密钥</p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">回调地址</label>
+                                    <input type="text" id="gitlabOAuthRedirectURI" placeholder="https://codeguard.company.com/api/v1/auth/gitlab/callback" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                    <p class="text-xs text-gray-400 mt-1">需与 GitLab Application 中填写的 Redirect URI 一致</p>
+                                </div>
+                                <div class="col-span-2 flex items-center gap-2">
+                                    <input type="checkbox" id="gitlabOAuthAutoCreateUser" class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+                                    <label class="text-sm text-gray-700">允许自动创建用户（首次登录的 GitLab 用户自动创建本地账号）</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="flex justify-end pt-4 border-t">
                         <button onclick="saveSettings()" class="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">保存配置</button>
                     </div>
@@ -495,6 +535,16 @@
                     setVal('alertNotifierID', data.data.alert_notifier_id, 0);
                     await loadAlertNotifierOptions(data.data.alert_notifier_id);
                     await loadAlertMentionUsers(data.data.alert_mention_user_ids || '');
+
+                    // GitLab SSO 配置
+                    const enabled = !!data.data.gitlab_oauth_enabled;
+                    document.getElementById('gitlabOAuthEnabled').checked = enabled;
+                    setVal('gitlabBaseURL', data.data.gitlab_base_url, '');
+                    setVal('gitlabOAuthClientID', data.data.gitlab_oauth_client_id, '');
+                    setVal('gitlabOAuthClientSecret', data.data.gitlab_oauth_client_secret, '');
+                    setVal('gitlabOAuthRedirectURI', data.data.gitlab_oauth_redirect_uri, '');
+                    document.getElementById('gitlabOAuthAutoCreateUser').checked = data.data.gitlab_oauth_auto_create_user !== false;
+                    toggleGitlabOAuthFields(enabled);
                 }
             } catch (e) {
                 console.error('加载配置失败:', e);
@@ -624,6 +674,13 @@ function previewTemplate() {
                 alert_cooldown_sec: parseInt(document.getElementById('alertCooldownSec').value) || 3600,
                 alert_notifier_id: parseInt(document.getElementById('alertNotifierID').value) || 0,
                 alert_mention_user_ids: Array.from(document.querySelectorAll('#alertMentionUsers input:checked')).map(cb => cb.value).join(','),
+                // GitLab SSO
+                gitlab_oauth_enabled: document.getElementById('gitlabOAuthEnabled').checked,
+                gitlab_base_url: document.getElementById('gitlabBaseURL').value.trim(),
+                gitlab_oauth_client_id: document.getElementById('gitlabOAuthClientID').value.trim(),
+                gitlab_oauth_client_secret: document.getElementById('gitlabOAuthClientSecret').value.trim(),
+                gitlab_oauth_redirect_uri: document.getElementById('gitlabOAuthRedirectURI').value.trim(),
+                gitlab_oauth_auto_create_user: document.getElementById('gitlabOAuthAutoCreateUser').checked,
             };
             try {
                 const res = await apiFetch(`${API_BASE}/system/config`, {
@@ -637,6 +694,17 @@ function previewTemplate() {
                 showToast('保存失败: ' + e.message, 'error');
             }
         }
+
+        // 切换 GitLab OAuth 字段显隐
+        function toggleGitlabOAuthFields(enabled) {
+            const fields = document.getElementById('gitlabOAuthFields');
+            if (fields) {
+                fields.style.display = enabled ? 'grid' : 'none';
+            }
+        }
+        document.getElementById('gitlabOAuthEnabled')?.addEventListener('change', function() {
+            toggleGitlabOAuthFields(this.checked);
+        });
 
         // ---- 代码审查模板函数 ----
         async function loadReviewTemplate() {

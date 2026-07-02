@@ -144,6 +144,26 @@ func (h *SystemHandler) UpdateConfig(c *gin.Context) {
 		updates["review_template"] = v.(string)
 	}
 
+	// GitLab OAuth 配置字段
+	if v, ok := data["gitlab_oauth_enabled"]; ok {
+		updates["gitlab_oauth_enabled"] = v.(bool)
+	}
+	if v, ok := data["gitlab_base_url"]; ok {
+		updates["gitlab_base_url"] = v.(string)
+	}
+	if v, ok := data["gitlab_oauth_client_id"]; ok {
+		updates["gitlab_oauth_client_id"] = v.(string)
+	}
+	if v, ok := data["gitlab_oauth_client_secret"]; ok {
+		updates["gitlab_oauth_client_secret"] = v.(string)
+	}
+	if v, ok := data["gitlab_oauth_redirect_uri"]; ok {
+		updates["gitlab_oauth_redirect_uri"] = v.(string)
+	}
+	if v, ok := data["gitlab_oauth_auto_create_user"]; ok {
+		updates["gitlab_oauth_auto_create_user"] = v.(bool)
+	}
+
 	// 判断是更新哪种模板或系统配置
 	isAITemplateOnly := len(data) == 1 && data["ai_log_template"] != nil
 	isReviewTemplateOnly := len(data) == 1 && data["review_template"] != nil

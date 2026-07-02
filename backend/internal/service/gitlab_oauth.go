@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ai-optimizer/backend/config"
 	"github.com/ai-optimizer/backend/internal/model"
 	"go.uber.org/zap"
 )
@@ -16,40 +15,75 @@ import (
 // 包级别带超时的 HTTP Client
 var oauthHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
-// GitLabOAuthService 处理 GitLab OAuth 流程
-type GitLabOAuthService struct {
-	cfg *config.Config
+// GitLabOAuthConfig OAuth 配置快照（从数据库实时读取）
+type GitLabOAuthConfig struct {
+	Enabled        bool
+	BaseURL        string
+	ClientID       string
+	ClientSecret   string
+	RedirectURI    string
+	AutoCreateUser bool
 }
 
-// NewGitLabOAuthService 创建 OAuth 服务（依赖注入）
-func NewGitLabOAuthService(cfg *config.Config) *GitLabOAuthService {
-	return &GitLabOAuthService{cfg: cfg}
+// loadOAuthConfig 从数据库加载 GitLab OAuth 配置
+func loadOAuthConfig() (*GitLabOAuthConfig, error) {
+	var cfg model.SystemConfig
+	if err := model.DB.First(&cfg).Error; err != nil {
+		return nil, fmt.Errorf("load system config failed: %w", err)
+	}
+	if !cfg.GitlabOAuthEnabled {
+		return nil, fmt.Errorf("gitlab oauth not enabled")
+	}
+	return &GitLabOAuthConfig{
+		Enabled:        cfg.GitlabOAuthEnabled,
+		BaseURL:        cfg.GitlabBaseURL,
+		ClientID:       cfg.GitlabOAuthClientID,
+		ClientSecret:   cfg.GitlabOAuthClientSecret,
+		RedirectURI:    cfg.GitlabOAuthRedirectURI,
+		AutoCreateUser: cfg.GitlabOAuthAutoCreateUser,
+	}, nil
+}
+
+// GitLabOAuthService 处理 GitLab OAuth 流程
+type GitLabOAuthService struct{}
+
+// NewGitLabOAuthService 创建 OAuth 服务
+func NewGitLabOAuthService() *GitLabOAuthService {
+	return &GitLabOAuthService{}
 }
 
 // BuildAuthURL 构造 GitLab 授权 URL
-func (s *GitLabOAuthService) BuildAuthURL(state string) string {
-	baseURL := strings.TrimSuffix(s.cfg.GitlabBaseURL, "/")
+func (s *GitLabOAuthService) BuildAuthURL(state string) (string, error) {
+	oc, err := loadOAuthConfig()
+	if err != nil {
+		return "", err
+	}
+	baseURL := strings.TrimSuffix(oc.BaseURL, "/")
 	params := url.Values{
-		"client_id":     {s.cfg.GitlabOAuthClientID},
-		"redirect_uri":  {s.cfg.GitlabOAuthRedirectURI},
+		"client_id":     {oc.ClientID},
+		"redirect_uri":  {oc.RedirectURI},
 		"response_type": {"code"},
 		"state":         {state},
 		"scope":         {"read_user"},
 	}
-	return fmt.Sprintf("%s/oauth/authorize?%s", baseURL, params.Encode())
+	return fmt.Sprintf("%s/oauth/authorize?%s", baseURL, params.Encode()), nil
 }
 
 // ExchangeCode 用 authorization code 换 access_token
 func (s *GitLabOAuthService) ExchangeCode(code string) (string, error) {
-	baseURL := strings.TrimSuffix(s.cfg.GitlabBaseURL, "/")
+	oc, err := loadOAuthConfig()
+	if err != nil {
+		return "", err
+	}
+	baseURL := strings.TrimSuffix(oc.BaseURL, "/")
 	tokenURL := fmt.Sprintf("%s/oauth/token", baseURL)
 
 	data := url.Values{
-		"client_id":     {s.cfg.GitlabOAuthClientID},
-		"client_secret": {s.cfg.GitlabOAuthClientSecret},
+		"client_id":     {oc.ClientID},
+		"client_secret": {oc.ClientSecret},
 		"code":          {code},
 		"grant_type":    {"authorization_code"},
-		"redirect_uri":  {s.cfg.GitlabOAuthRedirectURI},
+		"redirect_uri":  {oc.RedirectURI},
 	}
 
 	resp, err := oauthHTTPClient.Post(tokenURL, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
@@ -90,7 +124,11 @@ type GitLabUserInfo struct {
 
 // GetUserInfo 用 access_token 获取 GitLab 用户信息
 func (s *GitLabOAuthService) GetUserInfo(accessToken string) (*GitLabUserInfo, error) {
-	baseURL := strings.TrimSuffix(s.cfg.GitlabBaseURL, "/")
+	oc, err := loadOAuthConfig()
+	if err != nil {
+		return nil, err
+	}
+	baseURL := strings.TrimSuffix(oc.BaseURL, "/")
 	apiURL := fmt.Sprintf("%s/api/v4/user", baseURL)
 
 	req, err := http.NewRequest("GET", apiURL, nil)
@@ -130,8 +168,12 @@ func (s *GitLabOAuthService) FindOrCreateUser(info *GitLabUserInfo) (*model.User
 		return &user, false, nil // 已有用户
 	}
 
-	// 2. 未找到，自动创建新用户
-	if !s.cfg.GitlabOAuthAutoCreateUser {
+	// 2. 加载配置检查是否允许自动创建
+	oc, err := loadOAuthConfig()
+	if err != nil {
+		return nil, false, err
+	}
+	if !oc.AutoCreateUser {
 		return nil, false, fmt.Errorf("用户不存在，请联系管理员绑定")
 	}
 

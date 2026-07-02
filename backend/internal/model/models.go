@@ -251,8 +251,17 @@ type SystemConfig struct {
 	AlertCooldownSec        int       `gorm:"default:3600" json:"alert_cooldown_sec"`
 	AlertNotifierID         uint      `gorm:"default:0" json:"alert_notifier_id"`
 	AlertMentionUserIDs     string    `gorm:"size:512" json:"alert_mention_user_ids"`
-	CreatedAt               time.Time `json:"created_at"`
-	UpdatedAt               time.Time `json:"updated_at"`
+
+	// GitLab OAuth 配置（从环境变量迁移到数据库动态配置）
+	GitlabOAuthEnabled        bool   `gorm:"default:false" json:"gitlab_oauth_enabled"`
+	GitlabBaseURL             string `gorm:"size:512" json:"gitlab_base_url"`
+	GitlabOAuthClientID       string `gorm:"size:255" json:"gitlab_oauth_client_id"`
+	GitlabOAuthClientSecret   string `gorm:"size:255" json:"gitlab_oauth_client_secret"`
+	GitlabOAuthRedirectURI    string `gorm:"size:512" json:"gitlab_oauth_redirect_uri"`
+	GitlabOAuthAutoCreateUser bool   `gorm:"default:true" json:"gitlab_oauth_auto_create_user"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // --- Role Constants ---
