@@ -163,6 +163,9 @@ func (h *SystemHandler) UpdateConfig(c *gin.Context) {
 	if v, ok := data["gitlab_oauth_auto_create_user"]; ok {
 		updates["gitlab_oauth_auto_create_user"] = v.(bool)
 	}
+	if v, ok := data["gitlab_oauth_skip_verify"]; ok {
+		updates["gitlab_oauth_skip_verify"] = v.(bool)
+	}
 
 	// 判断是更新哪种模板或系统配置
 	isAITemplateOnly := len(data) == 1 && data["ai_log_template"] != nil

@@ -1,19 +1,34 @@
 package service
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ai-optimizer/backend/internal/model"
 	"go.uber.org/zap"
 )
 
-// 包级别带超时的 HTTP Client
-var oauthHTTPClient = &http.Client{Timeout: 15 * time.Second}
+// httpClientCache 按 skipVerify 配置缓存不同 Transport 的 Client
+var httpClientCache sync.Map
+
+func getHTTPClient(skipVerify bool) *http.Client {
+	key := skipVerify
+	if v, ok := httpClientCache.Load(key); ok {
+		return v.(*http.Client)
+	}
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: skipVerify},
+	}
+	client := &http.Client{Timeout: 15 * time.Second, Transport: transport}
+	httpClientCache.Store(key, client)
+	return client
+}
 
 // GitLabOAuthConfig OAuth 配置快照（从数据库实时读取）
 type GitLabOAuthConfig struct {
@@ -23,6 +38,7 @@ type GitLabOAuthConfig struct {
 	ClientSecret   string
 	RedirectURI    string
 	AutoCreateUser bool
+	SkipVerify     bool
 }
 
 // loadOAuthConfig 从数据库加载 GitLab OAuth 配置
@@ -41,6 +57,7 @@ func loadOAuthConfig() (*GitLabOAuthConfig, error) {
 		ClientSecret:   cfg.GitlabOAuthClientSecret,
 		RedirectURI:    cfg.GitlabOAuthRedirectURI,
 		AutoCreateUser: cfg.GitlabOAuthAutoCreateUser,
+		SkipVerify:     cfg.GitlabOAuthSkipVerify,
 	}, nil
 }
 
@@ -86,7 +103,7 @@ func (s *GitLabOAuthService) ExchangeCode(code string) (string, error) {
 		"redirect_uri":  {oc.RedirectURI},
 	}
 
-	resp, err := oauthHTTPClient.Post(tokenURL, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+	resp, err := getHTTPClient(oc.SkipVerify).Post(tokenURL, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
 	if err != nil {
 		return "", fmt.Errorf("token request failed: %w", err)
 	}
@@ -137,7 +154,7 @@ func (s *GitLabOAuthService) GetUserInfo(accessToken string) (*GitLabUserInfo, e
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
-	client := oauthHTTPClient
+	client := getHTTPClient(oc.SkipVerify)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("get user info failed: %w", err)

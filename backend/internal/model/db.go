@@ -63,6 +63,7 @@ func migrateSystemConfigColumns() {
 		{"gitlab_oauth_client_secret", "VARCHAR(255)"},
 		{"gitlab_oauth_redirect_uri", "VARCHAR(512)"},
 		{"gitlab_oauth_auto_create_user", "TINYINT(1) NOT NULL DEFAULT 1"},
+		{"gitlab_oauth_skip_verify", "TINYINT(1) NOT NULL DEFAULT 0"},
 	}
 
 	wrongSuffixes := []string{

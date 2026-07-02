@@ -259,6 +259,7 @@ type SystemConfig struct {
 	GitlabOAuthClientSecret   string `gorm:"size:255;column:gitlab_oauth_client_secret" json:"gitlab_oauth_client_secret"`
 	GitlabOAuthRedirectURI    string `gorm:"size:512;column:gitlab_oauth_redirect_uri" json:"gitlab_oauth_redirect_uri"`
 	GitlabOAuthAutoCreateUser bool   `gorm:"default:true;column:gitlab_oauth_auto_create_user" json:"gitlab_oauth_auto_create_user"`
+	GitlabOAuthSkipVerify     bool   `gorm:"default:false;column:gitlab_oauth_skip_verify" json:"gitlab_oauth_skip_verify"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

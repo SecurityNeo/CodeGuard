@@ -174,6 +174,10 @@
                                     <input type="checkbox" id="gitlabOAuthAutoCreateUser" class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
                                     <label class="text-sm text-gray-700">允许自动创建用户（首次登录的 GitLab 用户自动创建本地账号）</label>
                                 </div>
+                                <div class="col-span-2 flex items-center gap-2">
+                                    <input type="checkbox" id="gitlabOAuthSkipVerify" class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+                                    <label class="text-sm text-gray-700">跳过 TLS 证书验证（企业内部自签名证书或 IP 访问时勾选，生产环境慎用）</label>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -544,6 +548,7 @@
                     setVal('gitlabOAuthClientSecret', data.data.gitlab_oauth_client_secret, '');
                     setVal('gitlabOAuthRedirectURI', data.data.gitlab_oauth_redirect_uri, '');
                     document.getElementById('gitlabOAuthAutoCreateUser').checked = data.data.gitlab_oauth_auto_create_user !== false;
+                    document.getElementById('gitlabOAuthSkipVerify').checked = !!data.data.gitlab_oauth_skip_verify;
                     toggleGitlabOAuthFields(enabled);
                 }
             } catch (e) {
@@ -681,6 +686,7 @@ function previewTemplate() {
                 gitlab_oauth_client_secret: document.getElementById('gitlabOAuthClientSecret').value.trim(),
                 gitlab_oauth_redirect_uri: document.getElementById('gitlabOAuthRedirectURI').value.trim(),
                 gitlab_oauth_auto_create_user: document.getElementById('gitlabOAuthAutoCreateUser').checked,
+                gitlab_oauth_skip_verify: document.getElementById('gitlabOAuthSkipVerify').checked,
             };
             try {
                 const res = await apiFetch(`${API_BASE}/system/config`, {
