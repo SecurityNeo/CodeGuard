@@ -45,6 +45,32 @@ func InitDB(cfg *config.Config) error {
 	return autoMigrate()
 }
 
+// migrateOAuthColumns 兼容已有表：添加 SystemConfig 新增的 OAuth 列
+func migrateSystemConfigColumns() {
+	columns := []struct {
+		name string
+		def  string
+	}{
+		{"gitlab_oauth_enabled", "TINYINT(1) NOT NULL DEFAULT 0"},
+		{"gitlab_base_url", "VARCHAR(512)"},
+		{"gitlab_oauth_client_id", "VARCHAR(255)"},
+		{"gitlab_oauth_client_secret", "VARCHAR(255)"},
+		{"gitlab_oauth_redirect_uri", "VARCHAR(512)"},
+		{"gitlab_oauth_auto_create_user", "TINYINT(1) NOT NULL DEFAULT 1"},
+	}
+
+	for _, col := range columns {
+		if !DB.Migrator().HasColumn(&SystemConfig{}, col.name) {
+			sql := fmt.Sprintf("ALTER TABLE system_configs ADD COLUMN %s %s", col.name, col.def)
+			if err := DB.Exec(sql).Error; err != nil {
+				zap.L().Warn("add column failed, may already exist", zap.String("column", col.name), zap.Error(err))
+			} else {
+				zap.L().Info("added column", zap.String("column", col.name))
+			}
+		}
+	}
+}
+
 func autoMigrate() error {
 	// 按依赖顺序创建表，避免外键约束问题
 	if err := DB.AutoMigrate(
@@ -54,6 +80,9 @@ func autoMigrate() error {
 	); err != nil {
 		return err
 	}
+
+	// 兼容已有表：补充新增列（AutoMigrate 在某些场景下可能遗漏）
+	migrateSystemConfigColumns()
 
 	if err := DB.AutoMigrate(
 		&User{},
