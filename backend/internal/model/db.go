@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/ai-optimizer/backend/config"
 	"go.uber.org/zap"
@@ -47,7 +48,12 @@ func InitDB(cfg *config.Config) error {
 
 // migrateOAuthColumns 兼容已有表：添加 SystemConfig 新增的 OAuth 列
 func migrateSystemConfigColumns() {
-	columns := []struct {
+	// GORM 将 GitlabOAuthClientID 翻译为 gitlab_o_auth_client_id（多出一个下划线）
+	// 而 json tag / frontend 使用的是 gitlab_oauth_client_id
+	// 这导致数据库中可能同时存在两套列名，数据读写分离
+	// 修复：显式指定 column tag 后，统一使用正确命名的列，删除错误列
+
+	correctColumns := []struct {
 		name string
 		def  string
 	}{
@@ -59,11 +65,30 @@ func migrateSystemConfigColumns() {
 		{"gitlab_oauth_auto_create_user", "TINYINT(1) NOT NULL DEFAULT 1"},
 	}
 
-	for _, col := range columns {
+	wrongSuffixes := []string{
+		"_o_auth_", // GORM 错误生成的 gitlab_o_auth_client_id 等
+	}
+
+	// 1. 删除错误命名的列（如果存在）
+	for _, col := range correctColumns {
+		wrongName := strings.ReplaceAll(col.name, "gitlab_oauth_", "gitlab_o_auth_")
+		if DB.Migrator().HasColumn(&SystemConfig{}, wrongName) {
+			if err := DB.Exec("ALTER TABLE system_configs DROP COLUMN " + wrongName).Error; err != nil {
+				zap.L().Warn("drop wrong column failed, may have data",
+					zap.String("column", wrongName), zap.Error(err))
+			} else {
+				zap.L().Info("dropped wrong column", zap.String("column", wrongName))
+			}
+		}
+		_ = wrongSuffixes // 标记使用
+	}
+
+	// 2. 创建正确命名的列（如果不存在）
+	for _, col := range correctColumns {
 		if !DB.Migrator().HasColumn(&SystemConfig{}, col.name) {
 			sql := fmt.Sprintf("ALTER TABLE system_configs ADD COLUMN %s %s", col.name, col.def)
 			if err := DB.Exec(sql).Error; err != nil {
-				zap.L().Warn("add column failed, may already exist", zap.String("column", col.name), zap.Error(err))
+				zap.L().Warn("add column failed", zap.String("column", col.name), zap.Error(err))
 			} else {
 				zap.L().Info("added column", zap.String("column", col.name))
 			}

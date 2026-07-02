@@ -253,12 +253,12 @@ type SystemConfig struct {
 	AlertMentionUserIDs     string    `gorm:"size:512" json:"alert_mention_user_ids"`
 
 	// GitLab OAuth 配置（从环境变量迁移到数据库动态配置）
-	GitlabOAuthEnabled        bool   `gorm:"default:false" json:"gitlab_oauth_enabled"`
-	GitlabBaseURL             string `gorm:"size:512" json:"gitlab_base_url"`
-	GitlabOAuthClientID       string `gorm:"size:255" json:"gitlab_oauth_client_id"`
-	GitlabOAuthClientSecret   string `gorm:"size:255" json:"gitlab_oauth_client_secret"`
-	GitlabOAuthRedirectURI    string `gorm:"size:512" json:"gitlab_oauth_redirect_uri"`
-	GitlabOAuthAutoCreateUser bool   `gorm:"default:true" json:"gitlab_oauth_auto_create_user"`
+	GitlabOAuthEnabled        bool   `gorm:"default:false;column:gitlab_oauth_enabled" json:"gitlab_oauth_enabled"`
+	GitlabBaseURL             string `gorm:"size:512;column:gitlab_base_url" json:"gitlab_base_url"`
+	GitlabOAuthClientID       string `gorm:"size:255;column:gitlab_oauth_client_id" json:"gitlab_oauth_client_id"`
+	GitlabOAuthClientSecret   string `gorm:"size:255;column:gitlab_oauth_client_secret" json:"gitlab_oauth_client_secret"`
+	GitlabOAuthRedirectURI    string `gorm:"size:512;column:gitlab_oauth_redirect_uri" json:"gitlab_oauth_redirect_uri"`
+	GitlabOAuthAutoCreateUser bool   `gorm:"default:true;column:gitlab_oauth_auto_create_user" json:"gitlab_oauth_auto_create_user"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
