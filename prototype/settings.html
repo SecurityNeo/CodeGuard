@@ -31,9 +31,9 @@
         <aside id="sidebar" class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col"></aside>
 
         <main class="flex-1 overflow-y-auto">
-            <header class="bg-white border-b px-8 py-4 sticky top-0 z-10">
-                <h2 class="text-xl font-bold text-gray-800">系统管理</h2>
-                <p class="text-sm text-gray-500 mt-1">系统配置、操作日志与系统信息</p>
+            <header id="pageHeader" class="bg-white border-b px-8 py-4 sticky top-0 z-10">
+                <h2 id="pageTitle" class="text-xl font-bold text-gray-800">系统管理</h2>
+                <p id="pageDesc" class="text-sm text-gray-500 mt-1">系统配置、操作日志与系统信息</p>
             </header>
 
             <div class="p-8">
@@ -455,25 +455,8 @@
         let logsTotal = 0;
 
         function switchTab(tab) {
-            // 更新 URL hash
-            window.location.hash = '#' + tab;
-            
-            document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            // 标记正确的 tab-btn
-            const tabButtons = document.querySelectorAll('.tab-btn');
-            const tabIndexMap = { config: 0, aitemplate: 1, reviewtemplate: 2, logs: 3, info: 4 };
-            const idx = tabIndexMap[tab];
-            if (idx !== undefined && tabButtons[idx]) {
-                tabButtons[idx].classList.add('active');
-            }
-            document.getElementById('tab-' + tab).classList.add('active');
-            
-            if (tab === 'config') loadConfig();
-            if (tab === 'aitemplate') loadAITemplate();
-            if (tab === 'reviewtemplate') loadReviewTemplate();
-            if (tab === 'logs') loadOperationLogs();
-            if (tab === 'info') loadSystemInfo();
+            // Tab 模式下：跳转到带 query 参数的 URL，触发页面刷新显示对应子页面
+            window.location.href = 'settings.html?tab=' + tab;
         }
 
         function showToast(message, type = 'info') {
@@ -872,30 +855,65 @@ function previewTemplate() {
         }
 
 
-        // 根据 URL hash 初始化 Tab
+        // 根据 URL query 参数初始化 Tab
         function initTabFromHash() {
-            const hash = window.location.hash.replace('#', '');
+            const urlParams = new URLSearchParams(window.location.search);
+            const tabParam = urlParams.get('tab');
             const validTabs = ['config', 'aitemplate', 'reviewtemplate', 'logs', 'info'];
-            const tab = validTabs.includes(hash) ? hash : 'config';
+            const tab = validTabs.includes(tabParam) ? tabParam : 'config';
+            const isSidebarMode = tabParam && validTabs.includes(tabParam);
 
-            // 有 hash 时隐藏 Tab 栏（从侧边栏进入子页面）
+            // Tab 标题和描述映射
+            const tabInfo = {
+                config:        { title: '系统配置',     desc: '系统参数与任务设置' },
+                aitemplate:    { title: 'AI对话模板',   desc: '大模型对话模板管理' },
+                reviewtemplate:{ title: '代码审查模板', desc: '代码审查报告模板管理' },
+                logs:          { title: '操作日志',     desc: '系统操作日志查询' },
+                info:          { title: '系统信息',     desc: '系统版本与状态信息' }
+            };
+
+            // 更新页面标题和描述
+            const info = tabInfo[tab] || tabInfo.config;
+            const pageTitle = document.getElementById('pageTitle');
+            const pageDesc = document.getElementById('pageDesc');
+            if (pageTitle) pageTitle.textContent = info.title;
+            if (pageDesc) pageDesc.textContent = info.desc;
+            document.title = info.title + ' - CodeGuard';
+
+            // 更新 Tab 栏的可见性
             const tabBar = document.getElementById('tabBar');
             if (tabBar) {
-                if (hash && validTabs.includes(hash)) {
-                    tabBar.style.display = 'none';
-                    // 只显示当前 hash 对应的 tab-content，其他的隐藏
-                    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-                    document.getElementById('tab-' + tab).classList.add('active');
-                } else {
-                    tabBar.style.display = 'flex';
-                    switchTab(tab);
+                tabBar.style.display = isSidebarMode ? 'none' : 'flex';
+            }
+
+            // 激活对应 Tab 按钮（仅在 Tab 模式下）
+            if (!isSidebarMode) {
+                document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+                const tabButtons = document.querySelectorAll('.tab-btn');
+                const tabIndexMap = { config: 0, aitemplate: 1, reviewtemplate: 2, logs: 3, info: 4 };
+                const idx = tabIndexMap[tab];
+                if (idx !== undefined && tabButtons[idx]) {
+                    tabButtons[idx].classList.add('active');
                 }
             }
+
+            // 显示对应的 tab-content
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            const contentEl = document.getElementById('tab-' + tab);
+            if (contentEl) contentEl.classList.add('active');
+
+            // 加载对应数据
+            if (tab === 'config') loadConfig();
+            if (tab === 'aitemplate') loadAITemplate();
+            if (tab === 'reviewtemplate') loadReviewTemplate();
+            if (tab === 'logs') loadOperationLogs();
+            if (tab === 'info') loadSystemInfo();
         }
 
-        // 根据 hash 确定 sidebar 高亮 ID
+        // 根据 URL query 参数确定 sidebar 高亮 ID
         function getSettingsActiveId() {
-            const hash = window.location.hash.replace('#', '');
+            const urlParams = new URLSearchParams(window.location.search);
+            const tab = urlParams.get('tab');
             const map = {
                 config: 'settings-config',
                 aitemplate: 'settings-ai',
@@ -903,18 +921,12 @@ function previewTemplate() {
                 logs: 'settings-logs',
                 info: 'settings-info'
             };
-            return map[hash] || 'settings-config';
+            return map[tab] || 'settings-config';
         }
 
-        // 页面加载时根据 hash 初始化
+        // 页面加载时根据 query 参数初始化
         initTabFromHash();
         renderSidebar(getSettingsActiveId());
-
-        // 监听 hash 变化（从侧边栏点击子菜单时浏览器不会刷新页面）
-        window.addEventListener('hashchange', function() {
-            initTabFromHash();
-            renderSidebar(getSettingsActiveId());
-        });
     </script>
 </body>
 </html>
