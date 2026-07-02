@@ -71,7 +71,12 @@ func migrateSystemConfigColumns() {
 	}
 
 	// 1. 删除错误命名的列（如果存在）
+	// 注意：只对 gitlab_oauth_xxx 字段检测 GORM 错误命名（如 gitlab_o_auth_client_id）
+	// gitlab_base_url 不属于 gitlab_oauth_ 前缀，不需要检测错误命名
 	for _, col := range correctColumns {
+		if !strings.HasPrefix(col.name, "gitlab_oauth_") {
+			continue // 跳过非 gitlab_oauth_ 前缀的字段
+		}
 		wrongName := strings.ReplaceAll(col.name, "gitlab_oauth_", "gitlab_o_auth_")
 		if DB.Migrator().HasColumn(&SystemConfig{}, wrongName) {
 			if err := DB.Exec("ALTER TABLE system_configs DROP COLUMN " + wrongName).Error; err != nil {
