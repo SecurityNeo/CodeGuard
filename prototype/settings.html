@@ -37,8 +37,8 @@
             </header>
 
             <div class="p-8">
-                <!-- Tabs -->
-                <div class="bg-white rounded-t-xl border-b px-6 flex gap-6">
+                <!-- Tabs（仅在无 hash 时显示，即直接访问 settings.html） -->
+                <div id="tabBar" class="bg-white rounded-t-xl border-b px-6 flex gap-6">
                     <div class="tab-btn active" onclick="switchTab('config')">系统配置</div>
                     <div class="tab-btn" onclick="switchTab('aitemplate')">AI对话模板</div>
                     <div class="tab-btn" onclick="switchTab('reviewtemplate')">代码审查模板</div>
@@ -877,7 +877,20 @@ function previewTemplate() {
             const hash = window.location.hash.replace('#', '');
             const validTabs = ['config', 'aitemplate', 'reviewtemplate', 'logs', 'info'];
             const tab = validTabs.includes(hash) ? hash : 'config';
-            switchTab(tab);
+
+            // 有 hash 时隐藏 Tab 栏（从侧边栏进入子页面）
+            const tabBar = document.getElementById('tabBar');
+            if (tabBar) {
+                if (hash && validTabs.includes(hash)) {
+                    tabBar.style.display = 'none';
+                    // 只显示当前 hash 对应的 tab-content，其他的隐藏
+                    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+                    document.getElementById('tab-' + tab).classList.add('active');
+                } else {
+                    tabBar.style.display = 'flex';
+                    switchTab(tab);
+                }
+            }
         }
 
         // 根据 hash 确定 sidebar 高亮 ID
