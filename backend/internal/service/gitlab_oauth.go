@@ -76,6 +76,19 @@ func (s *GitLabOAuthService) BuildAuthURL(state string) (string, error) {
 		return "", err
 	}
 	baseURL := strings.TrimSuffix(oc.BaseURL, "/")
+
+	// 基础配置校验
+	if baseURL == "" {
+		return "", fmt.Errorf("GitLab 地址未配置")
+	}
+	if oc.ClientID == "" || oc.ClientSecret == "" {
+		return "", fmt.Errorf("Client ID 或 Client Secret 未配置")
+	}
+	// 防止把 CodeGuard 自身地址误填为 GitLab 地址
+	if strings.Contains(baseURL, "/api/") || strings.HasSuffix(baseURL, "/login") {
+		return "", fmt.Errorf("GitLab 地址配置错误：当前值 '%s' 看起来是 CodeGuard 自身地址，请填写 GitLab 服务器的真实地址（如 https://gitlab.company.com）", baseURL)
+	}
+
 	params := url.Values{
 		"client_id":     {oc.ClientID},
 		"redirect_uri":  {oc.RedirectURI},
