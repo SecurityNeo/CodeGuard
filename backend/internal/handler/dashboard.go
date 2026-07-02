@@ -3,6 +3,7 @@ package handler
 import (
 	"time"
 
+	"github.com/ai-optimizer/backend/internal/middleware"
 	"github.com/ai-optimizer/backend/internal/model"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -20,27 +21,31 @@ func NewDashboardHandler() *DashboardHandler {
 }
 
 func (h *DashboardHandler) GetStats(c *gin.Context) {
+	user, ok := middleware.GetUser(c)
+	if !ok {
+		c.JSON(401, gin.H{"error": "未登录"})
+		return
+	}
+
 	var totalProjects, todayTasks, runningTasks, failedTasks24h, activePools int64
 
 	model.DB.Model(&model.Project{}).Count(&totalProjects)
 
 	today := time.Now().Truncate(24 * time.Hour)
-	model.DB.Model(&model.Task{}).Where("created_at >= ?", today).Count(&todayTasks)
+	queryToday := model.DB.Model(&model.Task{}).Where("created_at >= ?", today)
+	queryToday = model.FilterByUser(queryToday, user, "mr_author")
+	queryToday.Count(&todayTasks)
 
-	model.DB.Model(&model.Task{}).Where("status = ?", model.TaskRunning).Count(&runningTasks)
+	queryRunning := model.DB.Model(&model.Task{}).Where("status = ?", model.TaskRunning)
+	queryRunning = model.FilterByUser(queryRunning, user, "mr_author")
+	queryRunning.Count(&runningTasks)
 
 	yesterday := today.Add(-24 * time.Hour)
-	model.DB.Model(&model.Task{}).Where("status = ? AND updated_at >= ?", model.TaskFailed, yesterday).Count(&failedTasks24h)
+	queryFailed := model.DB.Model(&model.Task{}).Where("status = ? AND updated_at >= ?", model.TaskFailed, yesterday)
+	queryFailed = model.FilterByUser(queryFailed, user, "mr_author")
+	queryFailed.Count(&failedTasks24h)
 
 	model.DB.Model(&model.ResourcePool{}).Where("status = ?", "active").Count(&activePools)
-
-	zap.L().Info("dashboard stats",
-		zap.Int64("total_projects", totalProjects),
-		zap.Int64("today_tasks", todayTasks),
-		zap.Int64("running_tasks", runningTasks),
-		zap.Int64("failed_tasks_24h", failedTasks24h),
-		zap.Int64("active_pools", activePools),
-	)
 
 	c.JSON(200, gin.H{
 		"total_projects":   totalProjects,
@@ -52,6 +57,12 @@ func (h *DashboardHandler) GetStats(c *gin.Context) {
 }
 
 func (h *DashboardHandler) GetTrends(c *gin.Context) {
+	user, ok := middleware.GetUser(c)
+	if !ok {
+		c.JSON(401, gin.H{"error": "未登录"})
+		return
+	}
+
 	labels := make([]string, 7)
 	success := make([]int, 7)
 	failed := make([]int, 7)
@@ -65,12 +76,15 @@ func (h *DashboardHandler) GetTrends(c *gin.Context) {
 		endOfDay := startOfDay.Add(24 * time.Hour)
 
 		var successCount, failedCount int64
-		model.DB.Model(&model.Task{}).
-			Where("status = ? AND created_at >= ? AND created_at < ?", model.TaskSuccess, startOfDay, endOfDay).
-			Count(&successCount)
-		model.DB.Model(&model.Task{}).
-			Where("status = ? AND created_at >= ? AND created_at < ?", model.TaskFailed, startOfDay, endOfDay).
-			Count(&failedCount)
+		qSuccess := model.DB.Model(&model.Task{}).
+			Where("status = ? AND created_at >= ? AND created_at < ?", model.TaskSuccess, startOfDay, endOfDay)
+		qSuccess = model.FilterByUser(qSuccess, user, "mr_author")
+		qSuccess.Count(&successCount)
+
+		qFailed := model.DB.Model(&model.Task{}).
+			Where("status = ? AND created_at >= ? AND created_at < ?", model.TaskFailed, startOfDay, endOfDay)
+		qFailed = model.FilterByUser(qFailed, user, "mr_author")
+		qFailed.Count(&failedCount)
 
 		success[6-i] = int(successCount)
 		failed[6-i] = int(failedCount)
@@ -84,16 +98,44 @@ func (h *DashboardHandler) GetTrends(c *gin.Context) {
 }
 
 func (h *DashboardHandler) GetRecentProjects(c *gin.Context) {
+	user, ok := middleware.GetUser(c)
+	if !ok {
+		c.JSON(401, gin.H{"error": "未登录"})
+		return
+	}
+
 	var projects []model.Project
 
-	err := model.DB.Preload("Tasks", func(db *gorm.DB) *gorm.DB {
-		return db.Order("created_at DESC").Limit(5)
-	}).Order("updated_at DESC").Limit(5).Find(&projects).Error
+	// user 时：先查自己最近有任务的项目ID，再用这些ID查项目详情
+	if user.Role != model.RoleAdmin {
+		var projectIDs []uint
+		model.DB.Model(&model.Task{}).
+			Select("DISTINCT project_id").
+			Where("mr_author = ?", user.GitlabUsername).
+			Order("created_at DESC").
+			Limit(5).
+			Pluck("project_id", &projectIDs)
 
-	if err != nil {
-		zap.L().Error("get recent projects failed", zap.Error(err))
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
+		if len(projectIDs) == 0 {
+			c.JSON(200, gin.H{"data": []any{}})
+			return
+		}
+
+		model.DB.Where("id IN ?", projectIDs).
+			Preload("Tasks", func(db *gorm.DB) *gorm.DB {
+				return db.Where("mr_author = ?", user.GitlabUsername).Order("created_at DESC").Limit(5)
+			}).
+			Find(&projects)
+	} else {
+		err := model.DB.Preload("Tasks", func(db *gorm.DB) *gorm.DB {
+			return db.Order("created_at DESC").Limit(5)
+		}).Order("updated_at DESC").Limit(5).Find(&projects).Error
+
+		if err != nil {
+			zap.L().Error("get recent projects failed", zap.Error(err))
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	type ProjectTask struct {
@@ -104,10 +146,10 @@ func (h *DashboardHandler) GetRecentProjects(c *gin.Context) {
 	}
 
 	type RecentProject struct {
-		ID          uint           `json:"id"`
-		Name        string         `json:"name"`
-		ProjectPath string         `json:"project_path"`
-		Tasks       []ProjectTask  `json:"tasks"`
+		ID          uint          `json:"id"`
+		Name        string        `json:"name"`
+		ProjectPath string        `json:"project_path"`
+		Tasks       []ProjectTask `json:"tasks"`
 	}
 
 	result := make([]RecentProject, 0, len(projects))
@@ -133,13 +175,20 @@ func (h *DashboardHandler) GetRecentProjects(c *gin.Context) {
 }
 
 func (h *DashboardHandler) GetRecentFailures(c *gin.Context) {
+	user, ok := middleware.GetUser(c)
+	if !ok {
+		c.JSON(401, gin.H{"error": "未登录"})
+		return
+	}
+
 	var tasks []model.Task
 
-	err := model.DB.Preload("Project").
+	query := model.DB.Preload("Project").
 		Where("status = ?", model.TaskFailed).
 		Order("updated_at DESC").
-		Limit(10).
-		Find(&tasks).Error
+		Limit(10)
+	query = model.FilterByUser(query, user, "mr_author")
+	err := query.Find(&tasks).Error
 
 	if err != nil {
 		zap.L().Error("get recent failures failed", zap.Error(err))
@@ -165,7 +214,6 @@ func (h *DashboardHandler) GetRecentFailures(c *gin.Context) {
 		if errorMsg == "" {
 			errorMsg = "任务执行失败"
 		}
-		// 截取错误信息前50字符
 		if len(errorMsg) > 50 {
 			errorMsg = errorMsg[:50] + "..."
 		}
@@ -183,19 +231,26 @@ func (h *DashboardHandler) GetRecentFailures(c *gin.Context) {
 }
 
 func (h *DashboardHandler) GetTaskDistribution(c *gin.Context) {
+	user, ok := middleware.GetUser(c)
+	if !ok {
+		c.JSON(401, gin.H{"error": "未登录"})
+		return
+	}
+
 	type ProjectTaskCount struct {
 		ProjectName string
 		Count       int64
 	}
 
 	var counts []ProjectTaskCount
-	model.DB.Model(&model.Task{}).
+	query := model.DB.Model(&model.Task{}).
 		Select("projects.name as project_name, COUNT(tasks.id) as count").
 		Joins("LEFT JOIN projects ON tasks.project_id = projects.id").
 		Group("tasks.project_id").
 		Order("count DESC").
-		Limit(6).
-		Scan(&counts)
+		Limit(6)
+	query = model.FilterByUser(query, user, "mr_author")
+	query.Scan(&counts)
 
 	labels := make([]string, len(counts))
 	data := make([]int, len(counts))
@@ -211,7 +266,10 @@ func (h *DashboardHandler) GetTaskDistribution(c *gin.Context) {
 
 	// 如果不足6个，添加"其他"
 	var otherCount int64
-	model.DB.Model(&model.Task{}).Count(&otherCount)
+	otherQuery := model.DB.Model(&model.Task{})
+	otherQuery = model.FilterByUser(otherQuery, user, "mr_author")
+	otherQuery.Count(&otherCount)
+
 	sum := int64(0)
 	for _, d := range data {
 		sum += int64(d)

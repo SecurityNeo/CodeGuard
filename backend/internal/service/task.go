@@ -30,21 +30,20 @@ func NewTaskService() *TaskService {
 	}
 }
 
-func (s *TaskService) List(projectID uint, status string, startTime, endTime time.Time, author, mrIID string, page, pageSize int) ([]model.Task, int64, error) {
-	zap.L().Debug("TaskService.List called", 
-		zap.Uint("project_id", projectID), 
+func (s *TaskService) List(user model.User, projectID uint, status string, startTime, endTime time.Time, author, mrIID string, page, pageSize int) ([]model.Task, int64, error) {
+	zap.L().Debug("TaskService.List called",
+		zap.Uint("project_id", projectID),
 		zap.String("status", status),
-		zap.Time("start_time", startTime),
-		zap.Time("end_time", endTime),
-		zap.String("author", author),
-		zap.String("mr_iid", mrIID),
-		zap.Int("page", page),
-		zap.Int("page_size", pageSize))
-	
+		zap.String("user", user.Username),
+		zap.String("role", user.Role))
+
 	var tasks []model.Task
 	var total int64
 
 	query := model.DB.Model(&model.Task{})
+	// 按用户角色过滤：admin不过滤，user只能看自己的
+	query = model.FilterByUser(query, user, "mr_author")
+
 	if projectID > 0 {
 		query = query.Where("project_id = ?", projectID)
 	}
@@ -65,23 +64,15 @@ func (s *TaskService) List(projectID uint, status string, startTime, endTime tim
 	}
 
 	if err := query.Count(&total).Error; err != nil {
-		zap.L().Error("count tasks failed", zap.Error(err))
 		return nil, 0, err
 	}
-	
-	zap.L().Debug("task count", zap.Int64("total", total))
 
-	query = query.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize)
+	query = query.Order("created_at DESC").Scopes(model.Paginate(page, pageSize))
 
 	if err := query.Preload("Project").Preload("Pool").Preload("Project.Pool").Preload("UsedModel").Find(&tasks).Error; err != nil {
-		zap.L().Error("find tasks failed", zap.Error(err))
 		return nil, 0, err
 	}
 
-	zap.L().Debug("tasks found", zap.Int("count", len(tasks)))
-	for i, t := range tasks {
-		zap.L().Debug("task info", zap.Int("index", i), zap.Uint("id", t.ID), zap.Int("duration", t.DurationSec), zap.String("status", string(t.Status)))
-	}
 	return tasks, total, nil
 }
 

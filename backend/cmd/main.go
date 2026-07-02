@@ -98,7 +98,6 @@ func initLogger(cfg *config.Config) *zap.Logger {
 	}
 	cfgZap := zap.NewProductionConfig()
 	cfgZap.Level = zap.NewAtomicLevelAt(level)
-	// 使用人类可读的时间格式
 	cfgZap.EncoderConfig.TimeKey = "ts"
 	cfgZap.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	logger, err := cfgZap.Build()
@@ -117,23 +116,17 @@ func initEncrypt(key string) {
 func initCron(cfg *config.Config) *cron.Cron {
 	cronRunner = cron.New(cron.WithSeconds())
 
-	// 数据同步日志定期清理（每60分钟检查一次）
 	_, _ = cronRunner.AddFunc("@every 1h", func() {
 		service.CleanupSyncLogs()
 	})
 
-	// 资源池健康检查（后台守护进程）
 	service.NewPoolService().StartHealthCheckDaemon()
-
-	// 模型健康检查（后台守护进程）
 	service.NewModelService().StartHealthCheckDaemon()
 
-	// 任务超时检测（每 10 秒检查）
 	_, _ = cronRunner.AddFunc("@every 10s", func() {
 		service.NewTaskService().TimeoutCheck()
 	})
 
-	// MR 状态同步（动态间隔，由 mr_sync_interval_sec 控制）
 	service.InitMRSyncCron(cronRunner)
 
 	cronRunner.Start()
@@ -151,7 +144,6 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 	r.Use(middleware.Logger())
 	r.Use(middleware.CORS())
 
-	// 静态文件服务 - 前端页面
 	frontendPath := cfg.FrontendPath
 	if frontendPath == "" {
 		frontendPath = "/data/ai-bug-fix/prototype"
@@ -198,13 +190,13 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 	r.GET("/", func(c *gin.Context) {
 		c.File(frontendPath + "/statistics.html")
 	})
-    r.GET("/index.html", func(c *gin.Context) {
-        c.File(frontendPath + "/index.html")
-    })
-    r.GET("/mail.html", func(c *gin.Context) {
-        c.File(frontendPath + "/mail.html")
-    })
-    r.GET("/report.html", func(c *gin.Context) {
+	r.GET("/index.html", func(c *gin.Context) {
+		c.File(frontendPath + "/index.html")
+	})
+	r.GET("/mail.html", func(c *gin.Context) {
+		c.File(frontendPath + "/mail.html")
+	})
+	r.GET("/report.html", func(c *gin.Context) {
 		c.File(frontendPath + "/report.html")
 	})
 	r.GET("/member-mappings.html", func(c *gin.Context) {
@@ -223,180 +215,190 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 	api.POST("/login", userHandler.Login)
 	api.POST("/logout", userHandler.Logout)
 
-	// GitLab Webhook（无需认证 - GitLab 不会携带我们的 Token）
-	// 统一入口处理 note 和 merge_request
+	// GitLab OAuth（无需认证）
+	gitlabAuthHandler := handler.NewGitLabAuthHandler()
+	api.GET("/auth/gitlab", gitlabAuthHandler.Redirect)
+	api.GET("/auth/gitlab/callback", gitlabAuthHandler.Callback)
+
+	// GitLab Webhook（无需认证）
 	api.POST("/webhooks/gitlab", handler.NewWebhookHandler().GitLabWebhook)
 	api.POST("/tasks/callback", handler.NewTaskHandler().Callback)
 
-	// 以下接口需要认证
-	api.Use(middleware.Auth())
+	// 公共需要认证的API（数据在handler/service层按user过滤）
+	common := api.Group("")
+	common.Use(middleware.Auth())
 	{
 		// 用户信息
-		api.GET("/users/me", userHandler.GetCurrentUser)
-		api.PUT("/users/password", userHandler.ChangePassword)
+		common.GET("/users/me", userHandler.GetCurrentUser)
+		common.PUT("/users/password", userHandler.ChangePassword)
+
+		// Dashboard
+		dashboard := common.Group("/dashboard")
+		{
+			h := handler.NewDashboardHandler()
+			dashboard.GET("/stats", h.GetStats)
+			dashboard.GET("/trends", h.GetTrends)
+			dashboard.GET("/recent-projects", h.GetRecentProjects)
+			dashboard.GET("/recent-failures", h.GetRecentFailures)
+			dashboard.GET("/task-distribution", h.GetTaskDistribution)
+		}
+
+		// 任务管理（只读 + 日志/消息/事件）
+		task := common.Group("/tasks")
+		{
+			h := handler.NewTaskHandler()
+			task.GET("", h.List)
+			task.GET("/:id", h.Get)
+			task.GET("/:id/logs", h.Logs)
+			task.GET("/:id/messages", h.Messages)
+			task.POST("/:id/messages", h.SendMessage)
+			task.GET("/:id/events", h.SubscribeEvents)
+		}
+
+		// MR 审查日志（数据已按user过滤）
+		mrLog := common.Group("/mr-review-logs")
+		{
+			h := handler.NewMRReviewLogHandler()
+			mrLog.GET("", h.List)
+			mrLog.POST("/:id/mark-as-draft", h.MarkAsDraft)
+			mrLog.POST("/:id/mark-as-ready", h.MarkAsReady)
+			mrLog.GET("/projects", h.Projects)
+			mrLog.GET("/authors", h.Authors)
+			mrLog.GET("/statistics", handler.NewStatisticsHandler().Get)
+		}
 	}
 
-	// Dashboard
-	dashboard := api.Group("/dashboard")
+	// 管理员专属API
+	adminOnly := api.Group("")
+	adminOnly.Use(middleware.Auth(), middleware.AdminOnly())
 	{
-		h := handler.NewDashboardHandler()
-		dashboard.GET("/stats", h.GetStats)
-		dashboard.GET("/trends", h.GetTrends)
-		dashboard.GET("/recent-projects", h.GetRecentProjects)
-		dashboard.GET("/recent-failures", h.GetRecentFailures)
-		dashboard.GET("/task-distribution", h.GetTaskDistribution)
-	}
+		// 任务管理 - 写操作
+		adminTask := adminOnly.Group("/tasks")
+		{
+			h := handler.NewTaskHandler()
+			adminTask.POST("", h.Create)
+			adminTask.POST("/:id/execute", h.Execute)
+			adminTask.POST("/:id/retry", h.Retry)
+			adminTask.POST("/:id/stop", h.Stop)
+			adminTask.DELETE("/:id/session", h.DeleteSession)
+		}
 
-	// 项目管理
-	project := api.Group("/projects")
-	{
-		h := handler.NewProjectHandler()
-		project.GET("", h.List)
-		project.POST("", h.Create)
-		project.GET("/:id", h.Get)
-		project.PUT("/:id", h.Update)
-		project.DELETE("/:id", h.Delete)
-		project.GET("/:id/tasks", h.Tasks)
-	}
+		// 项目管理
+		project := adminOnly.Group("/projects")
+		{
+			h := handler.NewProjectHandler()
+			project.GET("", h.List)
+			project.POST("", h.Create)
+			project.GET("/:id", h.Get)
+			project.PUT("/:id", h.Update)
+			project.DELETE("/:id", h.Delete)
+			project.GET("/:id/tasks", h.Tasks)
+		}
 
-	// 模版管理
-	template := api.Group("/templates")
-	{
-		h := handler.NewTemplateHandler()
-		template.GET("", h.List)
-		template.GET("/:id", h.Get)
-		template.POST("", h.Create)
-		template.PUT("/:id", h.Update)
-		template.DELETE("/:id", h.Delete)
-		template.POST("/:id/clone", h.Clone)
-	}
+		// 模版管理
+		template := adminOnly.Group("/templates")
+		{
+			h := handler.NewTemplateHandler()
+			template.GET("", h.List)
+			template.GET("/:id", h.Get)
+			template.POST("", h.Create)
+			template.PUT("/:id", h.Update)
+			template.DELETE("/:id", h.Delete)
+			template.POST("/:id/clone", h.Clone)
+		}
 
-	// 任务管理
-	task := api.Group("/tasks")
-	{
-		h := handler.NewTaskHandler()
-		task.GET("", h.List)
-		task.GET("/:id", h.Get)
-		task.POST("", h.Create)
-		task.POST("/:id/execute", h.Execute)
-		task.POST("/:id/retry", h.Retry)
-		task.POST("/:id/stop", h.Stop)
-		task.GET("/:id/logs", h.Logs)
-		task.GET("/:id/messages", h.Messages)
-		task.POST("/:id/messages", h.SendMessage)
-		task.GET("/:id/events", h.SubscribeEvents) // SSE 实时事件流
-		task.DELETE("/:id/session", h.DeleteSession)
-	}
+		// 资源池管理
+		pool := adminOnly.Group("/pools")
+		{
+			h := handler.NewPoolHandler()
+			pool.GET("", h.List)
+			pool.GET("/:id", h.Get)
+			pool.POST("", h.Create)
+			pool.PUT("/:id", h.Update)
+			pool.DELETE("/:id", h.Delete)
+			pool.POST("/test", h.TestConnectivity)
+			pool.POST("/:id/check", h.CheckConnectivity)
+			pool.PUT("/:id/toggle", h.Toggle)
+			pool.PUT("/:id/default", h.SetDefault)
+			pool.DELETE("/:id/default", h.UnsetDefault)
+			pool.GET("/:id/skills", h.GetPoolSkills)
+		}
 
-	// 资源池管理
-	pool := api.Group("/pools")
-	{
-		h := handler.NewPoolHandler()
-		pool.GET("", h.List)
-		pool.GET("/:id", h.Get)
-		pool.POST("", h.Create)
-		pool.PUT("/:id", h.Update)
-		pool.DELETE("/:id", h.Delete)
-		pool.POST("/test", h.TestConnectivity)
-		pool.POST("/:id/check", h.CheckConnectivity)
-		pool.PUT("/:id/toggle", h.Toggle)
-		pool.PUT("/:id/default", h.SetDefault)
-		pool.DELETE("/:id/default", h.UnsetDefault)
-		pool.GET("/:id/skills", h.GetPoolSkills)
-	}
+		// 大模型管理
+		model := adminOnly.Group("/models")
+		{
+			h := handler.NewModelHandler()
+			model.GET("", h.List)
+			model.GET("/default", h.GetDefault)
+			model.GET("/:id/edit", h.GetForUpdate)
+			model.GET("/:id", h.Get)
+			model.POST("", h.Create)
+			model.POST("/test", h.CreateTest)
+			model.PUT("/:id", h.Update)
+			model.DELETE("/:id", h.Delete)
+			model.PUT("/:id/default", h.SetDefault)
+			model.DELETE("/:id/default", h.UnsetDefault)
+			model.POST("/:id/check", h.CheckAPI)
+		}
 
-	// 大模型管理
-	model := api.Group("/models")
-	{
-		h := handler.NewModelHandler()
-		model.GET("", h.List)
-		model.GET("/default", h.GetDefault)
-        model.GET("/:id/edit", h.GetForUpdate)
-        model.GET("/:id", h.Get)
-		model.POST("", h.Create)
-		model.POST("/test", h.CreateTest)
-		model.PUT("/:id", h.Update)
-		model.DELETE("/:id", h.Delete)
-		model.PUT("/:id/default", h.SetDefault)
-		model.DELETE("/:id/default", h.UnsetDefault)
-		model.POST("/:id/check", h.CheckAPI)
-	}
+		// 企业微信通知
+		notifier := adminOnly.Group("/notifiers")
+		{
+			h := handler.NewNotifierHandler()
+			notifier.GET("", h.List)
+			notifier.GET("/:id", h.Get)
+			notifier.POST("", h.Create)
+			notifier.PUT("/:id", h.Update)
+			notifier.PUT("/:id/template", h.UpdateTemplate)
+			notifier.DELETE("/:id", h.Delete)
+			notifier.POST("/:id/test", h.Test)
+			notifier.PUT("/:id/toggle", h.Toggle)
+		}
 
-	// 企业微信通知
-	notifier := api.Group("/notifiers")
-	{
-		h := handler.NewNotifierHandler()
-		notifier.GET("", h.List)
-		notifier.GET("/:id", h.Get)
-		notifier.POST("", h.Create)
-		notifier.PUT("/:id", h.Update)
-		notifier.PUT("/:id/template", h.UpdateTemplate)
-		notifier.DELETE("/:id", h.Delete)
-		notifier.POST("/:id/test", h.Test)
-		notifier.PUT("/:id/toggle", h.Toggle)
-	}
+		// 成员映射管理
+		memberMapping := adminOnly.Group("/member-mappings")
+		{
+			h := handler.NewMemberMappingHandler()
+			memberMapping.GET("", h.List)
+			memberMapping.GET("/git-users", h.GitUsers)
+			memberMapping.GET("/:id", h.Get)
+			memberMapping.POST("", h.Create)
+			memberMapping.PUT("/:id", h.Update)
+			memberMapping.DELETE("/:id", h.Delete)
+			memberMapping.GET("/check", h.CheckMapping)
+		}
 
-	// 成员映射管理
-	memberMapping := api.Group("/member-mappings")
-	{
-		h := handler.NewMemberMappingHandler()
-		memberMapping.GET("", h.List)
-		memberMapping.GET("/git-users", h.GitUsers)
-		memberMapping.GET("/:id", h.Get)
-		memberMapping.POST("", h.Create)
-		memberMapping.PUT("/:id", h.Update)
-		memberMapping.DELETE("/:id", h.Delete)
-		memberMapping.GET("/check", h.CheckMapping)
-	}
+		// 系统管理
+		sys := adminOnly.Group("/system")
+		{
+			h := handler.NewSystemHandler()
+			sys.GET("/config", h.GetConfig)
+			sys.PUT("/config", h.UpdateConfig)
+			sys.GET("/logs", h.OperationLogs)
+			sys.DELETE("/logs", h.ClearLogs)
+			sys.GET("/info", h.Info)
+			sys.GET("/sync-logs", h.SyncLogs)
+		}
 
-	// 系统管理
-	sys := api.Group("/system")
-	{
-		h := handler.NewSystemHandler()
-		sys.GET("/config", h.GetConfig)
-		sys.PUT("/config", h.UpdateConfig)
-		sys.GET("/logs", h.OperationLogs)
-		sys.DELETE("/logs", h.ClearLogs)
-		sys.GET("/info", h.Info)
-		sys.GET("/sync-logs", h.SyncLogs)
-	}
-
-	// MR 审查日志
-	mrLog := api.Group("/mr-review-logs")
-	{
-		h := handler.NewMRReviewLogHandler()
-		mrLog.GET("", h.List)
-		mrLog.POST("/:id/mark-as-draft", h.MarkAsDraft)
-		mrLog.POST("/:id/mark-as-ready", h.MarkAsReady)
-		mrLog.GET("/projects", h.Projects)
-		mrLog.GET("/authors", h.Authors)
-		// 统计
-		mrLog.GET("/statistics", handler.NewStatisticsHandler().Get)
-	}
-
-	// 报表管理
-	report := api.Group("/reports")
-	{
-		h := handler.NewReportHandler()
-		// SMTP 配置
-		report.GET("/smtp", h.GetSMTPConfig)
-		report.PUT("/smtp", h.SaveSMTPConfig)
-		report.POST("/smtp/test", h.TestSMTP)
-		// 接收人
-		report.GET("/recipients", h.ListRecipients)
-		report.POST("/recipients", h.CreateRecipient)
-		report.PUT("/recipients/:id", h.UpdateRecipient)
-		report.DELETE("/recipients/:id", h.DeleteRecipient)
-		// 报告配置
-		report.GET("/config/:type", h.GetReportConfig)
-		report.PUT("/config/:type", h.SaveReportConfig)
-		// 预览与发送
-		report.GET("/preview/:type", h.PreviewReport)
-		report.POST("/send/:type", h.SendReport)
-		// 日志
-        report.GET("/logs", h.ListLogs)
-         report.DELETE("/logs/:id", h.DeleteLog)
-        report.GET("/logs/:id/html", h.GetReportLogHTML)
+		// 报表管理
+		report := adminOnly.Group("/reports")
+		{
+			h := handler.NewReportHandler()
+			report.GET("/smtp", h.GetSMTPConfig)
+			report.PUT("/smtp", h.SaveSMTPConfig)
+			report.POST("/smtp/test", h.TestSMTP)
+			report.GET("/recipients", h.ListRecipients)
+			report.POST("/recipients", h.CreateRecipient)
+			report.PUT("/recipients/:id", h.UpdateRecipient)
+			report.DELETE("/recipients/:id", h.DeleteRecipient)
+			report.GET("/config/:type", h.GetReportConfig)
+			report.PUT("/config/:type", h.SaveReportConfig)
+			report.GET("/preview/:type", h.PreviewReport)
+			report.POST("/send/:type", h.SendReport)
+			report.GET("/logs", h.ListLogs)
+			report.DELETE("/logs/:id", h.DeleteLog)
+			report.GET("/logs/:id/html", h.GetReportLogHTML)
+		}
 	}
 
 	return r

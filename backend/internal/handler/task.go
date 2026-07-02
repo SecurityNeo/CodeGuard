@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ai-optimizer/backend/internal/middleware"
 	"github.com/ai-optimizer/backend/internal/model"
 	"github.com/ai-optimizer/backend/internal/service"
 	"github.com/ai-optimizer/backend/pkg/encrypt"
@@ -19,6 +20,12 @@ func NewTaskHandler() *TaskHandler {
 }
 
 func (h *TaskHandler) List(c *gin.Context) {
+	user, ok := middleware.GetUser(c)
+	if !ok {
+		c.JSON(401, gin.H{"error": "未登录"})
+		return
+	}
+
 	projectID, _ := strconv.Atoi(c.Query("project_id"))
 	status := c.Query("status")
 	timeFilter := c.Query("time_filter")
@@ -27,7 +34,6 @@ func (h *TaskHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
-	// 解析时间范围
 	var startTime, endTime time.Time
 	now := time.Now()
 	switch timeFilter {
@@ -42,33 +48,35 @@ func (h *TaskHandler) List(c *gin.Context) {
 		endTime = now
 	}
 
-	zap.L().Info("TaskHandler.List called", 
-		zap.Int("project_id", projectID),
-		zap.String("status", status),
-		zap.String("time_filter", timeFilter),
-		zap.String("author", author),
-		zap.String("mr_iid", mrIID),
-		zap.Int("page", page),
-		zap.Int("page_size", pageSize))
-
-	tasks, total, err := service.NewTaskService().List(uint(projectID), status, startTime, endTime, author, mrIID, page, pageSize)
+	tasks, total, err := service.NewTaskService().List(user, uint(projectID), status, startTime, endTime, author, mrIID, page, pageSize)
 	if err != nil {
-		zap.L().Error("list tasks failed", zap.Error(err))
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
-	zap.L().Info("TaskHandler.List response", zap.Int("task_count", len(tasks)), zap.Int64("total", total))
 	c.JSON(200, gin.H{"data": tasks, "total": total})
 }
 
 func (h *TaskHandler) Get(c *gin.Context) {
+	user, ok := middleware.GetUser(c)
+	if !ok {
+		c.JSON(401, gin.H{"error": "未登录"})
+		return
+	}
+
 	id, _ := strconv.Atoi(c.Param("id"))
 	task, err := service.NewTaskService().Get(uint(id))
 	if err != nil {
 		c.JSON(404, gin.H{"error": "not found"})
 		return
 	}
+
+	// 非admin只能看自己的任务
+	if user.Role != model.RoleAdmin && task.MRAuthor != user.GitlabUsername {
+		c.JSON(403, gin.H{"error": "无权查看此任务"})
+		return
+	}
+
 	c.JSON(200, gin.H{"data": task})
 }
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ai-optimizer/backend/internal/middleware"
 	"github.com/ai-optimizer/backend/internal/model"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -125,6 +126,12 @@ type DevDailyScore struct {
 }
 
 func (h *StatisticsHandler) Get(c *gin.Context) {
+	user, ok := middleware.GetUser(c)
+	if !ok {
+		c.JSON(401, gin.H{"error": "未登录"})
+		return
+	}
+
 	projectName := c.Query("project_name")
 	author := c.Query("author")
 	startDate := c.Query("start_date")
@@ -132,25 +139,21 @@ func (h *StatisticsHandler) Get(c *gin.Context) {
 	daysStr := c.DefaultQuery("days", "0")
 	days, _ := strconv.Atoi(daysStr)
 
-	// 如果没有指定日期范围且 days > 0，根据 days 计算日期范围
-	// days = 0 表示不限制时间（全部数据）
 	if startDate == "" && endDate == "" && days > 0 {
 		endDate = time.Now().Format("2006-01-02") + " 23:59:59"
 		startDate = time.Now().AddDate(0, 0, -days).Format("2006-01-02")
 	}
-	// endDate 已经是完整时间戳的后缀为 "23:59:59"
-	// 前端输入的 endDate 只到日期，需要补上时分秒，且只做一次
 
-	// 日期处理：若 endDate 不含时分秒则补上，避免重复追加
 	if endDate != "" && !strings.Contains(endDate, ":") {
 		endDate = endDate + " 23:59:59"
 	}
 
-	// MySQL zero date（0000-00-00）会导致 COALESCE 不回退，用 IF 更安全
 	dateCol := "IF(mr_created_at IS NOT NULL AND mr_created_at > '1970-01-01', mr_created_at, synced_at)"
 
 	db := model.DB.Model(&model.MergeRequestReviewLog{})
 
+	// 按用户角色过滤
+	db = model.FilterByUser(db, user, "author")
 	if projectName != "" {
 		db = db.Where("project_name = ?", projectName)
 	}

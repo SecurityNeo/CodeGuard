@@ -37,9 +37,10 @@ func (s *UserService) InitAdmin() error {
 		return fmt.Errorf("hash password failed: %w", err)
 	}
 	admin := model.User{
-		Username: "admin",
-		Password: hashedPassword,
-		Role:     "admin",
+		Username:  "admin",
+		Password:  hashedPassword,
+		Role:      "admin",
+		LoginType: "local",
 	}
 	if err := model.DB.Create(&admin).Error; err != nil {
 		return fmt.Errorf("create admin user failed: %w", err)
@@ -52,6 +53,11 @@ func (s *UserService) InitAdmin() error {
 func (s *UserService) ValidateLogin(username, password string) (*model.User, bool) {
 	var user model.User
 	if err := model.DB.Where("username = ?", username).First(&user).Error; err != nil {
+		return nil, false
+	}
+
+	// 兼容旧数据：password 为空时（GitLab 用户或迁移数据）不能走本地密码验证
+	if user.Password == "" {
 		return nil, false
 	}
 

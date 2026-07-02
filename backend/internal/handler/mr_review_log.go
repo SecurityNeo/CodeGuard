@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ai-optimizer/backend/internal/middleware"
 	"github.com/ai-optimizer/backend/internal/model"
 	"github.com/ai-optimizer/backend/pkg/gitlab"
 	"github.com/gin-gonic/gin"
@@ -28,6 +29,12 @@ func NewMRReviewLogHandler() *MRReviewLogHandler {
 }
 
 func (h *MRReviewLogHandler) List(c *gin.Context) {
+	user, ok := middleware.GetUser(c)
+	if !ok {
+		c.JSON(401, gin.H{"error": "未登录"})
+		return
+	}
+
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	if pageSize > 100 {
@@ -44,6 +51,9 @@ func (h *MRReviewLogHandler) List(c *gin.Context) {
 	var total int64
 
 	db := model.DB.Model(&model.MergeRequestReviewLog{})
+
+	// 按用户角色过滤：user 只能看自己的
+	db = model.FilterByUser(db, user, "author")
 
 	if projectName != "" {
 		db = db.Where("project_name = ?", projectName)

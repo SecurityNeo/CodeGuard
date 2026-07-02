@@ -255,14 +255,26 @@ type SystemConfig struct {
 	UpdatedAt               time.Time `json:"updated_at"`
 }
 
+// --- Role Constants ---
+
+const (
+	RoleAdmin = "admin"
+	RoleUser  = "user"
+)
+
 // --- User ---
 type User struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Username  string    `gorm:"size:50;uniqueIndex;not null" json:"username"`
-	Password  string    `gorm:"size:255;not null" json:"-"`
-	Role      string    `gorm:"size:20;default:'admin'" json:"role"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	Username       string    `gorm:"size:50;uniqueIndex;not null" json:"username"`
+	Password       string    `gorm:"size:255" json:"-"` // GitLab 用户无本地密码
+	Role           string    `gorm:"size:20;default:'user'" json:"role"`          // admin / user
+	LoginType      string    `gorm:"size:20;default:'local'" json:"login_type"` // local / gitlab
+	GitlabUserID   *uint64   `gorm:"index" json:"gitlab_user_id"`
+	GitlabUsername string    `gorm:"size:100" json:"gitlab_username"`
+	GitlabEmail    string    `gorm:"size:255" json:"gitlab_email"`
+	AvatarURL      string    `gorm:"size:512" json:"avatar_url"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // --- Token ---

@@ -109,9 +109,13 @@ func (h *UserHandler) GetCurrentUser(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"role":     user.Role,
+			"id":             user.ID,
+			"username":       user.Username,
+			"role":           user.Role,
+			"login_type":     user.LoginType,
+			"gitlab_username": user.GitlabUsername,
+			"gitlab_email":   user.GitlabEmail,
+			"avatar_url":     user.AvatarURL,
 		},
 	})
 }

@@ -26,6 +26,14 @@ type Config struct {
 	MaxParallelTask int    `yaml:"max_parallel_task"`
 	ProjectBaseDir  string `yaml:"project_base_dir"`
 	FrontendPath    string `yaml:"frontend_path"`
+
+	// GitLab OAuth 配置
+	GitlabOAuthEnabled       bool   `yaml:"gitlab_oauth_enabled"`
+	GitlabBaseURL            string `yaml:"gitlab_base_url"`
+	GitlabOAuthClientID      string `yaml:"gitlab_oauth_client_id"`
+	GitlabOAuthClientSecret  string `yaml:"gitlab_oauth_client_secret"`
+	GitlabOAuthRedirectURI   string `yaml:"gitlab_oauth_redirect_uri"`
+	GitlabOAuthAutoCreateUser bool   `yaml:"gitlab_oauth_auto_create_user"`
 }
 
 func Load() *Config {
@@ -48,6 +56,14 @@ func Load() *Config {
 		MaxParallelTask: getEnvInt("MAX_PARALLEL_TASK", 20),
 		ProjectBaseDir:  getEnv("PROJECT_BASE_DIR", "/data/gitlab/"),
 		FrontendPath:    getEnv("FRONTEND_PATH", "/app/prototype"),
+
+		// GitLab OAuth
+		GitlabOAuthEnabled:       getEnvBool("GITLAB_OAUTH_ENABLED", false),
+		GitlabBaseURL:            getEnv("GITLAB_BASE_URL", ""),
+		GitlabOAuthClientID:      getEnv("GITLAB_OAUTH_CLIENT_ID", ""),
+		GitlabOAuthClientSecret:  getEnv("GITLAB_OAUTH_CLIENT_SECRET", ""),
+		GitlabOAuthRedirectURI:   getEnv("GITLAB_OAUTH_REDIRECT_URI", ""),
+		GitlabOAuthAutoCreateUser: getEnvBool("GITLAB_OAUTH_AUTO_CREATE_USER", true),
 	}
 	return cfg
 }

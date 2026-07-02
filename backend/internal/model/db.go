@@ -13,6 +13,15 @@ import (
 
 var DB *gorm.DB
 
+// FilterByUser 按用户角色过滤数据查询
+// admin 不过滤，user 按 authorColumn = gitlab_username 过滤
+func FilterByUser(db *gorm.DB, user User, authorColumn string) *gorm.DB {
+	if user.Role == RoleAdmin || user.GitlabUsername == "" {
+		return db
+	}
+	return db.Where(authorColumn+" = ?", user.GitlabUsername)
+}
+
 func InitDB(cfg *config.Config) error {
 	var dialector gorm.Dialector
 	dsn := cfg.GetDSN()
@@ -52,6 +61,11 @@ func autoMigrate() error {
 	); err != nil {
 		return err
 	}
+
+	// 兼容：现有用户标记 login_type = local，role 保持现有值（主要是 admin）
+	// 只要 role 为空字符串的记录才设为 'user'
+	DB.Exec("UPDATE users SET login_type = 'local' WHERE login_type = '' OR login_type IS NULL")
+	DB.Exec("UPDATE users SET role = 'admin' WHERE role = '' OR role IS NULL")
 
 	if err := DB.AutoMigrate(
 		&ResourcePool{},
