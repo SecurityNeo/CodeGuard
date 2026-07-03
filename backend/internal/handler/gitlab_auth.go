@@ -91,7 +91,7 @@ func generateState() string {
 // Redirect GET /api/v1/auth/gitlab
 func (h *GitLabAuthHandler) Redirect(c *gin.Context) {
 	state := generateState()
-	cache.add(state, c.ClientIP(), time.Now().Add(5*time.Minute))
+	cache.add(state, "", time.Now().Add(5*time.Minute))
 	authURL, err := h.oauthSvc.BuildAuthURL(state)
 	if err != nil {
 		c.JSON(400, gin.H{"error": "GitLab OAuth 未启用或配置不完整: " + err.Error()})
@@ -110,13 +110,9 @@ func (h *GitLabAuthHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	entry, ok := cache.get(state)
+	_, ok := cache.get(state)
 	if !ok {
 		c.JSON(403, gin.H{"error": "state 无效或已过期"})
-		return
-	}
-	if entry.ip != c.ClientIP() {
-		c.JSON(403, gin.H{"error": "state IP 不匹配"})
 		return
 	}
 	cache.del(state)
