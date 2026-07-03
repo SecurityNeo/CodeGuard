@@ -54,6 +54,18 @@ func (h *TaskHandler) List(c *gin.Context) {
 		return
 	}
 
+    // 清理敏感字段：不透传密码、API Key、项目Token
+    for i := range tasks {
+        tasks[i].Project.AccessToken = ""
+        if tasks[i].Pool.ID > 0 {
+            tasks[i].Pool.OpencodePassword = ""
+            tasks[i].Pool.OpencodeAPIKey = ""
+        }
+        if tasks[i].UsedModel.ID > 0 {
+            tasks[i].UsedModel.APIKey = ""
+        }
+    }
+
 	c.JSON(200, gin.H{"data": tasks, "total": total})
 }
 
@@ -75,6 +87,16 @@ func (h *TaskHandler) Get(c *gin.Context) {
 	if user.Role != model.RoleAdmin && task.MRAuthor != user.GitlabUsername {
 		c.JSON(403, gin.H{"error": "无权查看此任务"})
 		return
+	}
+
+	// 清理敏感字段：不透传密码、API Key、项目Token
+	task.Project.AccessToken = ""
+	if task.Pool.ID > 0 {
+		task.Pool.OpencodePassword = ""
+		task.Pool.OpencodeAPIKey = ""
+	}
+	if task.UsedModel.ID > 0 {
+		task.UsedModel.APIKey = ""
 	}
 
 	c.JSON(200, gin.H{"data": task})

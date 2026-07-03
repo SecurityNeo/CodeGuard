@@ -276,6 +276,7 @@ const (
 type User struct {
 	ID             uint      `gorm:"primaryKey" json:"id"`
 	Username       string    `gorm:"size:50;uniqueIndex;not null" json:"username"`
+	DisplayName    string    `gorm:"size:100" json:"display_name"`
 	Password       string    `gorm:"size:255" json:"-"`                         // GitLab 用户无本地密码
 	Role           string    `gorm:"size:20;default:'user'" json:"role"`        // admin / user
 	LoginType      string    `gorm:"size:20;default:'local'" json:"login_type"` // local / gitlab

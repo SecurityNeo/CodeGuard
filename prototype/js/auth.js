@@ -274,21 +274,21 @@
 
     // 初始化
     // OAuth 回调处理：URL 带有 ?token=xxx 时自动保存
-    function handleOAuthCallback() {
+    async function handleOAuthCallback() {
         const urlParams = new URLSearchParams(window.location.search);
         const token = urlParams.get('token');
         if (token) {
             localStorage.setItem(TOKEN_KEY, token);
             // 清理 URL 中的 token
             window.history.replaceState({}, document.title, window.location.pathname);
-            // 刷新用户信息
-            refreshUserInfo();
+            // 刷新用户信息（必须等待完成后再渲染菜单）
+            await refreshUserInfo();
             return true;
         }
         return false;
     }
 
-    // 从后端拉取最新用户信息（含 role）
+    // 从后端拉取最新用户信息（含 role / display_name）
     async function refreshUserInfo() {
         try {
             const token = getToken();
@@ -304,30 +304,33 @@
                     const merged = Object.assign({}, existing, data.data);
                     merged.token = token; // 确保 token 不被覆盖
                     localStorage.setItem(USER_KEY, JSON.stringify(merged));
-        // 隐藏所有 admin-only 元素
-        applyAdminVisibility();
-    }
+                    // 隐藏所有 admin-only 元素
+                    applyAdminVisibility();
+                    // 重新渲染侧边栏（确保角色过滤生效）
+                    if (typeof window.renderSidebar === 'function') {
+                        window.renderSidebar(window.activePageId);
+                    }
+                }
             }
         } catch(e) {}
     }
 
-    function init() {
+    async function init() {
         if (window.location.pathname === '/login.html') return;
 
-        // 优先处理 OAuth 回调
-        if (handleOAuthCallback()) {
-            // 不需要 redirectToLogin，直接继续
-        } else if (!checkAuth()) {
+        // 优先处理 OAuth 回调（异步等待用户信息刷新）
+        const isOAuth = await handleOAuthCallback();
+        if (!isOAuth && !checkAuth()) {
             return;
         }
 
-        // 每次页面加载时刷新用户信息（最多5分钟内不重复）
-        refreshUserInfo();
+        // 每次页面加载时刷新用户信息
+        await refreshUserInfo();
 
         try {
             const info = JSON.parse(localStorage.getItem(USER_KEY) || '{}');
             const el = document.getElementById('currentUser');
-            if (el) el.textContent = info.username || '管理员';
+            if (el) el.textContent = info.display_name || info.username || '管理员';
         } catch(e) {}
         createChangePasswordModal();
         // 若当前在通知管理子页面，自动展开通知管理菜单

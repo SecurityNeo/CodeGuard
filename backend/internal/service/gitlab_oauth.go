@@ -209,6 +209,7 @@ func (s *GitLabOAuthService) FindOrCreateUser(info *GitLabUserInfo) (*model.User
 
 	newUser := model.User{
 		Username:       info.Username,
+		DisplayName:    info.Name,
 		Role:           model.RoleUser,
 		LoginType:      "gitlab",
 		GitlabUserID:   func() *uint64 { v := uint64(info.ID); return &v }(),

@@ -69,7 +69,18 @@ func (s *TaskService) List(user model.User, projectID uint, status string, start
 
 	query = query.Order("created_at DESC").Scopes(model.Paginate(page, pageSize))
 
-	if err := query.Preload("Project").Preload("Pool").Preload("Project.Pool").Preload("UsedModel").Find(&tasks).Error; err != nil {
+	// 列表页裁剪大字段：不返回 ai_prompt / ai_response / error_msg / diff_summary
+	// 这些长文本字段只在详情页 (Get) 中获取
+	query = query.Select(
+		"id", "project_id", "mr_merge_id", "mr_author", "mr_author_display_name",
+		"mr_title", "mr_url", "trigger_type", "trigger_source", "task_type",
+		"status", "source_branch", "target_branch", "pool_id",
+		"model_id", "gitlab_token_id", "opencode_session_id",
+		"started_at", "completed_at", "duration_sec", "score_value",
+		"retry_count", "created_at", "updated_at",
+	)
+
+	if err := query.Preload("Project").Preload("Pool").Preload("UsedModel").Find(&tasks).Error; err != nil {
 		return nil, 0, err
 	}
 

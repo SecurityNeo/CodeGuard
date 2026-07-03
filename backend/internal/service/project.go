@@ -102,3 +102,20 @@ func (s *ProjectService) GetProjectTasks(projectID uint, page, pageSize int) ([]
 	}
 	return tasks, total, nil
 }
+
+// Options 返回项目名称列表（用于下拉框选择）
+type ProjectOption struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
+}
+
+func (s *ProjectService) Options() ([]ProjectOption, error) {
+	var opts []ProjectOption
+	if err := model.DB.Model(&model.Project{}).
+		Select("id", "name").
+		Order("name ASC").
+		Find(&opts).Error; err != nil {
+		return nil, err
+	}
+	return opts, nil
+}

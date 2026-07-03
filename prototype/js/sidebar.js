@@ -111,7 +111,7 @@
                     <i class="fas fa-user text-sm"></i>
                 </div>
                 <div class="text-sm flex-1">
-                    <div class="font-medium" id="currentUser">${userInfo.username || '用户'}</div>
+                    <div class="font-medium" id="currentUser">${userInfo.display_name || userInfo.username || '用户'}</div>
                     <div class="text-xs text-gray-400">${userRole === 'admin' ? '管理后台' : '开发者'}</div>
                 </div>
                 <i class="fas fa-chevron-down text-xs text-gray-400"></i>

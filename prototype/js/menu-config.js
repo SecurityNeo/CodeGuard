@@ -71,6 +71,7 @@ const MENU_CONFIG = [
             { id: 'settings-config',   name: '系统配置',     href: 'settings.html?tab=config',       icon: 'fa-sliders-h' },
             { id: 'settings-ai',       name: 'AI对话模板',   href: 'settings.html?tab=aitemplate',   icon: 'fa-robot' },
             { id: 'settings-review',   name: '代码审查模板', href: 'settings.html?tab=reviewtemplate', icon: 'fa-code' },
+            { id: 'settings-users',    name: '用户管理',     href: 'settings.html?tab=users',        icon: 'fa-user-cog' },
             { id: 'settings-logs',     name: '操作日志',     href: 'settings.html?tab=logs',         icon: 'fa-history' },
             { id: 'settings-info',     name: '系统信息',     href: 'settings.html?tab=info',         icon: 'fa-info-circle' },
         ]

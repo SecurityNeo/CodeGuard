@@ -150,8 +150,9 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 	}
 	r.Static("/js", frontendPath+"/js")
 	r.Static("/vendor", frontendPath+"/vendor")
-	r.Static("/static", frontendPath)
-	r.GET("/projects.html", func(c *gin.Context) {
+    r.Static("/static", frontendPath+"/static")
+
+    r.GET("/projects.html", func(c *gin.Context) {
 		c.File(frontendPath + "/projects.html")
 	})
 	r.GET("/models.html", func(c *gin.Context) {
@@ -266,6 +267,9 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			mrLog.GET("/authors", h.Authors)
 			mrLog.GET("/statistics", handler.NewStatisticsHandler().Get)
 		}
+
+		// 项目选项（任务列表/通知配置等下拉框使用，不含敏感字段）
+		common.GET("/projects/options", handler.NewProjectHandler().Options)
 	}
 
 	// 管理员专属API
@@ -366,6 +370,16 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			memberMapping.PUT("/:id", h.Update)
 			memberMapping.DELETE("/:id", h.Delete)
 			memberMapping.GET("/check", h.CheckMapping)
+		}
+
+		// 用户管理（管理员）
+		users := adminOnly.Group("/users")
+		{
+			users.GET("", userHandler.ListUsers)
+			users.POST("", userHandler.CreateUser)
+			users.PUT("/:id", userHandler.UpdateUser)
+			users.DELETE("/:id", userHandler.DeleteUser)
+			users.POST("/:id/reset-password", userHandler.ResetPassword)
 		}
 
 		// 系统管理

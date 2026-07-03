@@ -1,11 +1,12 @@
 package handler
 
 import (
-	"github.com/gin-gonic/gin"
+	"strconv"
+
 	"github.com/ai-optimizer/backend/internal/model"
 	"github.com/ai-optimizer/backend/internal/service"
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"strconv"
 )
 
 type ProjectHandler struct{}
@@ -28,6 +29,17 @@ func (h *ProjectHandler) List(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"data": projects, "total": total, "page": page, "page_size": pageSize})
+}
+
+// Options 返回项目名称列表（用于下拉框选择，不含敏感字段）
+func (h *ProjectHandler) Options(c *gin.Context) {
+	projects, err := service.NewProjectService().Options()
+	if err != nil {
+		zap.L().Error("list project options failed", zap.Error(err))
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"data": projects})
 }
 
 func (h *ProjectHandler) Get(c *gin.Context) {

@@ -3,160 +3,381 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>登录 - CodeGuard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="js/auth.js?v=5"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <title>登录 - AI Code Guard</title>
+    <link rel="stylesheet" href="/static/fontawesome/6.5.0/css/all.min.css">
     <style>
-        .gradient-bg {
-            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0b1121;
+            overflow: hidden;
+        }
+
+        /* ===== 全屏深色背景 ===== */
+        .bg-wrap {
+            position: fixed; inset: 0;
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -10%, rgba(59,130,246,0.14), transparent),
+                radial-gradient(ellipse 60% 50% at 80% 50%, rgba(99,102,241,0.07), transparent),
+                radial-gradient(ellipse 50% 50% at 20% 90%, rgba(37,99,235,0.06), transparent),
+                linear-gradient(145deg, #0b1121 0%, #0f172a 50%, #0b1121 100%);
+            z-index: 0;
+        }
+        .orb {
+            position: absolute; border-radius: 50%; filter: blur(100px); opacity: 0.30;
+            animation: float 14s ease-in-out infinite;
+        }
+        .orb-1 { width: 520px; height: 520px; background: #1e3a5f; top: -180px; left: 8%; }
+        .orb-2 { width: 420px; height: 420px; background: #312e81; bottom: -120px; right: 12%; animation-delay: -5s; }
+        .orb-3 { width: 380px; height: 380px; background: #1e40af; top: 40%; left: 30%; animation-delay: -9s; }
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(25px, -25px) scale(1.03); }
+            66% { transform: translate(-15px, 18px) scale(0.97); }
+        }
+
+        /* ===== 移动端拦截 ===== */
+        .mobile-block { display: none; }
+        @media (max-width: 1024px) {
+            .login-wrap { display: none !important; }
+            .mobile-block {
+                display: flex !important; position: fixed; inset: 0; z-index: 9999;
+                background: #0b1121; align-items: center; justify-content: center;
+                text-align: center; padding: 32px;
+            }
+            .mobile-block i { font-size: 48px; color: #3b82f6; margin-bottom: 16px; }
+            .mobile-block h2 { color: #fff; font-size: 20px; margin-bottom: 8px; }
+            .mobile-block p { color: rgba(255,255,255,0.5); font-size: 14px; line-height: 1.6; }
+        }
+
+        /* ===== 主布局：两端对齐 ===== */
+        .login-wrap {
+            position: relative; z-index: 1;
             min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 80px;
+            max-width: 1600px;
+            margin: 0 auto;
         }
-        .glass-card {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+
+        /* ---- 左侧品牌区（固定宽度 + 内容居中） ---- */
+        .brand-side {
+            width: 600px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #fff;
+            animation: fadeLeft 0.7s ease-out;
         }
-        .input-glow:focus {
-            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+        @keyframes fadeLeft {
+            from { opacity: 0; transform: translateX(-20px); }
+            to   { opacity: 1; transform: translateX(0); }
         }
+        .brand-side .logo {
+            width: 72px; height: 72px;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            border-radius: 20px;
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 28px;
+            box-shadow: 0 10px 40px rgba(37,99,235,0.35);
+        }
+        .brand-side .logo i { font-size: 32px; color: #fff; }
+        .brand-side h1 { font-size: 48px; font-weight: 700; letter-spacing: -1px; margin-bottom: 14px; }
+        .brand-side .subtitle {
+            font-size: 18px; color: rgba(255,255,255,0.55); line-height: 1.7;
+            margin-bottom: 52px;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 18px;
+            width: 100%;
+        }
+        .feature-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 14px;
+            padding: 22px 18px;
+            text-align: left;
+            transition: all 0.3s;
+        }
+        .feature-card:hover {
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(255,255,255,0.12);
+            transform: translateY(-2px);
+        }
+        .feature-card i {
+            font-size: 22px; color: #60a5fa; margin-bottom: 12px;
+            display: block;
+        }
+        .feature-card h4 { font-size: 16px; font-weight: 600; margin-bottom: 6px; color: rgba(255,255,255,0.92); }
+        .feature-card p { font-size: 14px; color: rgba(255,255,255,0.50); line-height: 1.6; }
+
+        /* ---- 右侧登录卡片 ---- */
+        .form-card {
+            width: 400px;
+            background: rgba(15, 23, 42, 0.72);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 20px;
+            padding: 40px 36px;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.03) inset;
+            animation: fadeRight 0.7s ease-out;
+            flex-shrink: 0;
+        }
+        @keyframes fadeRight {
+            from { opacity: 0; transform: translateX(20px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
+
+        .card-title { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+        .card-sub { font-size: 13px; color: rgba(255,255,255,0.35); margin-bottom: 28px; }
+
+        .field { margin-bottom: 16px; }
+        .field label {
+            display: block; font-size: 12px; font-weight: 500;
+            color: rgba(255,255,255,0.55); margin-bottom: 6px;
+        }
+        .input-box { position: relative; }
+        .input-box i {
+            position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+            color: rgba(255,255,255,0.28); font-size: 13px;
+        }
+        .input-box input {
+            width: 100%; padding: 10px 12px 10px 36px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.10);
+            border-radius: 10px; font-size: 13px; color: #fff;
+            transition: all 0.2s; outline: none;
+        }
+        .input-box input::placeholder { color: rgba(255,255,255,0.25); }
+        .input-box input:focus {
+            background: rgba(255,255,255,0.07);
+            border-color: rgba(59,130,246,0.50);
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.08);
+        }
+
+        .btn-primary {
+            width: 100%; padding: 11px;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: #fff; border: none; border-radius: 10px;
+            font-size: 13px; font-weight: 500; cursor: pointer;
+            transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+            margin-top: 4px;
+        }
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px rgba(37,99,235,0.35);
+        }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .err-msg {
+            display: none; align-items: center; gap: 6px;
+            padding: 9px 12px;
+            background: rgba(220, 38, 38, 0.12);
+            border: 1px solid rgba(220, 38, 38, 0.25);
+            color: #f87171; border-radius: 8px;
+            font-size: 12px; margin-bottom: 14px;
+        }
+        .err-msg.show { display: flex; }
+
+        .sep {
+            display: flex; align-items: center; gap: 14px;
+            margin: 24px 0 18px;
+        }
+        .sep-line { flex: 1; height: 1px; background: rgba(255,255,255,0.08); }
+        .sep-text { font-size: 12px; color: rgba(255,255,255,0.30); white-space: nowrap; }
+
+        .sso-row {
+            display: flex; align-items: center; justify-content: center; gap: 14px;
+        }
+        .sso-btn {
+            width: 44px; height: 44px;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(252, 109, 38, 0.08);
+            border: 1px solid rgba(252, 109, 38, 0.20);
+            border-radius: 12px; color: #fb923c;
+            text-decoration: none; transition: all 0.2s; font-size: 18px;
+        }
+        .sso-btn:hover {
+            background: rgba(252, 109, 38, 0.16);
+            border-color: rgba(252, 109, 38, 0.40);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 18px rgba(252,109,38,0.18);
+        }
+
+        .card-foot { text-align: center; margin-top: 24px; }
+        .card-foot p { font-size: 11px; color: rgba(255,255,255,0.22); }
     </style>
+    <script src="js/auth.js?v=5"></script>
 </head>
-<body class="gradient-bg flex items-center justify-center">
-    <div class="w-full max-w-md px-6">
-        <!-- Logo -->
-        <div class="text-center mb-8">
-            <div class="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <i class="fas fa-robot text-3xl text-white"></i>
+<body>
+    <div class="bg-wrap">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <!-- 移动端拦截 -->
+    <div class="mobile-block">
+        <div>
+            <i class="fas fa-desktop"></i>
+            <h2>请使用电脑访问</h2>
+            <p>AI Code Guard 智能代码门禁系统<br>仅支持电脑桌面端浏览器访问</p>
+        </div>
+    </div>
+
+    <!-- 桌面端登录 -->
+    <div class="login-wrap">
+
+        <!-- ===== 左侧品牌区（固定宽度 + 内容居中） ===== -->
+        <div class="brand-side">
+            <div class="logo"><i class="fas fa-robot"></i></div>
+            <h1>AI Code Guard</h1>
+            <p class="subtitle">基于 LLM 的智能代码门禁系统<br>让每一次代码提交都经过 AI 的深度审查</p>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <i class="fas fa-shield-alt"></i>
+                    <h4>自动拦截风险</h4>
+                    <p>实时分析 MR 变更，智能评分拦截低质量代码</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-brain"></i>
+                    <h4>多模型评审</h4>
+                    <p>支持 DeepSeek、Qwen 等多种大模型</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-chart-line"></i>
+                    <h4>开发者画像</h4>
+                    <p>全方位度量代码质量，产出团队研发数据</p>
+                </div>
+                <div class="feature-card">
+                    <i class="fas fa-plug"></i>
+                    <h4>GitLab 集成</h4>
+                    <p>无缝对接 GitLab Webhook</p>
+                </div>
             </div>
-            <h1 class="text-2xl font-bold text-white mb-2">CodeGuard</h1>
-            <p class="text-gray-400 text-sm">代码智能门禁</p>
         </div>
 
-        <!-- Login Card -->
-        <div class="glass-card rounded-2xl p-8">
-            <h2 class="text-xl font-bold text-white mb-6 text-center">登录</h2>
+        <!-- ===== 右侧登录卡片 ===== -->
+        <div class="form-card">
+            <div class="card-title">账号密码登录</div>
+            <div class="card-sub">请输入您的管理员账号信息</div>
 
-            <!-- GitLab 登录 -->
-            <a href="/api/v1/auth/gitlab" class="w-full flex items-center justify-center gap-2 bg-[#fc6d26] hover:bg-[#e65c19] text-white py-3 rounded-lg text-sm font-medium transition-all mb-4">
-                <i class="fab fa-gitlab"></i>
-                <span>使用 GitLab 登录</span>
-            </a>
-
-            <div class="flex items-center gap-3 my-4">
-                <div class="flex-1 h-px bg-gray-700"></div>
-                <span class="text-gray-500 text-xs">或</span>
-                <div class="flex-1 h-px bg-gray-700"></div>
+            <div id="errorMsg" class="err-msg">
+                <i class="fas fa-exclamation-circle"></i>
+                <span id="errorText"></span>
             </div>
 
             <form id="loginForm" onsubmit="return doLogin(event)">
-                <div class="space-y-5">
-                    <div>
-                        <label class="block text-sm text-gray-300 mb-2">用户名</label>
-                        <div class="relative">
-                            <i class="fas fa-user absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                            <input type="text" id="username" placeholder="admin"
-                                   class="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 input-glow transition-all">
-                        </div>
+                <div class="field">
+                    <label>用户名</label>
+                    <div class="input-box">
+                        <i class="fas fa-user"></i>
+                        <input type="text" id="username" placeholder="请输入用户名" autocomplete="username">
                     </div>
-
-                    <div>
-                        <label class="block text-sm text-gray-300 mb-2">密码</label>
-                        <div class="relative">
-                            <i class="fas fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
-                            <input type="password" id="password" placeholder="请输入密码"
-                                   class="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 input-glow transition-all">
-                        </div>
-                    </div>
-
-                    <div id="errorMsg" class="hidden text-red-400 text-sm text-center">
-                        <i class="fas fa-exclamation-circle mr-1"></i><span id="errorText"></span>
-                    </div>
-
-                    <button type="submit" id="loginBtn"
-                            class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2">
-                        <i class="fas fa-sign-in-alt"></i>
-                        <span>登录</span>
-                    </button>
                 </div>
+
+                <div class="field">
+                    <label>密码</label>
+                    <div class="input-box">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="password" placeholder="请输入密码" autocomplete="current-password">
+                    </div>
+                </div>
+
+                <button type="submit" id="loginBtn" class="btn-primary">
+                    <i class="fas fa-sign-in-alt"></i>
+                    <span>登录</span>
+                </button>
             </form>
+
+            <div class="sep">
+                <div class="sep-line"></div>
+                <div class="sep-text">其它登录方式</div>
+                <div class="sep-line"></div>
+            </div>
+
+            <div class="sso-row">
+                <a href="/api/v1/auth/gitlab" class="sso-btn" title="GitLab 单点登录">
+                    <i class="fab fa-gitlab"></i>
+                </a>
+            </div>
+
+            <div class="card-foot">
+                <p>AI Code Guard — 智能代码门禁系统</p>
+            </div>
         </div>
 
-        <!-- Footer -->
-        <p class="text-center text-gray-500 text-xs mt-6">
-            默认本地账号: admin / 默认密码: admin123
-        </p>
     </div>
 
     <script>
         const API_BASE = '/api/v1';
 
-        // 检查是否已登录
         function checkAuth() {
             const token = localStorage.getItem('auth_token');
             if (token) {
-                // 验证token是否有效
                 fetch(`${API_BASE}/users/me`, {
                     headers: { 'Authorization': 'Bearer ' + token }
                 }).then(res => {
-                    if (res.ok) {
-                        window.location.href = '/index.html';
-                    } else {
-                        localStorage.removeItem('auth_token');
-                        localStorage.removeItem('user_info');
-                    }
+                    if (res.ok) { window.location.href = '/index.html'; }
+                    else { localStorage.removeItem('auth_token'); localStorage.removeItem('user_info'); }
                 }).catch(() => {});
             }
         }
 
         async function doLogin(e) {
             e.preventDefault();
-            
             const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
             const btn = document.getElementById('loginBtn');
             const errorMsg = document.getElementById('errorMsg');
             const errorText = document.getElementById('errorText');
-            
+
             if (!username || !password) {
                 errorText.textContent = '请输入用户名和密码';
-                errorMsg.classList.remove('hidden');
+                errorMsg.classList.add('show');
                 return false;
             }
-            
+
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>登录中...</span>';
-            errorMsg.classList.add('hidden');
-            
+            errorMsg.classList.remove('show');
+
             try {
                 const res = await apiFetch(`${API_BASE}/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
                 });
-                
                 const data = await res.json();
-                
                 if (res.ok && data.data && data.data.token) {
                     localStorage.setItem('auth_token', data.data.token);
                     localStorage.setItem('user_info', JSON.stringify(data.data));
                     window.location.href = '/index.html';
                 } else {
                     errorText.textContent = data.error || '登录失败';
-                    errorMsg.classList.remove('hidden');
+                    errorMsg.classList.add('show');
                 }
             } catch (e) {
                 errorText.textContent = '网络错误，请稍后重试';
-                errorMsg.classList.remove('hidden');
+                errorMsg.classList.add('show');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-sign-in-alt"></i><span>登录</span>';
             }
-            
             return false;
         }
 
-        // 页面加载时检查
         checkAuth();
     </script>
 </body>

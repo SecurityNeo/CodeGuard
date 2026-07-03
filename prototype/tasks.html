@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+    <style>html{background-color:#1e293b;}</style>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>任务列表 - CodeGuard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="js/auth.js?v=5"></script>
+        <script src="js/auth.js?v=5"></script>
     <script src="js/menu-config.js?v=2"></script>
     <script src="js/sidebar.js?v=2"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/diff.min.js"></script>
+    <link rel="stylesheet" href="/static/fontawesome/6.5.0/css/all.min.css">
+    <script src="/static/js/marked.min.js"></script>
+    <link rel="stylesheet" href="/static/css/highlight-github-dark.min.css">
+    <script src="/static/js/highlight.min.js"></script>
+    <script src="/static/js/highlight-diff.min.js"></script>
     <style>
         .sidebar-item:hover { background-color: rgba(255,255,255,0.1); }
         .sidebar-item.active { background-color: rgba(255,255,255,0.15); border-left: 3px solid #3b82f6; }
@@ -93,9 +93,38 @@
     </style>
 </head>
 <body class="bg-gray-50 font-sans">
-    <div class="flex h-screen">
+    
+<div id="page-transition" style="position:fixed;top:0;left:0;right:0;bottom:0;background:#1e293b;z-index:99999;transition:opacity .25s ease;"></div>
+<script>
+(function(){
+  function hide(){var el=document.getElementById('page-transition');if(el){el.style.opacity='0';setTimeout(function(){el.remove();},250);}}
+  if(document.readyState==='complete'){hide();}else{window.addEventListener('load',hide);}
+})();
+</script>
+<div class="flex h-screen">
         <!-- 侧边栏 -->
-        <aside id="sidebar" class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col"></aside>
+        <aside id="sidebar" class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
+  <div class="p-6">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+        <i class="fas fa-robot text-xl"></i>
+      </div>
+      <div><h1 class="font-bold text-lg">CodeGuard</h1><p class="text-xs text-gray-400">代码智能门禁</p></div>
+    </div>
+  </div>
+  <nav class="flex-1 px-3 py-4 space-y-1"></nav>
+  <div class="p-4 border-t border-slate-700">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
+        <i class="fas fa-user text-sm"></i>
+      </div>
+      <div class="text-sm flex-1">
+        <div class="font-medium" id="currentUser">加载中…</div>
+        <div class="text-xs text-gray-400">开发者</div>
+      </div>
+    </div>
+  </div>
+</aside>
 
         <main class="flex-1 overflow-y-auto">
             <header class="bg-white border-b px-8 py-4 flex items-center justify-between sticky top-0 z-10">
@@ -326,7 +355,7 @@ const API_BASE = '/api/v1';
 
         async function loadProjectFilter() {
             try {
-                const resp = await apiFetch('/api/v1/projects?limit=999');
+                const resp = await apiFetch('/api/v1/projects/options');
                 const result = await resp.json();
                 const data = result.data || [];
                 const select = document.getElementById('projectFilter');
@@ -713,7 +742,7 @@ function renderTasks(tasks) {
                     switch (part.type) {
                         case 'text':
                             if (part.text) {
-                                sections.push({ type: 'text', html: marked.parse(part.text) });
+                                sections.push({ type: 'text', html: marked.parse(maskSensitive(part.text)) });
                             }
                             break;
                         case 'reasoning':
@@ -727,7 +756,7 @@ function renderTasks(tasks) {
                                             <i class="fas fa-chevron-down text-yellow-500 transition-transform duration-200" id="${rid}-icon"></i>
                                         </div>
                                         <div id="${rid}" class="hidden">
-                                            <div class="p-3 text-sm text-gray-700 markdown-body">${marked.parse(part.text)}</div>
+                                            <div class="p-3 text-sm text-gray-700 markdown-body">${marked.parse(maskSensitive(part.text))}</div>
                                         </div>
                                     </div>`
                                 });
@@ -816,7 +845,7 @@ function renderTasks(tasks) {
                             <div class="bg-gray-100 px-3 py-1.5 text-xs text-gray-600 flex items-center justify-between border-b border-gray-200">
                                 <span class="font-medium"><i class="fas fa-file-alt mr-1 text-blue-500"></i>读取文件${title ? ' · ' + escapeHtml(title) : ''}</span>
                             </div>
-                            <pre class="bg-gray-900 text-gray-100 p-3 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(output)}</code></pre>
+                            <pre class="bg-gray-900 text-gray-100 p-3 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(maskSensitive(output))}</code></pre>
                         </div>`;
                 }
                 case 'bash': {
@@ -829,13 +858,13 @@ function renderTasks(tasks) {
                                 ${title ? `<span class="text-gray-500">${escapeHtml(title)}</span>` : ''}
                             </div>
                             <div class="p-0">
-                                <div class="bg-gray-900 border-b border-gray-700 px-3 py-1.5">
+                                    <div class="bg-gray-900 border-b border-gray-700 px-3 py-1.5">
                                     <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Input</div>
-                                    <pre class="text-gray-300 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(cmd)}</code></pre>
+                                    <pre class="text-gray-300 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(maskSensitive(cmd))}</code></pre>
                                 </div>
                                 <div class="bg-gray-900 px-3 py-1.5">
                                     <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Output</div>
-                                    <pre class="text-green-400 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(output)}</code></pre>
+                                    <pre class="text-green-400 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(maskSensitive(output))}</code></pre>
                                 </div>
                             </div>
                         </div>`;
@@ -849,7 +878,7 @@ function renderTasks(tasks) {
                                 <span class="font-medium"><i class="fas fa-magic mr-1"></i>${escapeHtml(skillName)}</span>
                                 <span class="bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded text-[10px]">Skill</span>
                             </div>
-                            <div class="bg-white p-3 text-sm text-gray-700 markdown-body">${marked.parse(output || '')}</div>
+                            <div class="bg-white p-3 text-sm text-gray-700 markdown-body">${marked.parse(maskSensitive(output || ''))}</div>
                         </div>`;
                 }
                 case 'glob': {
@@ -869,7 +898,7 @@ function renderTasks(tasks) {
                                 </div>
                                 <div class="bg-white px-3 py-1.5">
                                     <div class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Matches</div>
-                                    <pre class="text-xs text-gray-700 overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(output)}</pre>
+                                    <pre class="text-xs text-gray-700 overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(maskSensitive(output))}</pre>
                                 </div>
                             </div>
                         </div>`;
@@ -898,7 +927,7 @@ function renderTasks(tasks) {
                                 </div>
                                 <div class="bg-gray-900 px-3 py-1.5">
                                     <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Matches</div>
-                                    <pre class="text-green-400 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(output)}</code></pre>
+                                    <pre class="text-green-400 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(maskSensitive(output))}</code></pre>
                                 </div>
                             </div>
                         </div>`;
@@ -917,17 +946,17 @@ function renderTasks(tasks) {
                                 ${oldStr ? `
                                 <div class="bg-red-50 border-b border-red-100 px-3 py-1.5">
                                     <div class="text-[10px] text-red-400 uppercase tracking-wider mb-1">移除</div>
-                                    <pre class="text-red-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(oldStr)}</pre>
+                                    <pre class="text-red-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(maskSensitive(oldStr))}</pre>
                                 </div>` : ''}
                                 ${newStr ? `
                                 <div class="bg-green-50 border-b border-green-100 px-3 py-1.5">
                                     <div class="text-[10px] text-green-400 uppercase tracking-wider mb-1">替换为</div>
-                                    <pre class="text-green-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(newStr)}</pre>
+                                    <pre class="text-green-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(maskSensitive(newStr))}</pre>
                                 </div>` : ''}
                                 ${output ? `
                                 <div class="bg-white px-3 py-1.5">
                                     <div class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">结果</div>
-                                    <pre class="text-gray-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(output)}</pre>
+                                    <pre class="text-gray-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(maskSensitive(output))}</pre>
                                 </div>` : ''}
                             </div>
                         </div>`;
@@ -945,12 +974,12 @@ function renderTasks(tasks) {
                                 ${content ? `
                                 <div class="bg-gray-50 border-b border-gray-100 px-3 py-1.5">
                                     <div class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">内容</div>
-                                    <pre class="text-gray-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(content)}</code></pre>
+                                    <pre class="text-gray-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(maskSensitive(content))}</code></pre>
                                 </div>` : ''}
                                 ${output ? `
                                 <div class="bg-white px-3 py-1.5">
                                     <div class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">结果</div>
-                                    <pre class="text-gray-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(output)}</pre>
+                                    <pre class="text-gray-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(maskSensitive(output))}</pre>
                                 </div>` : ''}
                             </div>
                         </div>`;
@@ -968,12 +997,12 @@ function renderTasks(tasks) {
                                 ${diffContent ? `
                                 <div class="bg-gray-900 border-b border-gray-700 px-3 py-1.5">
                                     <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Diff</div>
-                                    <pre class="text-green-400 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-diff">${escapeHtml(diffContent)}</code></pre>
+                                    <pre class="text-green-400 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-diff">${escapeHtml(maskSensitive(diffContent))}</code></pre>
                                 </div>` : ''}
                                 ${output ? `
                                 <div class="bg-white px-3 py-1.5">
                                     <div class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">结果</div>
-                                    <pre class="text-gray-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(output)}</pre>
+                                    <pre class="text-gray-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(maskSensitive(output))}</pre>
                                 </div>` : ''}
                             </div>
                         </div>`;
@@ -985,7 +1014,7 @@ function renderTasks(tasks) {
                             <div class="bg-gray-100 px-3 py-1.5 text-xs text-gray-600 flex items-center justify-between border-b border-gray-200">
                                 <span class="font-medium"><i class="fas fa-cog mr-1 text-gray-500"></i>工具: ${escapeHtml(tool)}</span>
                             </div>
-                            <pre class="bg-gray-900 text-gray-100 p-3 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(output)}</code></pre>
+                            <pre class="bg-gray-900 text-gray-100 p-3 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(maskSensitive(output))}</code></pre>
                         </div>`;
                 }
             }
@@ -1401,7 +1430,7 @@ function renderTasks(tasks) {
                             <span class="font-medium text-gray-600">你</span>
                         </div>
                         <div class="bg-white text-gray-800 border border-gray-200 rounded-2xl rounded-tr-sm px-4 py-3 text-sm shadow-sm">
-                            <div class="markdown-body">${escapeHtml(content)}</div>
+                            <div class="markdown-body">${escapeHtml(maskSensitive(content))}</div>
                         </div>
                     </div>
                     <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-xs shadow-sm flex-shrink-0">
@@ -1558,5 +1587,6 @@ function renderTasks(tasks) {
             restrictAuthorFilterToSelf();
         }
     </script>
+    <script defer src="/static/js/tailwindcss.min.js"></script>
 </body>
 </html>

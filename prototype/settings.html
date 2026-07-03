@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+    <style>html{background-color:#1e293b;}</style>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>系统管理 - CodeGuard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="js/auth.js?v=5"></script>
+        <script src="js/auth.js?v=5"></script>
     <script src="js/menu-config.js?v=2"></script>
     <script src="js/sidebar.js?v=2"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/fontawesome/6.5.0/css/all.min.css">
     <style>
         .sidebar-item:hover { background-color: rgba(255,255,255,0.1); }
         .sidebar-item.active { background-color: rgba(255,255,255,0.15); border-left: 3px solid #3b82f6; }
@@ -26,9 +26,38 @@
     </style>
 </head>
 <body class="bg-gray-50 font-sans">
-    <div id="toastContainer"></div>
+    
+<div id="page-transition" style="position:fixed;top:0;left:0;right:0;bottom:0;background:#1e293b;z-index:99999;transition:opacity .25s ease;"></div>
+<script>
+(function(){
+  function hide(){var el=document.getElementById('page-transition');if(el){el.style.opacity='0';setTimeout(function(){el.remove();},250);}}
+  if(document.readyState==='complete'){hide();}else{window.addEventListener('load',hide);}
+})();
+</script>
+<div id="toastContainer"></div>
     <div class="flex h-screen">
-        <aside id="sidebar" class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col"></aside>
+        <aside id="sidebar" class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
+  <div class="p-6">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+        <i class="fas fa-robot text-xl"></i>
+      </div>
+      <div><h1 class="font-bold text-lg">CodeGuard</h1><p class="text-xs text-gray-400">代码智能门禁</p></div>
+    </div>
+  </div>
+  <nav class="flex-1 px-3 py-4 space-y-1"></nav>
+  <div class="p-4 border-t border-slate-700">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
+        <i class="fas fa-user text-sm"></i>
+      </div>
+      <div class="text-sm flex-1">
+        <div class="font-medium" id="currentUser">加载中…</div>
+        <div class="text-xs text-gray-400">开发者</div>
+      </div>
+    </div>
+  </div>
+</aside>
 
         <main class="flex-1 overflow-y-auto">
             <header id="pageHeader" class="bg-white border-b px-8 py-4 sticky top-0 z-10">
@@ -42,6 +71,7 @@
                     <div class="tab-btn active" onclick="switchTab('config')">系统配置</div>
                     <div class="tab-btn" onclick="switchTab('aitemplate')">AI对话模板</div>
                     <div class="tab-btn" onclick="switchTab('reviewtemplate')">代码审查模板</div>
+                    <div class="tab-btn" onclick="switchTab('users')">用户管理</div>
                     <div class="tab-btn" onclick="switchTab('logs')">操作日志</div>
                     <div class="tab-btn" onclick="switchTab('info')">系统信息</div>
                 </div>
@@ -321,6 +351,68 @@
                     </div>
                 </div>
 
+                <!-- 用户管理 -->
+                <div id="tab-users" class="tab-content bg-white rounded-b-xl border border-t-0 p-6 space-y-5">
+                    <!-- 工具栏卡片 -->
+                    <div class="bg-gray-50 rounded-lg p-4 border flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <button onclick="openUserModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 flex items-center gap-2">
+                                <i class="fas fa-plus"></i>新建用户
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm text-gray-500">角色：</span>
+                                <select id="userRoleFilter" class="px-3 py-2 border rounded-lg text-sm bg-white" onchange="loadUsers()">
+                                    <option value="">全部</option>
+                                    <option value="admin">管理员</option>
+                                    <option value="user">普通用户</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="text" id="userKeywordFilter" placeholder="搜索用户名/显示名" class="px-3 py-2 border rounded-lg text-sm" onkeydown="if(event.key==='Enter')loadUsers()">
+                                <button onclick="loadUsers()" class="bg-white text-gray-600 px-3 py-2 rounded-lg text-sm border hover:bg-gray-50 transition-colors">
+                                    <i class="fas fa-search mr-1"></i>搜索
+                                </button>
+                            </div>
+                            <button onclick="loadUsers()" class="bg-white text-gray-600 px-3 py-2 rounded-lg text-sm border hover:bg-gray-50 transition-colors">
+                                <i class="fas fa-redo mr-1"></i>刷新
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 用户表格卡片 -->
+                    <div class="bg-white rounded-lg border overflow-hidden">
+                        <table class="w-full">
+                            <thead class="bg-gray-50 border-b">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">用户名</th>
+                                    <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">显示名</th>
+                                    <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">角色</th>
+                                    <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">登录类型</th>
+                                    <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">创建时间</th>
+                                    <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersBody" class="divide-y divide-gray-100 text-sm">
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 分页卡片 -->
+                    <div class="bg-gray-50 rounded-lg p-4 border flex justify-between items-center">
+                        <span id="usersTotal" class="text-sm text-gray-500">共 0 条记录</span>
+                        <div class="flex items-center gap-4">
+                            <select id="usersPageSize" onchange="changeUsersPageSize()" class="px-2 py-1 border rounded text-sm bg-white">
+                                <option value="10" selected>10条/页</option>
+                                <option value="20">20条/页</option>
+                                <option value="50">50条/页</option>
+                            </select>
+                            <div id="usersPagination" class="flex gap-2"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 操作日志 -->
                 <div id="tab-logs" class="tab-content bg-white rounded-b-xl border border-t-0 p-6 space-y-5">
                     <!-- 工具栏卡片 -->
@@ -335,9 +427,38 @@
                                 <span class="text-sm text-gray-500">操作类型：</span>
                                 <select id="logTypeFilter" class="px-3 py-2 border rounded-lg text-sm bg-white" onchange="loadOperationLogs()">
                                     <option value="">所有操作</option>
-                                    <option value="project_change">项目变更</option>
-                                    <option value="task_op">任务操作</option>
-                                    <option value="pool_change">资源池变更</option>
+                                    <option value="用户登录">用户登录</option>
+                                    <option value="修改密码">修改密码</option>
+                                    <option value="项目创建">项目创建</option>
+                                    <option value="项目更新">项目更新</option>
+                                    <option value="项目删除">项目删除</option>
+                                    <option value="资源池创建">资源池创建</option>
+                                    <option value="资源池更新">资源池更新</option>
+                                    <option value="资源池删除">资源池删除</option>
+                                    <option value="资源池启用">资源池启用</option>
+                                    <option value="资源池禁用">资源池禁用</option>
+                                    <option value="设为默认资源池">设为默认资源池</option>
+                                    <option value="取消默认资源池">取消默认资源池</option>
+                                    <option value="通知配置创建">通知配置创建</option>
+                                    <option value="通知配置更新">通知配置更新</option>
+                                    <option value="通知模板更新">通知模板更新</option>
+                                    <option value="通知配置删除">通知配置删除</option>
+                                    <option value="模板创建">模板创建</option>
+                                    <option value="模板更新">模板更新</option>
+                                    <option value="模板删除">模板删除</option>
+                                    <option value="模板克隆">模板克隆</option>
+                                    <option value="模型创建">模型创建</option>
+                                    <option value="模型更新">模型更新</option>
+                                    <option value="模型删除">模型删除</option>
+                                    <option value="设为默认模型">设为默认模型</option>
+                                    <option value="取消默认模型">取消默认模型</option>
+                                    <option value="用户创建">用户创建</option>
+                                    <option value="用户更新">用户更新</option>
+                                    <option value="用户删除">用户删除</option>
+                                    <option value="重置密码">重置密码</option>
+                                    <option value="AI对话模板更新">AI对话模板更新</option>
+                                    <option value="代码审查模版更新">代码审查模版更新</option>
+                                    <option value="系统配置更新">系统配置更新</option>
                                 </select>
                             </div>
                             <button onclick="loadOperationLogs()" class="bg-white text-gray-600 px-3 py-2 rounded-lg text-sm border hover:bg-gray-50 transition-colors">
@@ -497,6 +618,9 @@
         let currentLogsPage = 1;
         let logsPageSize = 10;
         let logsTotal = 0;
+        let currentUsersPage = 1;
+        let usersPageSize = 10;
+        let usersTotal = 0;
 
         function switchTab(tab) {
             // Tab 模式下：跳转到带 query 参数的 URL，触发页面刷新显示对应子页面
@@ -928,12 +1052,303 @@ function previewTemplate() {
             return d.toLocaleString('zh-CN');
         }
 
+        // ---- 用户管理函数 ----
+        async function loadUsers() {
+            const role = document.getElementById('userRoleFilter')?.value || '';
+            const keyword = document.getElementById('userKeywordFilter')?.value || '';
+            const url = `${API_BASE}/users?page=${currentUsersPage}&page_size=${usersPageSize}${role ? '&role=' + role : ''}${keyword ? '&keyword=' + encodeURIComponent(keyword) : ''}`;
+            try {
+                const res = await apiFetch(url);
+                const data = await res.json();
+                usersTotal = data.total || 0;
+                renderUsers(data.data || []);
+                document.getElementById('usersTotal').textContent = `共 ${usersTotal} 条记录`;
+                updateUsersPagination();
+            } catch (e) {
+                console.error('加载用户列表失败:', e);
+            }
+        }
+
+        function renderUsers(users) {
+            const tbody = document.getElementById('usersBody');
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">暂无数据</td></tr>';
+                return;
+            }
+            const roleMap = { admin: '管理员', user: '普通用户' };
+            const loginTypeMap = { local: '本地', gitlab: 'GitLab' };
+            tbody.innerHTML = users.map(u => `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 font-medium">${escapeHtml(u.username)}</td>
+                    <td class="px-4 py-3 text-gray-600">${escapeHtml(u.display_name || '-')}</td>
+                    <td class="px-4 py-3"><span class="${u.role === 'admin' ? 'bg-purple-50 text-purple-600' : 'bg-gray-50 text-gray-600'} px-2 py-0.5 rounded text-xs">${roleMap[u.role] || u.role}</span></td>
+                    <td class="px-4 py-3"><span class="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-xs">${loginTypeMap[u.login_type] || u.login_type}</span></td>
+                    <td class="px-4 py-3 text-gray-500">${formatDate(u.created_at)}</td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center gap-3">
+                            <button onclick="openEditUserModal(${u.id}, '${escapeHtml(u.display_name || '')}', '${u.role}')" class="text-blue-600 hover:text-blue-800 text-xs font-medium" title="编辑">编辑</button>
+                            ${u.login_type !== 'gitlab' ? `<button onclick="openResetPasswordModal(${u.id}, '${escapeHtml(u.username)}')" class="text-orange-600 hover:text-orange-800 text-xs font-medium" title="重置密码">重置密码</button>` : ''}
+                            ${u.role !== 'admin' ? `<button onclick="deleteUser(${u.id}, '${escapeHtml(u.username)}')" class="text-red-600 hover:text-red-800 text-xs font-medium" title="删除">删除</button>` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function updateUsersPagination() {
+            const pagination = document.getElementById('usersPagination');
+            if (!pagination) return;
+            const page = currentUsersPage;
+            const pages = Math.ceil(usersTotal / usersPageSize) || 1;
+            if (pages <= 1) { pagination.innerHTML = ''; return; }
+
+            let html = '';
+            html += `<button class="px-2 py-1 border rounded text-sm ${page <= 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50 bg-white'}" ${page <= 1 ? 'disabled' : ''} onclick="goToUsersPage(${page - 1})">上一页</button>`;
+            if (page > 3) {
+                html += `<button class="px-2 py-1 border rounded text-sm text-gray-500 hover:bg-gray-50 bg-white" onclick="goToUsersPage(1)">1</button>`;
+                if (page > 4) html += `<span class="px-2 py-1 text-gray-400">...</span>`;
+            }
+            let start = Math.max(1, page - 2);
+            let end = Math.min(pages, page + 2);
+            if (end - start < 4) {
+                if (start === 1) end = Math.min(pages, start + 4);
+                else if (end === pages) start = Math.max(1, end - 4);
+            }
+            for (let i = start; i <= end; i++) {
+                html += `<button class="px-2 py-1 border rounded text-sm ${i === page ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50 bg-white'}" onclick="goToUsersPage(${i})">${i}</button>`;
+            }
+            if (page < pages - 2) {
+                if (page < pages - 3) html += `<span class="px-2 py-1 text-gray-400">...</span>`;
+                html += `<button class="px-2 py-1 border rounded text-sm text-gray-500 hover:bg-gray-50 bg-white" onclick="goToUsersPage(${pages})">${pages}</button>`;
+            }
+            html += `<button class="px-2 py-1 border rounded text-sm ${page >= pages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50 bg-white'}" ${page >= pages ? 'disabled' : ''} onclick="goToUsersPage(${page + 1})">下一页</button>`;
+            pagination.innerHTML = html;
+        }
+
+        function goToUsersPage(page) {
+            const totalPages = Math.ceil(usersTotal / usersPageSize) || 1;
+            if (page < 1 || page > totalPages) return;
+            currentUsersPage = page;
+            loadUsers();
+        }
+
+        function changeUsersPageSize() {
+            usersPageSize = parseInt(document.getElementById('usersPageSize').value);
+            currentUsersPage = 1;
+            loadUsers();
+        }
+
+        function togglePw(inputId, eyeId) {
+            const input = document.getElementById(inputId);
+            const eye = document.getElementById(eyeId);
+            if (!input || !eye) return;
+            if (input.type === 'password') {
+                input.type = 'text';
+                eye.classList.remove('fa-eye');
+                eye.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                eye.classList.remove('fa-eye-slash');
+                eye.classList.add('fa-eye');
+            }
+        }
+
+        function openUserModal() {
+            const modal = document.createElement('div');
+            modal.id = 'userModal';
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4">
+                    <div class="px-6 py-4 border-b flex items-center justify-between">
+                        <h3 class="font-bold text-lg">新建用户</h3>
+                        <button onclick="document.getElementById('userModal').remove()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">用户名 <span class="text-red-500">*</span></label>
+                            <input type="text" id="newUserUsername" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="请输入用户名">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">显示名</label>
+                            <input type="text" id="newUserDisplayName" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="显示名（可选）">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">密码 <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <input type="password" id="newUserPassword" class="w-full px-3 py-2 pr-10 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="至少6位">
+                                <button type="button" onclick="togglePw('newUserPassword','newPwEye')" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <i id="newPwEye" class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">确认密码 <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <input type="password" id="newUserPasswordConfirm" class="w-full px-3 py-2 pr-10 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="再次输入密码">
+                                <button type="button" onclick="togglePw('newUserPasswordConfirm','newPwConfirmEye')" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <i id="newPwConfirmEye" class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">角色 <span class="text-red-500">*</span></label>
+                            <select id="newUserRole" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <option value="user">普通用户</option>
+                                <option value="admin">管理员</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 border-t flex justify-end gap-3">
+                        <button onclick="document.getElementById('userModal').remove()" class="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50">取消</button>
+                        <button onclick="submitCreateUser()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">确定</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+        }
+
+        async function submitCreateUser() {
+            const username = document.getElementById('newUserUsername').value.trim();
+            const displayName = document.getElementById('newUserDisplayName').value.trim();
+            const password = document.getElementById('newUserPassword').value;
+            const passwordConfirm = document.getElementById('newUserPasswordConfirm').value;
+            const role = document.getElementById('newUserRole').value;
+            if (!username || !password) { showToast('用户名和密码不能为空', 'error'); return; }
+            if (password.length < 6) { showToast('密码至少6位', 'error'); return; }
+            if (password !== passwordConfirm) { showToast('两次输入的密码不一致', 'error'); return; }
+            try {
+                const res = await apiFetch(`${API_BASE}/users`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, display_name: displayName, password, role })
+                });
+                const result = await res.json();
+                if (!res.ok) { showToast(result.error || '创建失败', 'error'); return; }
+                showToast(result.message || '创建成功', 'success');
+                document.getElementById('userModal')?.remove();
+                loadUsers();
+            } catch (e) { showToast('创建失败: ' + e.message, 'error'); }
+        }
+
+        function openEditUserModal(id, displayName, role) {
+            const modal = document.createElement('div');
+            modal.id = 'editUserModal';
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4">
+                    <div class="px-6 py-4 border-b flex items-center justify-between">
+                        <h3 class="font-bold text-lg">编辑用户</h3>
+                        <button onclick="document.getElementById('editUserModal').remove()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">显示名</label>
+                            <input type="text" id="editUserDisplayName" value="${escapeHtml(displayName)}" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">角色</label>
+                            <select id="editUserRole" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <option value="user" ${role === 'user' ? 'selected' : ''}>普通用户</option>
+                                <option value="admin" ${role === 'admin' ? 'selected' : ''}>管理员</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 border-t flex justify-end gap-3">
+                        <button onclick="document.getElementById('editUserModal').remove()" class="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50">取消</button>
+                        <button onclick="submitEditUser(${id})" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">保存</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+        }
+
+        async function submitEditUser(id) {
+            const displayName = document.getElementById('editUserDisplayName').value.trim();
+            const role = document.getElementById('editUserRole').value;
+            try {
+                const res = await apiFetch(`${API_BASE}/users/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ display_name: displayName, role })
+                });
+                const result = await res.json();
+                if (!res.ok) { showToast(result.error || '更新失败', 'error'); return; }
+                showToast(result.message || '更新成功', 'success');
+                document.getElementById('editUserModal')?.remove();
+                loadUsers();
+            } catch (e) { showToast('更新失败: ' + e.message, 'error'); }
+        }
+
+        function openResetPasswordModal(id, username) {
+            const modal = document.createElement('div');
+            modal.id = 'resetPwModal';
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4">
+                    <div class="px-6 py-4 border-b flex items-center justify-between">
+                        <h3 class="font-bold text-lg">重置密码 - ${escapeHtml(username)}</h3>
+                        <button onclick="document.getElementById('resetPwModal').remove()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">新密码 <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <input type="password" id="resetPwValue" class="w-full px-3 py-2 pr-10 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="至少6位">
+                                <button type="button" onclick="togglePw('resetPwValue','resetPwEye')" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <i id="resetPwEye" class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">确认密码 <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <input type="password" id="resetPwValueConfirm" class="w-full px-3 py-2 pr-10 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="再次输入新密码">
+                                <button type="button" onclick="togglePw('resetPwValueConfirm','resetPwConfirmEye')" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <i id="resetPwConfirmEye" class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 border-t flex justify-end gap-3">
+                        <button onclick="document.getElementById('resetPwModal').remove()" class="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50">取消</button>
+                        <button onclick="submitResetPassword(${id})" class="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm hover:bg-orange-700">重置</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+        }
+
+        async function submitResetPassword(id) {
+            const newPassword = document.getElementById('resetPwValue').value;
+            const newPasswordConfirm = document.getElementById('resetPwValueConfirm').value;
+            if (!newPassword || newPassword.length < 6) { showToast('新密码至少6位', 'error'); return; }
+            if (newPassword !== newPasswordConfirm) { showToast('两次输入的密码不一致', 'error'); return; }
+            try {
+                const res = await apiFetch(`${API_BASE}/users/${id}/reset-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ new_password: newPassword })
+                });
+                const result = await res.json();
+                if (!res.ok) { showToast(result.error || '重置失败', 'error'); return; }
+                showToast(result.message || '密码已重置', 'success');
+                document.getElementById('resetPwModal')?.remove();
+            } catch (e) { showToast('重置失败: ' + e.message, 'error'); }
+        }
+
+        async function deleteUser(id, username) {
+            if (!confirm(`确定删除用户 "${username}"？此操作不可撤销。`)) return;
+            try {
+                const res = await apiFetch(`${API_BASE}/users/${id}`, { method: 'DELETE' });
+                const result = await res.json();
+                if (!res.ok) { showToast(result.error || '删除失败', 'error'); return; }
+                showToast(result.message || '已删除', 'success');
+                loadUsers();
+            } catch (e) { showToast('删除失败: ' + e.message, 'error'); }
+        }
 
         // 根据 URL query 参数初始化 Tab
         function initTabFromHash() {
             const urlParams = new URLSearchParams(window.location.search);
             const tabParam = urlParams.get('tab');
-            const validTabs = ['config', 'aitemplate', 'reviewtemplate', 'logs', 'info'];
+            const validTabs = ['config', 'aitemplate', 'reviewtemplate', 'users', 'logs', 'info'];
             const tab = validTabs.includes(tabParam) ? tabParam : 'config';
             const isSidebarMode = tabParam && validTabs.includes(tabParam);
 
@@ -942,6 +1357,7 @@ function previewTemplate() {
                 config:        { title: '系统配置',     desc: '系统参数与任务设置' },
                 aitemplate:    { title: 'AI对话模板',   desc: '大模型对话模板管理' },
                 reviewtemplate:{ title: '代码审查模板', desc: '代码审查报告模板管理' },
+                users:         { title: '用户管理',     desc: '系统用户账号管理' },
                 logs:          { title: '操作日志',     desc: '系统操作日志查询' },
                 info:          { title: '系统信息',     desc: '系统版本与状态信息' }
             };
@@ -964,7 +1380,7 @@ function previewTemplate() {
             if (!isSidebarMode) {
                 document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
                 const tabButtons = document.querySelectorAll('.tab-btn');
-                const tabIndexMap = { config: 0, aitemplate: 1, reviewtemplate: 2, logs: 3, info: 4 };
+                const tabIndexMap = { config: 0, aitemplate: 1, reviewtemplate: 2, users: 3, logs: 4, info: 5 };
                 const idx = tabIndexMap[tab];
                 if (idx !== undefined && tabButtons[idx]) {
                     tabButtons[idx].classList.add('active');
@@ -980,6 +1396,7 @@ function previewTemplate() {
             if (tab === 'config') loadConfig();
             if (tab === 'aitemplate') loadAITemplate();
             if (tab === 'reviewtemplate') loadReviewTemplate();
+            if (tab === 'users') loadUsers();
             if (tab === 'logs') loadOperationLogs();
             if (tab === 'info') loadSystemInfo();
         }
@@ -992,6 +1409,7 @@ function previewTemplate() {
                 config: 'settings-config',
                 aitemplate: 'settings-ai',
                 reviewtemplate: 'settings-review',
+                users: 'settings-users',
                 logs: 'settings-logs',
                 info: 'settings-info'
             };
@@ -1002,5 +1420,6 @@ function previewTemplate() {
         initTabFromHash();
         renderSidebar(getSettingsActiveId());
     </script>
+    <script defer src="/static/js/tailwindcss.min.js"></script>
 </body>
 </html>
