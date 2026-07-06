@@ -141,7 +141,11 @@ func (h *TaskHandler) Retry(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "补充复核意见过长，最多5000字符"})
 		return
 	}
-	if err := service.NewTaskService().Retry(uint(id), req.UserReviewComment); err != nil {
+	operatorID, _ := c.Get("user_id")
+	if operatorID == nil {
+		operatorID = uint(0)
+	}
+	if err := service.NewTaskService().Retry(uint(id), req.UserReviewComment, operatorID.(uint)); err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}

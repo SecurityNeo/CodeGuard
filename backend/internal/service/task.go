@@ -203,8 +203,9 @@ func (s *TaskService) Execute(taskID uint) error {
 
 	// OpenCode 路径注入人工复核意见
 	aiPrompt := task.AIPrompt
-	if task.UserReviewComment != "" {
-		aiPrompt += "\n\n### ⚠️ 人工复核意见（请重点参考）\n" + task.UserReviewComment
+	reviewCommentText := buildReviewCommentText(task.ID)
+	if reviewCommentText != "" {
+		aiPrompt += "\n\n### ⚠️ 人工复核意见（请重点参考）\n" + reviewCommentText
 		zap.L().Info("injected user review comment into OpenCode task", zap.Uint("task_id", task.ID))
 	}
 
@@ -411,7 +412,7 @@ func (s *TaskService) Abort(taskID uint) error {
 	return nil
 }
 
-func (s *TaskService) Retry(taskID uint, userReviewComment string) error {
+func (s *TaskService) Retry(taskID uint, userReviewComment string, operatorID uint) error {
 	var task model.Task
 	if err := model.DB.First(&task, taskID).Error; err != nil {
 		return err
@@ -421,12 +422,19 @@ func (s *TaskService) Retry(taskID uint, userReviewComment string) error {
 		return fmt.Errorf("only failed, stopped, timeout, pending or success tasks can be retried")
 	}
 
-	// 追加用户复核意见
+	// 将复核意见写入独立表
 	if userReviewComment != "" {
-		if task.UserReviewComment != "" {
-			task.UserReviewComment += "\n\n"
+		comment := model.TaskReviewComment{
+			TaskID:     task.ID,
+			Content:    userReviewComment,
+			RetryRound: task.RetryCount + 1,
+			OperatorID: operatorID,
 		}
-		task.UserReviewComment += fmt.Sprintf("【第%d次复核】%s", task.RetryCount+1, userReviewComment)
+		if err := model.DB.Create(&comment).Error; err != nil {
+			zap.L().Error("create task review comment failed", zap.Error(err))
+			return fmt.Errorf("保存复核意见失败: %w", err)
+		}
+		model.RecordOpLog("任务复核", fmt.Sprintf("任务ID:%d", task.ID), task.ID, "success", "", "")
 	}
 
 	task.Status = model.TaskPending
@@ -747,10 +755,11 @@ func (s *TaskService) ExecuteAIReviewTask(taskID uint) error {
 	}
 
 	// 注入人工复核意见
-	if task.UserReviewComment != "" {
-		projectTemplate += "\n\n### ⚠️ 人工复核意见（请重点参考）\n" + task.UserReviewComment
+	reviewCommentText := buildReviewCommentText(task.ID)
+	if reviewCommentText != "" {
+		projectTemplate += "\n\n### ⚠️ 人工复核意见（请重点参考）\n" + reviewCommentText
 		zap.L().Info("injected user review comment", zap.Uint("task_id", task.ID),
-			zap.String("comment", task.UserReviewComment[:min(200, len(task.UserReviewComment))]))
+			zap.String("comment", reviewCommentText[:min(200, len(reviewCommentText))]))
 	}
 
 	// 执行评审（单批/分批）
@@ -1226,6 +1235,22 @@ func saveReviewLogFromTask(task model.Task, additions, deletions int, commits []
 		SyncedAt:          now,
 	}
 	return model.DB.Create(&log).Error
+}
+
+// buildReviewCommentText 从 TaskReviewComment 表查询并组装复核意见文本
+func buildReviewCommentText(taskID uint) string {
+	var comments []model.TaskReviewComment
+	if err := model.DB.Where("task_id = ?", taskID).Order("retry_round asc").Find(&comments).Error; err != nil {
+		return ""
+	}
+	if len(comments) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	for _, c := range comments {
+		sb.WriteString(fmt.Sprintf("【第%d次复核】%s\n\n", c.RetryRound, c.Content))
+	}
+	return strings.TrimSpace(sb.String())
 }
 
 func min(a, b int) int {

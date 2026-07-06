@@ -70,12 +70,22 @@ type Task struct {
 	AIResponse          string       `gorm:"type:longtext" json:"ai_response"`
 	RetryCount          int          `gorm:"default:0" json:"retry_count"`
 	ScoreValue          int          `gorm:"default:0" json:"score_value"` // 评分值
-	UserReviewComment   string       `gorm:"type:text" json:"user_review_comment"` // 人工复核意见（追加存储）
 	CreatedAt           time.Time    `json:"created_at"`
 	UpdatedAt           time.Time    `json:"updated_at"`
+	ReviewComments      []TaskReviewComment `gorm:"foreignKey:TaskID" json:"review_comments,omitempty"`
 	Project             Project      `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
 	Pool                ResourcePool `gorm:"foreignKey:PoolID" json:"pool,omitempty"`
 	UsedModel           LLMModel     `gorm:"foreignKey:UsedModelID;references:ID" json:"used_model,omitempty"`
+}
+
+// --- TaskReviewComment 任务人工复核意见 ---
+type TaskReviewComment struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	TaskID     uint      `gorm:"index;not null" json:"task_id"`
+	Content    string    `gorm:"type:text;not null" json:"content"`
+	RetryRound int       `gorm:"default:1" json:"retry_round"`
+	OperatorID uint      `gorm:"index" json:"operator_id"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // --- MemberMapping 成员映射（Git用户名 <-> IM用户ID）---

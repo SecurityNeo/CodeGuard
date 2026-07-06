@@ -153,8 +153,18 @@ func autoMigrate() error {
 
 	if err := DB.AutoMigrate(
 		&Task{},
+		&TaskReviewComment{},
 	); err != nil {
 		return err
+	}
+
+	// 删除已废弃的 user_review_comment 列（数据已迁移到 TaskReviewComment 表）
+	if DB.Migrator().HasColumn(&Task{}, "user_review_comment") {
+		if err := DB.Migrator().DropColumn(&Task{}, "user_review_comment"); err != nil {
+			zap.L().Warn("drop column user_review_comment failed", zap.Error(err))
+		} else {
+			zap.L().Info("dropped deprecated column user_review_comment")
+		}
 	}
 
 	if err := DB.AutoMigrate(
