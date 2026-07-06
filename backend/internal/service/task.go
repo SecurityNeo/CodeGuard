@@ -250,6 +250,9 @@ func (s *TaskService) ExecuteWithComment(taskID uint, commentOverride string) er
 			"completed_at": now,
 			"duration_sec": currentTask.DurationSec,
 		})
+		if res.Error != nil {
+			zap.L().Error("failed to update task status to failed", zap.Uint("task_id", taskID), zap.Error(res.Error))
+		}
 		if res.RowsAffected == 0 {
 			zap.L().Info("OpenCode task no longer running, skip writing failed status", zap.Uint("task_id", taskID))
 		}
@@ -366,6 +369,10 @@ func (s *TaskService) UpdateStatus(taskID uint, status model.TaskStatus, respons
 		updates["ai_response"] = response
 	}
 	res := model.DB.Model(&model.Task{}).Where("id = ? AND status = ?", taskID, model.TaskRunning).Updates(updates)
+	if res.Error != nil {
+		zap.L().Error("failed to update task status", zap.Uint("task_id", taskID), zap.String("target_status", string(status)), zap.Error(res.Error))
+		return res.Error
+	}
 	if res.RowsAffected == 0 {
 		zap.L().Info("task no longer running, skip updating status", zap.Uint("task_id", taskID), zap.String("target_status", string(status)))
 	}
@@ -418,11 +425,14 @@ func (s *TaskService) Abort(taskID uint) error {
 			return 0
 		}(),
 	}
-	// review 类型用 Where 条件更新，避免覆盖 timeout/success
-	if task.TaskType == "review" {
-		model.DB.Model(&model.Task{}).Where("id = ? AND status = ?", task.ID, model.TaskRunning).Updates(updates)
-	} else {
-		model.DB.Model(&model.Task{}).Where("id = ? AND status = ?", task.ID, model.TaskRunning).Updates(updates)
+	// Abort 统一使用 Where 条件更新，避免覆盖已被修改的状态
+	res := model.DB.Model(&model.Task{}).Where("id = ? AND status = ?", task.ID, model.TaskRunning).Updates(updates)
+	if res.Error != nil {
+		zap.L().Error("abort task update failed", zap.Uint("task_id", taskID), zap.Error(res.Error))
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		zap.L().Info("abort task: task no longer running, skip updating", zap.Uint("task_id", taskID))
 	}
 
 	// 任务被停止后，触发队列中的下一个 pending 任务
@@ -521,31 +531,37 @@ func (s *TaskService) TimeoutCheck() {
 
 	for _, task := range tasks {
 		zap.L().Info("task timeout, aborting", zap.Uint("task_id", task.ID))
-		if err := s.Abort(task.ID); err != nil {
-			zap.L().Error("abort timeout task failed", zap.Uint("task_id", task.ID), zap.Error(err))
+
+		// 终止 OpenCode session（如存在）
+		if task.OpencodeSessionID != "" {
+			opencodeSvc := NewOpencodeService()
+			if err := opencodeSvc.AbortTask(task.PoolID, task.OpencodeSessionID); err != nil {
+				zap.L().Error("abort timeout task session failed", zap.Uint("task_id", task.ID), zap.Error(err))
+			}
 		}
-		// 重新查询，防止竞态
-		var currentTask model.Task
-		if err := model.DB.First(&currentTask, task.ID).Error; err != nil {
-			zap.L().Error("reload timeout task failed", zap.Uint("task_id", task.ID), zap.Error(err))
-			continue
-		}
-		currentTask.Status = model.TaskTimeout
-		currentTask.ErrorMsg = "任务超时"
+
+		// 条件更新为 timeout，避免覆盖已被修改的状态
 		now := time.Now()
-		currentTask.CompletedAt = &now
-		if currentTask.StartedAt != nil {
-			currentTask.DurationSec = int(now.Sub(*currentTask.StartedAt).Seconds())
+		updates := map[string]interface{}{
+			"status":       model.TaskTimeout,
+			"error_msg":    "任务超时",
+			"completed_at": now,
+			"duration_sec": func() int {
+				if task.StartedAt != nil {
+					return int(now.Sub(*task.StartedAt).Seconds())
+				}
+				return 0
+			}(),
 		}
-		// review 类型无资源池，避免外键约束失败
-		if currentTask.TaskType == "review" {
-			model.DB.Omit("pool_id").Save(&currentTask)
-		} else {
-			model.DB.Save(&currentTask)
+		res := model.DB.Model(&model.Task{}).Where("id = ? AND status = ?", task.ID, model.TaskRunning).Updates(updates)
+		if res.Error != nil {
+			zap.L().Error("timeout check update failed", zap.Uint("task_id", task.ID), zap.Error(res.Error))
+		} else if res.RowsAffected == 0 {
+			zap.L().Info("timeout check: task no longer running, skip updating", zap.Uint("task_id", task.ID))
 		}
 
 		// 超时后触发队列中的下一个 pending 任务
-		s.startNextPendingTask(currentTask.ProjectID)
+		s.startNextPendingTask(task.ProjectID)
 	}
 }
 
@@ -848,6 +864,9 @@ func (s *TaskService) ExecuteAIReviewTaskWithComment(taskID uint, commentOverrid
 		"duration_sec": int(now.Sub(startedAt).Seconds()),
 		"ai_prompt":    truncateDiffInPrompt(userPrompt, truncationThreshold),
 	})
+	if res.Error != nil {
+		zap.L().Error("failed to update review task status to success", zap.Uint("task_id", task.ID), zap.Uint("used_model_id", actualModelID), zap.Error(res.Error))
+	}
 	if res.RowsAffected == 0 {
 		zap.L().Info("review task no longer running, skip writing success status", zap.Uint("task_id", task.ID))
 	} else {
