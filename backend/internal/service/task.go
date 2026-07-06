@@ -233,7 +233,12 @@ func (s *TaskService) Execute(taskID uint) error {
 		if currentTask.StartedAt != nil {
 			currentTask.DurationSec = int(now.Sub(*currentTask.StartedAt).Seconds())
 		}
-		model.DB.Save(&currentTask)
+		// review 类型无资源池，避免外键约束失败
+		if currentTask.TaskType == "review" {
+			model.DB.Omit("pool_id").Save(&currentTask)
+		} else {
+			model.DB.Save(&currentTask)
+		}
 
 		// 发送 GitLab MR 评论告知失败
 		go func() {
@@ -343,7 +348,12 @@ func (s *TaskService) UpdateStatus(taskID uint, status model.TaskStatus, respons
 		task.DurationSec = int(now.Sub(*task.StartedAt).Seconds())
 	}
 
-	model.DB.Save(&task)
+	// review 类型无资源池，避免外键约束失败
+	if task.TaskType == "review" {
+		model.DB.Omit("pool_id").Save(&task)
+	} else {
+		model.DB.Save(&task)
+	}
 
 	// 注意：任务完成后不再自动删除session，保留供查看对话历史
 	// 如需删除，请调用 DELETE /api/v1/tasks/:id/session 接口
@@ -472,7 +482,12 @@ func (s *TaskService) TimeoutCheck() {
 		if currentTask.StartedAt != nil {
 			currentTask.DurationSec = int(now.Sub(*currentTask.StartedAt).Seconds())
 		}
-		model.DB.Save(&currentTask)
+		// review 类型无资源池，避免外键约束失败
+		if currentTask.TaskType == "review" {
+			model.DB.Omit("pool_id").Save(&currentTask)
+		} else {
+			model.DB.Save(&currentTask)
+		}
 
 		// 超时后触发队列中的下一个 pending 任务
 		s.startNextPendingTask(currentTask.ProjectID)
