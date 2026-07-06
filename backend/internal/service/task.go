@@ -179,6 +179,10 @@ func (s *TaskService) Create(data map[string]interface{}) (*model.Task, error) {
 }
 
 func (s *TaskService) Execute(taskID uint) error {
+	return s.ExecuteWithComment(taskID, "")
+}
+
+func (s *TaskService) ExecuteWithComment(taskID uint, commentOverride string) error {
 	zap.L().Info("========== TaskService.Execute started ==========", zap.Uint("task_id", taskID))
 	var task model.Task
 	if err := model.DB.Preload("Project").First(&task, taskID).Error; err != nil {
@@ -203,7 +207,12 @@ func (s *TaskService) Execute(taskID uint) error {
 
 	// OpenCode 路径注入人工复核意见
 	aiPrompt := task.AIPrompt
-	reviewCommentText := buildReviewCommentText(task.ID)
+	var reviewCommentText string
+	if commentOverride != "" {
+		reviewCommentText = commentOverride
+	} else {
+		reviewCommentText = buildReviewCommentText(task.ID)
+	}
 	if reviewCommentText != "" {
 		aiPrompt += "\n\n### ⚠️ 人工复核意见（请重点参考）\n" + reviewCommentText
 		zap.L().Info("injected user review comment into OpenCode task", zap.Uint("task_id", task.ID))
@@ -412,7 +421,15 @@ func (s *TaskService) Abort(taskID uint) error {
 	return nil
 }
 
-func (s *TaskService) Retry(taskID uint, userReviewComment string, operatorID uint) error {
+func (s *TaskService) ListReviewComments(taskID uint) ([]model.TaskReviewComment, error) {
+	var comments []model.TaskReviewComment
+	if err := model.DB.Where("task_id = ?", taskID).Order("retry_round asc").Find(&comments).Error; err != nil {
+		return nil, err
+	}
+	return comments, nil
+}
+
+func (s *TaskService) Retry(taskID uint, userReviewComment string, selectedCommentIDs []uint, operatorID uint) error {
 	var task model.Task
 	if err := model.DB.First(&task, taskID).Error; err != nil {
 		return err
@@ -422,7 +439,18 @@ func (s *TaskService) Retry(taskID uint, userReviewComment string, operatorID ui
 		return fmt.Errorf("only failed, stopped, timeout, pending or success tasks can be retried")
 	}
 
-	// 将复核意见写入独立表
+	// 拼接选中的历史复核意见 + 新复核意见
+	var injectedParts []string
+	if len(selectedCommentIDs) > 0 {
+		var selected []model.TaskReviewComment
+		if err := model.DB.Where("task_id = ? AND id IN ?", taskID, selectedCommentIDs).Order("retry_round asc").Find(&selected).Error; err == nil {
+			for _, c := range selected {
+				injectedParts = append(injectedParts, fmt.Sprintf("【第%d次复核】%s", c.RetryRound, c.Content))
+			}
+		}
+	}
+
+	// 将新复核意见写入独立表
 	if userReviewComment != "" {
 		comment := model.TaskReviewComment{
 			TaskID:     task.ID,
@@ -434,8 +462,10 @@ func (s *TaskService) Retry(taskID uint, userReviewComment string, operatorID ui
 			zap.L().Error("create task review comment failed", zap.Error(err))
 			return fmt.Errorf("保存复核意见失败: %w", err)
 		}
+		injectedParts = append(injectedParts, fmt.Sprintf("【第%d次复核】%s", task.RetryCount+1, userReviewComment))
 		model.RecordOpLog("任务复核", fmt.Sprintf("任务ID:%d", task.ID), task.ID, "success", "", "")
 	}
+	injectedText := strings.Join(injectedParts, "\n\n")
 
 	task.Status = model.TaskPending
 	task.ErrorMsg = ""
@@ -447,11 +477,15 @@ func (s *TaskService) Retry(taskID uint, userReviewComment string, operatorID ui
 		model.DB.Save(&task)
 	}
 
-	// 根据任务类型调用对应的执行方法
+	// 根据任务类型调用对应的执行方法（通过闭包传递注入文本）
 	if task.TaskType == "review" {
-		go s.ExecuteAIReviewTask(taskID)
+		go func(id uint, injected string) {
+			s.ExecuteAIReviewTaskWithComment(id, injected)
+		}(taskID, injectedText)
 	} else {
-		go s.Execute(taskID)
+		go func(id uint, injected string) {
+			s.ExecuteWithComment(id, injected)
+		}(taskID, injectedText)
 	}
 	return nil
 }
@@ -713,6 +747,10 @@ const (
 
 // ExecuteAIReviewTask 执行 AI 评审任务（大模型直连，不走 OpenCode）
 func (s *TaskService) ExecuteAIReviewTask(taskID uint) error {
+	return s.ExecuteAIReviewTaskWithComment(taskID, "")
+}
+
+func (s *TaskService) ExecuteAIReviewTaskWithComment(taskID uint, commentOverride string) error {
 	var task model.Task
 	if err := model.DB.Preload("Project").Preload("Project.Template").First(&task, taskID).Error; err != nil {
 		zap.L().Error("review task not found", zap.Uint("task_id", taskID), zap.Error(err))
@@ -755,7 +793,12 @@ func (s *TaskService) ExecuteAIReviewTask(taskID uint) error {
 	}
 
 	// 注入人工复核意见
-	reviewCommentText := buildReviewCommentText(task.ID)
+	var reviewCommentText string
+	if commentOverride != "" {
+		reviewCommentText = commentOverride
+	} else {
+		reviewCommentText = buildReviewCommentText(task.ID)
+	}
 	if reviewCommentText != "" {
 		projectTemplate += "\n\n### ⚠️ 人工复核意见（请重点参考）\n" + reviewCommentText
 		zap.L().Info("injected user review comment", zap.Uint("task_id", task.ID),

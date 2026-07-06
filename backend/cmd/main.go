@@ -285,6 +285,7 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			adminTask.POST("/:id/retry", h.Retry)
 			adminTask.POST("/:id/stop", h.Stop)
 			adminTask.DELETE("/:id/session", h.DeleteSession)
+			adminTask.GET("/:id/review-comments", h.ListReviewComments)
 		}
 
 		// 项目管理

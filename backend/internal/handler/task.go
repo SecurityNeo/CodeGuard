@@ -134,7 +134,8 @@ const maxUserReviewCommentLen = 5000
 func (h *TaskHandler) Retry(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	var req struct {
-		UserReviewComment string `json:"user_review_comment"`
+		UserReviewComment  string   `json:"user_review_comment"`
+		SelectedCommentIDs []uint   `json:"selected_comment_ids"`
 	}
 	_ = c.ShouldBindJSON(&req) // 可选字段，不强制要求
 	if len(req.UserReviewComment) > maxUserReviewCommentLen {
@@ -145,11 +146,23 @@ func (h *TaskHandler) Retry(c *gin.Context) {
 	if operatorID == nil {
 		operatorID = uint(0)
 	}
-	if err := service.NewTaskService().Retry(uint(id), req.UserReviewComment, operatorID.(uint)); err != nil {
+	if err := service.NewTaskService().Retry(uint(id), req.UserReviewComment, req.SelectedCommentIDs, operatorID.(uint)); err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(200, gin.H{"message": "task retried"})
+}
+
+// ListReviewComments 获取任务人工复核意见列表
+func (h *TaskHandler) ListReviewComments(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	comments, err := service.NewTaskService().ListReviewComments(uint(id))
+	if err != nil {
+		zap.L().Error("list review comments failed", zap.Error(err))
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"data": comments})
 }
 
 func (h *TaskHandler) Stop(c *gin.Context) {
