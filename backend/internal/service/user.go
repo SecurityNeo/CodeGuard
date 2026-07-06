@@ -19,14 +19,14 @@ func NewUserService() *UserService {
 // InitAdmin 初始化 admin 用户（如果不存在）
 func (s *UserService) InitAdmin() error {
 	var user model.User
-	result := model.DB.Where("username = ?", "admin").First(&user)
+	err := model.SilentFirst(model.DB.Where("username = ?", "admin"), &user)
 
-	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return fmt.Errorf("query admin user failed: %w", result.Error)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("query admin user failed: %w", err)
 	}
 
 	// 用户已存在
-	if result.Error == nil {
+	if err == nil {
 		zap.L().Info("admin user already exists")
 		return nil
 	}

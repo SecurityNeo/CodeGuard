@@ -282,7 +282,7 @@ func (s *ModelService) runModelHealthChecks() {
 	alertDuration, alertCooldown := 300, 3600
 	notifierID := uint(0)
 	mentionIDs := ""
-	if err := model.DB.First(&cfg).Error; err == nil {
+	if err := model.SilentFirst(model.DB, &cfg); err == nil {
 		alertDuration = cfg.AlertDurationSec
 		if alertDuration <= 0 {
 			alertDuration = 300

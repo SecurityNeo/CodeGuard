@@ -148,15 +148,15 @@ func autoMigrate() error {
 		return err
 	}
 
-	// 清理 Task.used_model_id 空字符串脏数据（从 string 改为 uint 前的兼容处理）
-	DB.Exec("UPDATE tasks SET model_id = 0 WHERE model_id = '' OR model_id IS NULL")
-
 	if err := DB.AutoMigrate(
 		&Task{},
 		&TaskReviewComment{},
 	); err != nil {
 		return err
 	}
+
+	// 清理 Task.used_model_id 空字符串脏数据（从 string 改为 uint 前的兼容处理）
+	DB.Exec("UPDATE tasks SET model_id = 0 WHERE model_id = '' OR model_id IS NULL")
 
 	// 删除已废弃的 user_review_comment 列（数据已迁移到 TaskReviewComment 表）
 	if DB.Migrator().HasColumn(&Task{}, "user_review_comment") {
@@ -202,7 +202,10 @@ func OrderColumn(key string) string {
 	return "created_at DESC"
 }
 
-// Pagination helper
+// SilentFirst 执行 First 查询但忽略 record not found 日志（初始化场景使用）
+func SilentFirst(db *gorm.DB, dest interface{}, conds ...interface{}) error {
+	return db.Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).First(dest, conds...).Error
+}
 func Paginate(page, pageSize int) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if page <= 0 {

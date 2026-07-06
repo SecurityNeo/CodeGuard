@@ -367,7 +367,7 @@ func (h *ReportHandler) DeleteLog(c *gin.Context) {
 func InitReportConfigs() {
 	for _, t := range []string{"weekly", "monthly"} {
 		var cfg model.ReportConfig
-		if err := model.DB.Where("report_type = ?", t).First(&cfg).Error; err != nil {
+		if err := model.SilentFirst(model.DB.Where("report_type = ?", t), &cfg); err != nil {
 			cfg.ReportType = t
 			if t == "weekly" {
 				cfg.DataPeriodDays = 7
