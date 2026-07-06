@@ -1511,13 +1511,14 @@ function renderTasks(tasks) {
                 const comments = json.data || [];
                 if (comments.length > 0) {
                     hasHistory = true;
-                    // 默认展开最新 2 条，更早的折叠
+                    // 默认展开最新 2 条，更早的折叠；默认不勾选超时的（最早期的）
                     const expandThreshold = Math.max(0, comments.length - 2);
+                    const initialSelected = comments.filter((_, idx) => idx >= expandThreshold).length;
                     commentsHtml = '<div class="space-y-2 max-h-56 overflow-y-auto pr-1" id="historyComments">' +
                         '<div class="flex items-center justify-between mb-2">' +
-                            '<div class="text-sm font-medium text-gray-700">历史复核意见（<span id="selectedCountDisplay">' + comments.length + '</span>/' + comments.length + ' 已选）</div>' +
+                            '<div class="text-sm font-medium text-gray-700">历史复核意见（<span id="selectedCountDisplay">' + initialSelected + '</span>/' + comments.length + ' 已选）</div>' +
                             '<label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">' +
-                                '<input type="checkbox" id="selectAllComments" class="w-3.5 h-3.5 rounded text-green-600 focus:ring-green-500" checked onchange="toggleSelectAllComments(this)"> 全选' +
+                                '<input type="checkbox" id="selectAllComments" class="w-3.5 h-3.5 rounded text-green-600 focus:ring-green-500" onchange="toggleSelectAllComments(this)"> 全选' +
                             '</label>' +
                         '</div>' +
                         comments.map((c, idx) => {
@@ -1568,6 +1569,7 @@ function renderTasks(tasks) {
                     </div>
                 </div>`;
             document.body.appendChild(modal);
+            updateSelectedCount();
         }
 
         function toggleHistoryComment(headerEl) {
