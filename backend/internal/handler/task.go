@@ -129,12 +129,18 @@ func (h *TaskHandler) Execute(c *gin.Context) {
 	c.JSON(200, gin.H{"message": "task started"})
 }
 
+const maxUserReviewCommentLen = 5000
+
 func (h *TaskHandler) Retry(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	var req struct {
 		UserReviewComment string `json:"user_review_comment"`
 	}
 	_ = c.ShouldBindJSON(&req) // 可选字段，不强制要求
+	if len(req.UserReviewComment) > maxUserReviewCommentLen {
+		c.JSON(400, gin.H{"error": "补充复核意见过长，最多5000字符"})
+		return
+	}
 	if err := service.NewTaskService().Retry(uint(id), req.UserReviewComment); err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
