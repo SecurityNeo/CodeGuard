@@ -329,7 +329,7 @@ func (s *TaskService) ExecuteWithComment(taskID uint, commentOverride string) er
 // startNextPendingTask 查找同一项目最早的 pending 任务并启动执行
 func (s *TaskService) startNextPendingTask(projectID uint) {
 	var nextTask model.Task
-	if err := model.DB.Where("project_id = ? AND status = ?", projectID, model.TaskPending).Order("created_at ASC").First(&nextTask).Error; err != nil {
+	if err := model.SilentFirst(model.DB.Where("project_id = ? AND status = ?", projectID, model.TaskPending).Order("created_at ASC"), &nextTask); err != nil {
 		zap.L().Debug("no pending tasks in queue", zap.Uint("project_id", projectID))
 		return
 	}
@@ -521,7 +521,7 @@ func (s *TaskService) TimeoutCheck() {
 	// 从数据库获取超时配置，HTTP 超时已改为 120 分钟，Task 超时应 >= 120 分钟
 	var sysConfig model.SystemConfig
 	timeoutMin := 120 // 默认2小时，匹配HTTP Client超时
-	if err := model.DB.First(&sysConfig).Error; err == nil && sysConfig.TaskTimeoutMin > 0 {
+	if err := model.SilentFirst(model.DB, &sysConfig); err == nil && sysConfig.TaskTimeoutMin > 0 {
 		timeoutMin = sysConfig.TaskTimeoutMin
 	}
 
@@ -1282,7 +1282,7 @@ func saveReviewLogFromTask(task model.Task, additions, deletions int, commits []
 	}
 
 	var log model.MergeRequestReviewLog
-	err := model.DB.Where("url = ?", task.MRURL).First(&log).Error
+	err := model.SilentFirst(model.DB.Where("url = ?", task.MRURL), &log)
 
 	commitsJSON, _ := json.Marshal(commits)
 	now := time.Now()

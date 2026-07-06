@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/ai-optimizer/backend/pkg/gitlab"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 var (
@@ -40,8 +42,12 @@ func RebuildMRSyncCron() {
 	}
 
 	var cfg model.SystemConfig
-	if err := model.DB.First(&cfg).Error; err != nil {
-		zap.L().Error("mr sync: get config failed", zap.Error(err))
+	if err := model.SilentFirst(model.DB, &cfg); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			zap.L().Info("mr sync: system config not found, skipping")
+		} else {
+			zap.L().Error("mr sync: get config failed", zap.Error(err))
+		}
 		return
 	}
 
@@ -74,8 +80,12 @@ func NewMRSyncService() *MRSyncService {
 // SyncOpenedMRs 轮询 GitLab API，刷新本地 opened 状态 MR 的 mr_state、is_draft 等字段
 func (s *MRSyncService) SyncOpenedMRs() {
 	var cfg model.SystemConfig
-	if err := model.DB.First(&cfg).Error; err != nil {
-		zap.L().Error("mr sync: get config failed", zap.Error(err))
+	if err := model.SilentFirst(model.DB, &cfg); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			zap.L().Info("mr sync: system config not found, skipping")
+		} else {
+			zap.L().Error("mr sync: get config failed", zap.Error(err))
+		}
 		return
 	}
 

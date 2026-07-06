@@ -43,39 +43,39 @@ const (
 )
 
 type Task struct {
-	ID                  uint         `gorm:"primaryKey" json:"id"`
-	ProjectID           uint         `gorm:"index;not null" json:"project_id"`
-	MRMergeID           int          `json:"mr_iid"`
-	MRAuthor            string       `gorm:"size:100" json:"author"`
-	MRAuthorDisplayName string       `gorm:"size:100" json:"author_display_name"`
-	MRTitle             string       `gorm:"size:512" json:"mr_title"`
-	MRURL               string       `gorm:"size:512" json:"mr_url"`
-	NoteID              int          `json:"note_id"`
-	TriggerType         string       `gorm:"size:20;default:'webhook'" json:"trigger_type"`
-	TriggerSource       string       `gorm:"size:30;default:'manual'" json:"trigger_source"` // manual | score_threshold
-	TaskType            string       `gorm:"size:20;default:'chat'" json:"task_type"`        // chat 或 bugfix
-	Status              TaskStatus   `gorm:"size:20;index;default:'pending'" json:"status"`
-	SourceBranch        string       `gorm:"size:100" json:"source_branch"`
-	TargetBranch        string       `gorm:"size:100" json:"target_branch"`
-	PoolID              uint         `json:"pool_id"`
-	UsedModelID         uint         `gorm:"column:model_id" json:"model_id"` // 实际使用的LLM模型ID（review任务）
-	GitlabTokenID       uint         `json:"gitlab_token_id"`
-	StartedAt           *time.Time   `json:"started_at"`
-	CompletedAt         *time.Time   `json:"completed_at"`
-	DurationSec         int          `gorm:"default:0" json:"duration_sec"`
-	ErrorMsg            string       `gorm:"type:longtext" json:"error_msg"`
-	OpencodeSessionID   string       `gorm:"size:128" json:"opencode_session_id"`
-	DiffSummary         string       `gorm:"type:text" json:"diff_summary"`
-	AIPrompt            string       `gorm:"type:longtext;column:ai_prompt" json:"ai_prompt"`
-	AIResponse          string       `gorm:"type:longtext" json:"ai_response"`
-	RetryCount          int          `gorm:"default:0" json:"retry_count"`
-	ScoreValue          int          `gorm:"default:0" json:"score_value"` // 评分值
-	CreatedAt           time.Time    `json:"created_at"`
-	UpdatedAt           time.Time    `json:"updated_at"`
+	ID                  uint                `gorm:"primaryKey" json:"id"`
+	ProjectID           uint                `gorm:"index;not null" json:"project_id"`
+	MRMergeID           int                 `json:"mr_iid"`
+	MRAuthor            string              `gorm:"size:100" json:"author"`
+	MRAuthorDisplayName string              `gorm:"size:100" json:"author_display_name"`
+	MRTitle             string              `gorm:"size:512" json:"mr_title"`
+	MRURL               string              `gorm:"size:512" json:"mr_url"`
+	NoteID              int                 `json:"note_id"`
+	TriggerType         string              `gorm:"size:20;default:'webhook'" json:"trigger_type"`
+	TriggerSource       string              `gorm:"size:30;default:'manual'" json:"trigger_source"` // manual | score_threshold
+	TaskType            string              `gorm:"size:20;default:'chat'" json:"task_type"`        // chat 或 bugfix
+	Status              TaskStatus          `gorm:"size:20;index;default:'pending'" json:"status"`
+	SourceBranch        string              `gorm:"size:100" json:"source_branch"`
+	TargetBranch        string              `gorm:"size:100" json:"target_branch"`
+	PoolID              uint                `json:"pool_id"`
+	UsedModelID         uint                `gorm:"column:model_id" json:"model_id"` // 实际使用的LLM模型ID（review任务）
+	GitlabTokenID       uint                `json:"gitlab_token_id"`
+	StartedAt           *time.Time          `json:"started_at"`
+	CompletedAt         *time.Time          `json:"completed_at"`
+	DurationSec         int                 `gorm:"default:0" json:"duration_sec"`
+	ErrorMsg            string              `gorm:"type:longtext" json:"error_msg"`
+	OpencodeSessionID   string              `gorm:"size:128" json:"opencode_session_id"`
+	DiffSummary         string              `gorm:"type:text" json:"diff_summary"`
+	AIPrompt            string              `gorm:"type:longtext;column:ai_prompt" json:"ai_prompt"`
+	AIResponse          string              `gorm:"type:longtext" json:"ai_response"`
+	RetryCount          int                 `gorm:"default:0" json:"retry_count"`
+	ScoreValue          int                 `gorm:"default:0" json:"score_value"` // 评分值
+	CreatedAt           time.Time           `json:"created_at"`
+	UpdatedAt           time.Time           `json:"updated_at"`
 	ReviewComments      []TaskReviewComment `gorm:"foreignKey:TaskID" json:"review_comments,omitempty"`
-	Project             Project      `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
-	Pool                ResourcePool `gorm:"foreignKey:PoolID" json:"pool,omitempty"`
-	UsedModel           LLMModel     `gorm:"foreignKey:UsedModelID;references:ID" json:"used_model,omitempty"`
+	Project             Project             `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
+	Pool                ResourcePool        `gorm:"foreignKey:PoolID" json:"pool,omitempty"`
+	UsedModel           LLMModel            `gorm:"foreignKey:UsedModelID;references:ID" json:"used_model,omitempty"`
 }
 
 // --- TaskReviewComment 任务人工复核意见 ---
@@ -202,23 +202,6 @@ type OperationLog struct {
 	CreatedAt  time.Time `gorm:"index"`
 }
 
-// --- SyncLog ---
-
-type SyncLog struct {
-	ID           uint   `gorm:"primaryKey"`
-	SyncType     string `gorm:"size:20;default:'project'"`
-	TriggerType  string `gorm:"size:20;default:'auto'"`
-	TotalCount   int
-	AddedCount   int
-	UpdatedCount int
-	DeletedCount int
-	FailedCount  int
-	FailedDetail string `gorm:"type:text"`
-	DurationMs   int
-	Status       string `gorm:"size:20"`
-	CreatedAt    time.Time
-}
-
 // --- MergeRequestReviewLog ---
 
 type MergeRequestReviewLog struct {
@@ -247,21 +230,21 @@ type MergeRequestReviewLog struct {
 // --- SystemConfig ---
 
 type SystemConfig struct {
-	ID                      uint      `gorm:"primaryKey" json:"id"`
-	GitlabToken             string    `gorm:"size:255" json:"gitlab_token"`
-	TaskTimeoutMin          int       `gorm:"default:120" json:"task_timeout_min"`
-	SyncIntervalSec         int       `gorm:"default:60" json:"sync_interval_sec"`
-	MRSyncIntervalSec       int       `gorm:"default:60" json:"mr_sync_interval_sec"`
-	MaxParallelTask         int       `gorm:"default:20" json:"max_parallel_task"`
-	LogRetentionDay         int       `gorm:"default:90" json:"log_retention_day"`
-	AILogTemplate           string    `gorm:"type:text" json:"ai_log_template"`
-	ScoreThreshold          int       `gorm:"default:60" json:"score_threshold"`
-	ReviewTemplate          string    `gorm:"type:text" json:"review_template"`
-	DiffTruncationThreshold int       `gorm:"default:5000" json:"diff_truncation_threshold"`
-	AlertDurationSec        int       `gorm:"default:300" json:"alert_duration_sec"`
-	AlertCooldownSec        int       `gorm:"default:3600" json:"alert_cooldown_sec"`
-	AlertNotifierID         uint      `gorm:"default:0" json:"alert_notifier_id"`
-	AlertMentionUserIDs     string    `gorm:"size:512" json:"alert_mention_user_ids"`
+	ID                      uint   `gorm:"primaryKey" json:"id"`
+	GitlabToken             string `gorm:"size:255" json:"gitlab_token"`
+	TaskTimeoutMin          int    `gorm:"default:120" json:"task_timeout_min"`
+	SyncIntervalSec         int    `gorm:"default:60" json:"sync_interval_sec"`
+	MRSyncIntervalSec       int    `gorm:"default:60" json:"mr_sync_interval_sec"`
+	MaxParallelTask         int    `gorm:"default:20" json:"max_parallel_task"`
+	LogRetentionDay         int    `gorm:"default:90" json:"log_retention_day"`
+	AILogTemplate           string `gorm:"type:text" json:"ai_log_template"`
+	ScoreThreshold          int    `gorm:"default:60" json:"score_threshold"`
+	ReviewTemplate          string `gorm:"type:text" json:"review_template"`
+	DiffTruncationThreshold int    `gorm:"default:5000" json:"diff_truncation_threshold"`
+	AlertDurationSec        int    `gorm:"default:300" json:"alert_duration_sec"`
+	AlertCooldownSec        int    `gorm:"default:3600" json:"alert_cooldown_sec"`
+	AlertNotifierID         uint   `gorm:"default:0" json:"alert_notifier_id"`
+	AlertMentionUserIDs     string `gorm:"size:512" json:"alert_mention_user_ids"`
 
 	// GitLab OAuth 配置（从环境变量迁移到数据库动态配置）
 	GitlabOAuthEnabled        bool   `gorm:"default:false;column:gitlab_oauth_enabled" json:"gitlab_oauth_enabled"`

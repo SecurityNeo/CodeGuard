@@ -26,17 +26,17 @@ func (h *SystemHandler) GetConfig(c *gin.Context) {
 	var cfg model.SystemConfig
 	if err := model.DB.First(&cfg).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-		cfg = model.SystemConfig{
-			TaskTimeoutMin:          30,
-			MaxParallelTask:         20,
-			LogRetentionDay:         90,
-			DiffTruncationThreshold: 5000,
-			AlertDurationSec:        300,
-			AlertCooldownSec:        3600,
-			AlertNotifierID:         0,
-			AlertMentionUserIDs:     "",
-			AILogTemplate: "请先执行以下命令拉取代码：\ngit clone {{CLONE_URL}}\n\n变更摘要：\n{{MR_DIFF}}\n\n{{USER_INPUT}}\n\n请审查以上代码变更，给出审查意见。",
-		}
+			cfg = model.SystemConfig{
+				TaskTimeoutMin:          30,
+				MaxParallelTask:         20,
+				LogRetentionDay:         90,
+				DiffTruncationThreshold: 5000,
+				AlertDurationSec:        300,
+				AlertCooldownSec:        3600,
+				AlertNotifierID:         0,
+				AlertMentionUserIDs:     "",
+				AILogTemplate:           "请先执行以下命令拉取代码：\ngit clone {{CLONE_URL}}\n\n变更摘要：\n{{MR_DIFF}}\n\n{{USER_INPUT}}\n\n请审查以上代码变更，给出审查意见。",
+			}
 			if err := model.DB.Create(&cfg).Error; err != nil {
 				zap.L().Error("create system config failed", zap.Error(err))
 				c.JSON(500, gin.H{"error": err.Error()})
@@ -277,22 +277,5 @@ func (h *SystemHandler) Info(c *gin.Context) {
 		"total_models":   totalModels,
 		"running_tasks":  runningTasks,
 		"failed_tasks":   failedTasks,
-	})
-}
-
-func (h *SystemHandler) SyncLogs(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-
-	var logs []model.SyncLog
-	var total int64
-
-	model.DB.Model(&model.SyncLog{}).Count(&total)
-	model.DB.Model(&model.SyncLog{}).Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&logs)
-
-	c.JSON(200, gin.H{
-		"data":  logs,
-		"total": total,
-		"page":  page,
 	})
 }

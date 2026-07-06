@@ -107,7 +107,6 @@ func autoMigrate() error {
 	if err := DB.AutoMigrate(
 		&SystemConfig{},
 		&OperationLog{},
-		&SyncLog{},
 	); err != nil {
 		return err
 	}

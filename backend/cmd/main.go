@@ -116,18 +116,11 @@ func initEncrypt(key string) {
 func initCron(cfg *config.Config) *cron.Cron {
 	cronRunner = cron.New(cron.WithSeconds())
 
-	_, _ = cronRunner.AddFunc("@every 1h", func() {
-		service.CleanupSyncLogs()
-	})
-
-	service.NewPoolService().StartHealthCheckDaemon()
-	service.NewModelService().StartHealthCheckDaemon()
+	service.InitMRSyncCron(cronRunner)
 
 	_, _ = cronRunner.AddFunc("@every 10s", func() {
 		service.NewTaskService().TimeoutCheck()
 	})
-
-	service.InitMRSyncCron(cronRunner)
 
 	cronRunner.Start()
 	zap.L().Info("cron jobs started")
@@ -150,9 +143,9 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 	}
 	r.Static("/js", frontendPath+"/js")
 	r.Static("/vendor", frontendPath+"/vendor")
-    r.Static("/static", frontendPath+"/static")
+	r.Static("/static", frontendPath+"/static")
 
-    r.GET("/projects.html", func(c *gin.Context) {
+	r.GET("/projects.html", func(c *gin.Context) {
 		c.File(frontendPath + "/projects.html")
 	})
 	r.GET("/models.html", func(c *gin.Context) {
@@ -244,7 +237,7 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			dashboard.GET("/task-distribution", h.GetTaskDistribution)
 		}
 
-		// 任务管理（只读 + 日志/消息/事件）
+		// 任务管理（只读 + 日志/消息/事件 + 用户可操作的写操作）
 		task := common.Group("/tasks")
 		{
 			h := handler.NewTaskHandler()
@@ -255,6 +248,8 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			task.POST("/:id/messages", h.SendMessage)
 			task.GET("/:id/events", h.SubscribeEvents)
 			task.GET("/:id/review-comments", h.ListReviewComments)
+			task.POST("/:id/retry", h.Retry)
+			task.POST("/:id/stop", h.Stop)
 		}
 
 		// MR 审查日志（数据已按user过滤）
@@ -277,16 +272,14 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 	adminOnly := api.Group("")
 	adminOnly.Use(middleware.Auth(), middleware.AdminOnly())
 	{
-		// 任务管理 - 写操作
+		// 任务管理 - 写操作（仅限管理员）
 		adminTask := adminOnly.Group("/tasks")
 		{
 			h := handler.NewTaskHandler()
 			adminTask.POST("", h.Create)
 			adminTask.POST("/:id/execute", h.Execute)
-			adminTask.POST("/:id/retry", h.Retry)
-			adminTask.POST("/:id/stop", h.Stop)
 			adminTask.DELETE("/:id/session", h.DeleteSession)
-			}
+		}
 
 		// 项目管理
 		project := adminOnly.Group("/projects")
@@ -392,7 +385,6 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			sys.GET("/logs", h.OperationLogs)
 			sys.DELETE("/logs", h.ClearLogs)
 			sys.GET("/info", h.Info)
-			sys.GET("/sync-logs", h.SyncLogs)
 		}
 
 		// 报表管理
