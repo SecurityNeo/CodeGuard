@@ -465,7 +465,7 @@ func (h *WebhookHandler) handleMergeRequestHook(c *gin.Context, payload map[stri
 		"source_branch":        sourceBranch,
 		"target_branch":        targetBranch,
 		"diff_summary":         lastCommitID, // 用于去重和追踪 commit
-		"ai_prompt":            "", // 由执行时动态组装
+		"a_iprompt":            "", // 由执行时动态组装
 		"task_type":            "review",
 		"trigger_type":         "webhook",
 		"trigger_source":       "merge_request",
@@ -518,7 +518,7 @@ func buildTaskFromTrigger(project model.Project, noteableIID, noteID int, projec
 		"source_branch":       sourceBranch,
 		"target_branch":       targetBranch,
 		"note_id":             float64(noteID),
-		"ai_prompt":           prompt,
+		"a_iprompt":           prompt,
 		"task_type":           taskType,
 		"trigger_type":        "webhook",
 		"trigger_source":      triggerSource,

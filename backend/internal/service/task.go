@@ -138,6 +138,10 @@ func (s *TaskService) Create(data map[string]interface{}) (*model.Task, error) {
 	if v, ok := data["score_value"].(float64); ok && v > 0 {
 		scoreValue = int(v)
 	}
+	aiprompt := ""
+	if v, ok := data["a_iprompt"].(string); ok {
+		aiprompt = v
+	}
 
 	task := model.Task{
 		ProjectID:           uint(data["project_id"].(float64)),
@@ -151,7 +155,7 @@ func (s *TaskService) Create(data map[string]interface{}) (*model.Task, error) {
 		SourceBranch:        sourceBranch,
 		TargetBranch:        targetBranch,
 		NoteID:              noteID,
-		AIPrompt:            data["ai_prompt"].(string),
+		AIPrompt:            aiprompt,
 		TaskType:            "chat",
 		Status:              model.TaskPending,
 		TriggerType:         data["trigger_type"].(string),
@@ -862,7 +866,7 @@ func (s *TaskService) ExecuteAIReviewTaskWithComment(taskID uint, commentOverrid
 		"started_at":   startedAt,
 		"completed_at": now,
 		"duration_sec": int(now.Sub(startedAt).Seconds()),
-		"ai_prompt":    truncateDiffInPrompt(userPrompt, truncationThreshold),
+		"a_iprompt":    truncateDiffInPrompt(userPrompt, truncationThreshold),
 	})
 	if res.Error != nil {
 		zap.L().Error("failed to update review task status to success", zap.Uint("task_id", task.ID), zap.Uint("used_model_id", actualModelID), zap.Error(res.Error))
@@ -1174,7 +1178,7 @@ func (s *TaskService) triggerDeepReview(reviewTask model.Task, threshold int) {
 		"author":         reviewTask.MRAuthor,
 		"source_branch":  reviewTask.SourceBranch,
 		"target_branch":  reviewTask.TargetBranch,
-		"ai_prompt":      aiPrompt,
+		"a_iprompt":      aiPrompt,
 		"task_type":      "chat",
 		"trigger_type":   "auto",
 		"trigger_source": "score_threshold",

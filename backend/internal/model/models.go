@@ -66,7 +66,7 @@ type Task struct {
 	ErrorMsg            string       `gorm:"type:longtext" json:"error_msg"`
 	OpencodeSessionID   string       `gorm:"size:128" json:"opencode_session_id"`
 	DiffSummary         string       `gorm:"type:text" json:"diff_summary"`
-	AIPrompt            string       `gorm:"type:longtext" json:"ai_prompt"`
+	AIPrompt            string       `gorm:"type:longtext;column:a_iprompt" json:"ai_prompt"`
 	AIResponse          string       `gorm:"type:longtext" json:"ai_response"`
 	RetryCount          int          `gorm:"default:0" json:"retry_count"`
 	ScoreValue          int          `gorm:"default:0" json:"score_value"` // 评分值
