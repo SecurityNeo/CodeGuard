@@ -1511,20 +1511,28 @@ function renderTasks(tasks) {
                 const comments = json.data || [];
                 if (comments.length > 0) {
                     hasHistory = true;
-                    commentsHtml = '<div class="space-y-2" id="historyComments">' +
-                        '<div class="text-sm font-medium text-gray-700 mb-2">历史复核意见（勾选要下发的）</div>' +
-                        comments.map(c => `
-                            <label class="flex items-start gap-2 p-3 bg-gray-50 rounded-lg border cursor-pointer hover:bg-gray-100">
-                                <input type="checkbox" value="${c.id}" class="retry-checkbox mt-0.5 w-4 h-4 text-green-600 rounded focus:ring-green-500" checked>
-                                <div class="flex-1 text-sm">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <span class="text-xs font-medium text-green-700 bg-green-50 px-1.5 py-0.5 rounded">第${c.retry_round}次复核</span>
-                                        <span class="text-xs text-gray-400">${formatDate(c.created_at)}</span>
-                                    </div>
-                                    <div class="text-gray-700 whitespace-pre-wrap">${escapeHtml(c.content)}</div>
+                    // 默认展开最新 2 条，更早的折叠
+                    const expandThreshold = Math.max(0, comments.length - 2);
+                    commentsHtml = '<div class="space-y-2 max-h-56 overflow-y-auto pr-1" id="historyComments">' +
+                        '<div class="flex items-center justify-between mb-2">' +
+                            '<div class="text-sm font-medium text-gray-700">历史复核意见（<span id="selectedCountDisplay">' + comments.length + '</span>/' + comments.length + ' 已选）</div>' +
+                            '<label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">' +
+                                '<input type="checkbox" id="selectAllComments" class="w-3.5 h-3.5 rounded text-green-600 focus:ring-green-500" checked onchange="toggleSelectAllComments(this)"> 全选' +
+                            '</label>' +
+                        '</div>' +
+                        comments.map((c, idx) => {
+                            const isExpanded = idx >= expandThreshold;
+                            return `
+                            <div class="bg-gray-50 rounded-lg border transition-all ${idx === comments.length - 1 ? 'ring-1 ring-blue-200 border-blue-200' : ''}" data-comment-id="${c.id}">
+                                <div class="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none" onclick="toggleHistoryComment(this)">
+                                    <input type="checkbox" value="${c.id}" class="retry-checkbox w-4 h-4 text-green-600 rounded focus:ring-green-500 shrink-0" ${isExpanded ? 'checked' : ''} onclick="event.stopPropagation(); updateSelectedCount()">
+                                    <span class="text-xs font-medium ${idx === comments.length - 1 ? 'text-blue-700 bg-blue-50' : 'text-green-700 bg-green-50'} px-1.5 py-0.5 rounded shrink-0">第${c.retry_round}次复核${idx === comments.length - 1 ? ' · 最新' : ''}</span>
+                                    <span class="text-xs text-gray-400 shrink-0">${formatDate(c.created_at)}</span>
+                                    <i class="fas fa-chevron-down ml-auto text-gray-400 text-xs transition-transform duration-200 ${isExpanded ? '' : '-rotate-90'}"></i>
                                 </div>
-                            </label>
-                        `).join('') +
+                                <div class="text-sm text-gray-700 whitespace-pre-wrap px-3 pb-3 overflow-hidden transition-all duration-200 ${isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'}" style="line-height: 1.6;">${escapeHtml(c.content)}</div>
+                            </div>`;
+                        }).join('') +
                         '</div>';
                 }
             } catch (e) {
@@ -1536,23 +1544,23 @@ function renderTasks(tasks) {
             modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
             modal.dataset.taskId = id;
             modal.innerHTML = `
-                <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[85vh] flex flex-col">
+                <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col">
                     <div class="px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
                         <h3 class="font-bold text-lg">补充意见并重新评审</h3>
                         <button onclick="document.getElementById('retryModal').remove()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
                     </div>
                     <div class="p-6 space-y-4 overflow-y-auto flex-1">
-                        ${commentsHtml}
+                        <!-- 编辑区置顶 -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">${hasHistory ? '新增复核意见（可选）' : '补充复核意见'}</label>
-                            <textarea id="retryComment" rows="8" maxlength="5000" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none resize-y" placeholder="请描述上次评审中不准确的地方，例如：
-1. 第32行的并发处理判断有误，应该用channel而非锁
-2. 第45行的空指针风险被遗漏了" oninput="updateRetryCharCount()"></textarea>
+                            <textarea id="retryComment" rows="5" maxlength="5000" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none resize-y" placeholder="请描述上次评审中不准确的地方，例如：\n1. 第32行的并发处理判断有误，应该用channel而非锁\n2. 第45行的空指针风险被遗漏了" oninput="updateRetryCharCount()"></textarea>
                             <div class="flex justify-between items-center mt-1">
                                 <p class="text-xs text-gray-400">系统将勾选的复核意见 + 新的复核意见一起作为补充上下文发给大模型</p>
                                 <span id="retryCharCount" class="text-xs text-gray-400">0 / 5000</span>
                             </div>
                         </div>
+                        <!-- 历史复核意见 -->
+                        ${commentsHtml}
                     </div>
                     <div class="px-6 py-4 border-t flex justify-end gap-3 flex-shrink-0">
                         <button onclick="document.getElementById('retryModal').remove()" class="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50">取消</button>
@@ -1560,6 +1568,41 @@ function renderTasks(tasks) {
                     </div>
                 </div>`;
             document.body.appendChild(modal);
+        }
+
+        function toggleHistoryComment(headerEl) {
+            const card = headerEl.parentElement;
+            const contentDiv = card.querySelector('div:last-child');
+            const icon = headerEl.querySelector('.fa-chevron-down');
+            const isCollapsed = contentDiv.classList.contains('max-h-0');
+            if (isCollapsed) {
+                contentDiv.classList.remove('max-h-0', 'opacity-0');
+                contentDiv.classList.add('max-h-96', 'opacity-100');
+                icon.classList.remove('-rotate-90');
+            } else {
+                contentDiv.classList.remove('max-h-96', 'opacity-100');
+                contentDiv.classList.add('max-h-0', 'opacity-0');
+                icon.classList.add('-rotate-90');
+            }
+        }
+
+        function toggleSelectAllComments(checkbox) {
+            document.querySelectorAll('#historyComments .retry-checkbox').forEach(cb => {
+                cb.checked = checkbox.checked;
+            });
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            const total = document.querySelectorAll('#historyComments .retry-checkbox').length;
+            const selected = document.querySelectorAll('#historyComments .retry-checkbox:checked').length;
+            const display = document.getElementById('selectedCountDisplay');
+            if (display) display.textContent = selected;
+            const selectAll = document.getElementById('selectAllComments');
+            if (selectAll) {
+                selectAll.checked = selected === total && total > 0;
+                selectAll.indeterminate = selected > 0 && selected < total;
+            }
         }
 
         function updateRetryCharCount() {
