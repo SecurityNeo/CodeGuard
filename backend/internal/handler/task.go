@@ -146,7 +146,7 @@ func (h *TaskHandler) Retry(c *gin.Context) {
 	if operatorID == nil {
 		operatorID = uint(0)
 	}
-	if err := service.NewTaskService().Retry(uint(id), req.UserReviewComment, req.SelectedCommentIDs, operatorID.(uint)); err != nil {
+	if err := service.NewTaskService().Retry(uint(id), req.UserReviewComment, req.SelectedCommentIDs, operatorID.(uint), c.ClientIP()); err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}

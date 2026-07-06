@@ -451,7 +451,7 @@ func (s *TaskService) ListReviewComments(taskID uint) ([]model.TaskReviewComment
 	return comments, nil
 }
 
-func (s *TaskService) Retry(taskID uint, userReviewComment string, selectedCommentIDs []uint, operatorID uint) error {
+func (s *TaskService) Retry(taskID uint, userReviewComment string, selectedCommentIDs []uint, operatorID uint, clientIP string) error {
 	var task model.Task
 	if err := model.DB.First(&task, taskID).Error; err != nil {
 		return err
@@ -485,9 +485,15 @@ func (s *TaskService) Retry(taskID uint, userReviewComment string, selectedComme
 			return fmt.Errorf("保存复核意见失败: %w", err)
 		}
 		injectedParts = append(injectedParts, fmt.Sprintf("【第%d次复核】%s", task.RetryCount+1, userReviewComment))
-		model.RecordOpLog("任务复核", fmt.Sprintf("任务ID:%d", task.ID), task.ID, "success", "", "")
 	}
 	injectedText := strings.Join(injectedParts, "\n\n")
+
+	// 记录操作日志（无论是否有新评论，只要发生重试即记录）
+	opDetail := fmt.Sprintf("任务ID:%d, 选中历史意见:%d条", task.ID, len(selectedCommentIDs))
+	if userReviewComment != "" {
+		opDetail += ", 新增复核意见"
+	}
+	model.RecordOpLog("任务复核", opDetail, task.ID, "success", "", clientIP)
 
 	task.Status = model.TaskPending
 	task.ErrorMsg = ""
@@ -892,6 +898,8 @@ func (s *TaskService) ExecuteAIReviewTaskWithComment(taskID uint, commentOverrid
 
 	// 阈值检查
 	if score > 0 {
+		// 同步更新内存中的 ScoreValue，避免 triggerDeepReview 读取到旧值
+		task.ScoreValue = score
 		s.checkThresholdAndTrigger(task, score)
 	}
 
