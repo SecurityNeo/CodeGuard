@@ -243,11 +243,15 @@ func (s *TaskService) ExecuteWithComment(taskID uint, commentOverride string) er
 		if currentTask.StartedAt != nil {
 			currentTask.DurationSec = int(now.Sub(*currentTask.StartedAt).Seconds())
 		}
-		// review 类型无资源池，避免外键约束失败
-		if currentTask.TaskType == "review" {
-			model.DB.Omit("pool_id").Save(&currentTask)
-		} else {
-			model.DB.Save(&currentTask)
+		// 条件更新：只有状态仍是 running 时才写入失败，防止被 TimeoutCheck 覆盖后回写
+		res := model.DB.Model(&model.Task{}).Where("id = ? AND status = ?", taskID, model.TaskRunning).Updates(map[string]interface{}{
+			"status":       model.TaskFailed,
+			"error_msg":    err.Error(),
+			"completed_at": now,
+			"duration_sec": currentTask.DurationSec,
+		})
+		if res.RowsAffected == 0 {
+			zap.L().Info("OpenCode task no longer running, skip writing failed status", zap.Uint("task_id", taskID))
 		}
 
 		// 发送 GitLab MR 评论告知失败
@@ -347,22 +351,23 @@ func (s *TaskService) UpdateStatus(taskID uint, status model.TaskStatus, respons
 		return err
 	}
 
-	task.Status = status
-	if response != "" {
-		task.AIResponse = response
-	}
-
 	if status == model.TaskSuccess || status == model.TaskFailed {
 		now := time.Now()
 		task.CompletedAt = &now
 		task.DurationSec = int(now.Sub(*task.StartedAt).Seconds())
 	}
 
-	// review 类型无资源池，避免外键约束失败
-	if task.TaskType == "review" {
-		model.DB.Omit("pool_id").Save(&task)
-	} else {
-		model.DB.Save(&task)
+	updates := map[string]interface{}{
+		"status":       status,
+		"completed_at": task.CompletedAt,
+		"duration_sec": task.DurationSec,
+	}
+	if response != "" {
+		updates["ai_response"] = response
+	}
+	res := model.DB.Model(&model.Task{}).Where("id = ? AND status = ?", taskID, model.TaskRunning).Updates(updates)
+	if res.RowsAffected == 0 {
+		zap.L().Info("task no longer running, skip updating status", zap.Uint("task_id", taskID), zap.String("target_status", string(status)))
 	}
 
 	// 注意：任务完成后不再自动删除session，保留供查看对话历史
@@ -401,18 +406,23 @@ func (s *TaskService) Abort(taskID uint) error {
 		zap.L().Warn("abort task: no session_id found", zap.Uint("task_id", taskID))
 	}
 
-	task.Status = model.TaskStopped
-	task.ErrorMsg = "手动终止"
 	now := time.Now()
-	task.CompletedAt = &now
-	if task.StartedAt != nil {
-		task.DurationSec = int(now.Sub(*task.StartedAt).Seconds())
+	updates := map[string]interface{}{
+		"status":       model.TaskStopped,
+		"error_msg":    "手动终止",
+		"completed_at": now,
+		"duration_sec": func() int {
+			if task.StartedAt != nil {
+				return int(now.Sub(*task.StartedAt).Seconds())
+			}
+			return 0
+		}(),
 	}
-	// review 类型无资源池，避免外键约束失败
+	// review 类型用 Where 条件更新，避免覆盖 timeout/success
 	if task.TaskType == "review" {
-		model.DB.Omit("pool_id").Save(&task)
+		model.DB.Model(&model.Task{}).Where("id = ? AND status = ?", task.ID, model.TaskRunning).Updates(updates)
 	} else {
-		model.DB.Save(&task)
+		model.DB.Model(&model.Task{}).Where("id = ? AND status = ?", task.ID, model.TaskRunning).Updates(updates)
 	}
 
 	// 任务被停止后，触发队列中的下一个 pending 任务
@@ -470,6 +480,9 @@ func (s *TaskService) Retry(taskID uint, userReviewComment string, selectedComme
 	task.Status = model.TaskPending
 	task.ErrorMsg = ""
 	task.RetryCount++
+	// 重置 started_at，避免 TimeoutCheck 用上一次旧时间判定超时
+	now := time.Now()
+	task.StartedAt = &now
 	// review 类型无资源池，避免外键约束失败
 	if task.TaskType == "review" {
 		model.DB.Omit("pool_id").Save(&task)
@@ -759,9 +772,10 @@ func (s *TaskService) ExecuteAIReviewTaskWithComment(taskID uint, commentOverrid
 
 	// ExecuteAIReviewTask uses Omit("pool_id") because AI review tasks don't have a pool
 	// and pool_id=0 violates the fk_tasks_pool foreign key constraint
-	task.Status = model.TaskRunning
-	model.DB.Omit("pool_id").Save(&task)
 	startedAt := time.Now()
+	task.Status = model.TaskRunning
+	task.StartedAt = &startedAt
+	model.DB.Omit("pool_id").Save(&task)
 
 	zap.L().Info("========== AI Review Task started ==========",
 		zap.Uint("task_id", task.ID),
@@ -822,16 +836,20 @@ func (s *TaskService) ExecuteAIReviewTaskWithComment(taskID uint, commentOverrid
 	task.AIPrompt = truncateDiffInPrompt(userPrompt, truncationThreshold)
 
 	// 更新 Task（含实际使用的大模型信息）
+	// 条件更新：只有状态仍是 running 时才写入成功，防止被 TimeoutCheck 覆盖后回写
 	now := time.Now()
-	task.Status = model.TaskSuccess
-	task.AIResponse = reviewReport
-	task.ScoreValue = score
-	task.UsedModelID = actualModelID // 写入实际使用的模型ID
-	task.StartedAt = &startedAt
-	task.CompletedAt = &now
-	task.DurationSec = int(now.Sub(startedAt).Seconds())
-	if err := model.DB.Omit("pool_id").Save(&task).Error; err != nil {
-		zap.L().Error("保存 review 任务失败", zap.Uint("task_id", task.ID), zap.Uint("used_model_id", actualModelID), zap.Error(err))
+	res := model.DB.Model(&model.Task{}).Where("id = ? AND status = ?", task.ID, model.TaskRunning).Updates(map[string]interface{}{
+		"status":       model.TaskSuccess,
+		"ai_response":  reviewReport,
+		"score_value":  score,
+		"model_id":     actualModelID,
+		"started_at":   startedAt,
+		"completed_at": now,
+		"duration_sec": int(now.Sub(startedAt).Seconds()),
+		"ai_prompt":    truncateDiffInPrompt(userPrompt, truncationThreshold),
+	})
+	if res.RowsAffected == 0 {
+		zap.L().Info("review task no longer running, skip writing success status", zap.Uint("task_id", task.ID))
 	} else {
 		zap.L().Info("review 任务保存成功", zap.Uint("task_id", task.ID), zap.Uint("used_model_id", actualModelID))
 	}
@@ -869,10 +887,21 @@ func (s *TaskService) ExecuteAIReviewTaskWithComment(taskID uint, commentOverrid
 
 func (s *TaskService) failReviewTask(task model.Task, errMsg string) error {
 	now := time.Now()
-	task.Status = model.TaskFailed
-	task.ErrorMsg = errMsg
-	task.CompletedAt = &now
-	model.DB.Omit("pool_id").Save(&task)
+	res := model.DB.Model(&model.Task{}).Where("id = ? AND status = ?", task.ID, model.TaskRunning).Updates(map[string]interface{}{
+		"status":       model.TaskFailed,
+		"error_msg":    errMsg,
+		"completed_at": now,
+		"duration_sec": func() int {
+			if task.StartedAt != nil {
+				return int(now.Sub(*task.StartedAt).Seconds())
+			}
+			return 0
+		}(),
+	})
+	if res.RowsAffected == 0 {
+		zap.L().Info("review task no longer running, skip writing failed status", zap.Uint("task_id", task.ID))
+		return fmt.Errorf(errMsg)
+	}
 	zap.L().Error("review task failed", zap.Uint("task_id", task.ID), zap.String("error", errMsg))
 	go s.postReviewComment(task, "❌ AI 评审失败："+errMsg)
 	return fmt.Errorf(errMsg)

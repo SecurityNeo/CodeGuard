@@ -254,6 +254,7 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			task.GET("/:id/messages", h.Messages)
 			task.POST("/:id/messages", h.SendMessage)
 			task.GET("/:id/events", h.SubscribeEvents)
+			task.GET("/:id/review-comments", h.ListReviewComments)
 		}
 
 		// MR 审查日志（数据已按user过滤）
@@ -285,8 +286,7 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			adminTask.POST("/:id/retry", h.Retry)
 			adminTask.POST("/:id/stop", h.Stop)
 			adminTask.DELETE("/:id/session", h.DeleteSession)
-			adminTask.GET("/:id/review-comments", h.ListReviewComments)
-		}
+			}
 
 		// 项目管理
 		project := adminOnly.Group("/projects")
