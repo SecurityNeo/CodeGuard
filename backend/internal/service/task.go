@@ -214,8 +214,6 @@ func (s *TaskService) ExecuteWithComment(taskID uint, commentOverride string) er
 	var reviewCommentText string
 	if commentOverride != "" {
 		reviewCommentText = commentOverride
-	} else {
-		reviewCommentText = buildReviewCommentText(task.ID)
 	}
 	if reviewCommentText != "" {
 		aiPrompt += "\n\n### ⚠️ 人工复核意见（请重点参考）\n" + reviewCommentText
@@ -830,8 +828,6 @@ func (s *TaskService) ExecuteAIReviewTaskWithComment(taskID uint, commentOverrid
 	var reviewCommentText string
 	if commentOverride != "" {
 		reviewCommentText = commentOverride
-	} else {
-		reviewCommentText = buildReviewCommentText(task.ID)
 	}
 	if reviewCommentText != "" {
 		projectTemplate += "\n\n### ⚠️ 人工复核意见（请重点参考）\n" + reviewCommentText
@@ -1330,22 +1326,6 @@ func saveReviewLogFromTask(task model.Task, additions, deletions int, commits []
 		SyncedAt:          now,
 	}
 	return model.DB.Create(&log).Error
-}
-
-// buildReviewCommentText 从 TaskReviewComment 表查询并组装复核意见文本
-func buildReviewCommentText(taskID uint) string {
-	var comments []model.TaskReviewComment
-	if err := model.DB.Where("task_id = ?", taskID).Order("retry_round asc").Find(&comments).Error; err != nil {
-		return ""
-	}
-	if len(comments) == 0 {
-		return ""
-	}
-	var sb strings.Builder
-	for _, c := range comments {
-		sb.WriteString(fmt.Sprintf("【第%d次复核】%s\n\n", c.RetryRound, c.Content))
-	}
-	return strings.TrimSpace(sb.String())
 }
 
 func min(a, b int) int {
