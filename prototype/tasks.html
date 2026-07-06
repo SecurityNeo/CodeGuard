@@ -505,7 +505,11 @@ function renderTasks(tasks) {
                         ${!isReview && t.opencode_session_id ? `<button onclick="viewMessages(${t.id}); event.stopPropagation();" class="text-purple-600 hover:text-purple-700 text-sm">智能体</button>` : ''}
                         ${!isReview && t.opencode_session_id ? `<button onclick="deleteTaskSession(${t.id}); event.stopPropagation();" class="text-red-500 hover:text-red-600 text-sm">删除会话</button>` : ''}
                         ${t.status === 'running' ? `<button onclick="stopTask(${t.id}); event.stopPropagation();" class="text-red-600 hover:text-red-700 text-sm">停止</button>` : ''}
-                        ${(t.status === 'failed' || t.status === 'stopped' || t.status === 'timeout' || t.status === 'success') ? `<button onclick="retryTask(${t.id}); event.stopPropagation();" class="text-green-600 hover:text-green-700 text-sm">重试</button>` : ''}
+                        ${(t.status === 'failed' || t.status === 'stopped' || t.status === 'timeout' || t.status === 'success') ? `
+                            ${t.task_type === 'review' ?
+                                `<button onclick="openRetryModal(${t.id}); event.stopPropagation();" class="text-green-600 hover:text-green-700 text-sm">补充意见重试</button>` :
+                                `<button onclick="retryTask(${t.id}); event.stopPropagation();" class="text-green-600 hover:text-green-700 text-sm">重试</button>`
+                            }` : ''}
                     </td>
                 </tr>`;
             }).join('');
@@ -1496,6 +1500,53 @@ function renderTasks(tasks) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        function openRetryModal(id) {
+            const modal = document.createElement('div');
+            modal.id = 'retryModal';
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-xl max-w-lg w-full mx-4">
+                    <div class="px-6 py-4 border-b flex items-center justify-between">
+                        <h3 class="font-bold text-lg">补充意见并重新评审</h3>
+                        <button onclick="document.getElementById('retryModal').remove()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">补充复核意见</label>
+                            <textarea id="retryComment" rows="5" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:outline-none resize-y" placeholder="请描述上次评审中不准确的地方，例如：
+1. 第32行的并发处理判断有误，应该用channel而非锁
+2. 第45行的空指针风险被遗漏了"></textarea>
+                            <p class="text-xs text-gray-400 mt-1">系统将把这些意见作为补充上下文发给大模型，重新生成评审报告</p>
+                        </div>
+                    </div>
+                    <div class="px-6 py-4 border-t flex justify-end gap-3">
+                        <button onclick="document.getElementById('retryModal').remove()" class="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50">取消</button>
+                        <button onclick="submitRetryWithComment(${id})" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700">确认重试</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+        }
+
+        async function submitRetryWithComment(id) {
+            const comment = document.getElementById('retryComment').value.trim();
+            if (!comment) {
+                if (!confirm('未填写补充意见，将直接重新评审（与点击普通重试效果相同），是否继续？')) return;
+            }
+            try {
+                const res = await apiFetch(`${API_BASE}/tasks/${id}/retry`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_review_comment: comment })
+                });
+                if (!res.ok) throw new Error('重试失败');
+                showToast('任务已补充意见并重新触发', 'success');
+                document.getElementById('retryModal')?.remove();
+                loadTasks();
+            } catch (e) {
+                showToast('重试失败: ' + e.message, 'error');
+            }
         }
 
         async function retryTask(id) {

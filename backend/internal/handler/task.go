@@ -131,7 +131,11 @@ func (h *TaskHandler) Execute(c *gin.Context) {
 
 func (h *TaskHandler) Retry(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	if err := service.NewTaskService().Retry(uint(id)); err != nil {
+	var req struct {
+		UserReviewComment string `json:"user_review_comment"`
+	}
+	_ = c.ShouldBindJSON(&req) // 可选字段，不强制要求
+	if err := service.NewTaskService().Retry(uint(id), req.UserReviewComment); err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}

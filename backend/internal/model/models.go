@@ -70,6 +70,7 @@ type Task struct {
 	AIResponse          string       `gorm:"type:longtext" json:"ai_response"`
 	RetryCount          int          `gorm:"default:0" json:"retry_count"`
 	ScoreValue          int          `gorm:"default:0" json:"score_value"` // 评分值
+	UserReviewComment   string       `gorm:"type:text" json:"user_review_comment"` // 人工复核意见（追加存储）
 	CreatedAt           time.Time    `json:"created_at"`
 	UpdatedAt           time.Time    `json:"updated_at"`
 	Project             Project      `gorm:"foreignKey:ProjectID" json:"project,omitempty"`

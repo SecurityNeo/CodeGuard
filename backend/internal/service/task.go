@@ -201,6 +201,13 @@ func (s *TaskService) Execute(taskID uint) error {
 	model.DB.Model(&task).Select("Status").Updates(task)
 	zap.L().Info("task status updated to running", zap.Uint("task_id", task.ID))
 
+	// OpenCode 路径注入人工复核意见
+	aiPrompt := task.AIPrompt
+	if task.UserReviewComment != "" {
+		aiPrompt += "\n\n### ⚠️ 人工复核意见（请重点参考）\n" + task.UserReviewComment
+		zap.L().Info("injected user review comment into OpenCode task", zap.Uint("task_id", task.ID))
+	}
+
 	zap.L().Info("calling OpencodeService.ExecuteTaskWithSession", zap.Uint("pool_id", task.PoolID))
 	opencodeSvc := NewOpencodeService()
 	sessionID, aiResponse, err := opencodeSvc.ExecuteTaskWithSession(
@@ -208,7 +215,7 @@ func (s *TaskService) Execute(taskID uint) error {
 		task.PoolID,
 		task.Project.ProjectPath,
 		task.Project.Name,
-		task.AIPrompt,
+		aiPrompt,
 		s.cfg.ProjectBaseDir,
 		task.Project.AccessToken,
 	)
@@ -394,7 +401,7 @@ func (s *TaskService) Abort(taskID uint) error {
 	return nil
 }
 
-func (s *TaskService) Retry(taskID uint) error {
+func (s *TaskService) Retry(taskID uint, userReviewComment string) error {
 	var task model.Task
 	if err := model.DB.First(&task, taskID).Error; err != nil {
 		return err
@@ -402,6 +409,14 @@ func (s *TaskService) Retry(taskID uint) error {
 
 	if task.Status != model.TaskFailed && task.Status != model.TaskPending && task.Status != model.TaskStopped && task.Status != model.TaskTimeout && task.Status != model.TaskSuccess {
 		return fmt.Errorf("only failed, stopped, timeout, pending or success tasks can be retried")
+	}
+
+	// 追加用户复核意见
+	if userReviewComment != "" {
+		if task.UserReviewComment != "" {
+			task.UserReviewComment += "\n\n"
+		}
+		task.UserReviewComment += fmt.Sprintf("【第%d次复核】%s", task.RetryCount+1, userReviewComment)
 	}
 
 	task.Status = model.TaskPending
@@ -714,6 +729,13 @@ func (s *TaskService) ExecuteAIReviewTask(taskID uint) error {
 	if task.Project.TemplateID > 0 && task.Project.Template.ID > 0 {
 		projectTemplate = task.Project.Template.Prompt
 		zap.L().Info("using project template", zap.Uint("template_id", task.Project.TemplateID))
+	}
+
+	// 注入人工复核意见
+	if task.UserReviewComment != "" {
+		projectTemplate += "\n\n### ⚠️ 人工复核意见（请重点参考）\n" + task.UserReviewComment
+		zap.L().Info("injected user review comment", zap.Uint("task_id", task.ID),
+			zap.String("comment", task.UserReviewComment[:min(200, len(task.UserReviewComment))]))
 	}
 
 	// 执行评审（单批/分批）
