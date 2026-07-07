@@ -194,9 +194,10 @@ func (s *TaskService) ExecuteWithComment(taskID uint, commentOverride string) er
 		return err
 	}
 
-	// 约束检查：同一项目只能有一个 running 任务，新任务进入排队（pending）
+	// 约束检查：同一项目只能有一个 running 的"深度评审"任务（task_type=chat），
+	// AI 评审任务（task_type=review）与其不互斥，可以并发执行。
 	var runningCount int64
-	model.DB.Model(&model.Task{}).Where("project_id = ? AND status = ? AND id != ?", task.ProjectID, model.TaskRunning, taskID).Count(&runningCount)
+	model.DB.Model(&model.Task{}).Where("project_id = ? AND status = ? AND task_type = ? AND id != ?", task.ProjectID, model.TaskRunning, "chat", taskID).Count(&runningCount)
 	if runningCount > 0 {
 		zap.L().Info("project has running task, task queued in pending",
 			zap.Uint("task_id", taskID),
@@ -931,6 +932,8 @@ func (s *TaskService) failReviewTask(task model.Task, errMsg string) error {
 	}
 	zap.L().Error("review task failed", zap.Uint("task_id", task.ID), zap.String("error", errMsg))
 	go s.postReviewComment(task, "❌ AI 评审失败："+errMsg)
+	// AI 评审失败后也需要唤醒同项目 pending 队列，避免后续任务饿死
+	s.startNextPendingTask(task.ProjectID)
 	return fmt.Errorf(errMsg)
 }
 

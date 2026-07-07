@@ -122,8 +122,8 @@ func (h *SystemHandler) UpdateConfig(c *gin.Context) {
 	}
 	if v, ok := data["alert_duration_sec"]; ok {
 		val := int(v.(float64))
-		if val < 60 {
-			val = 60
+		if val < 1 {
+			val = 1
 		}
 		updates["alert_duration_sec"] = val
 	}
