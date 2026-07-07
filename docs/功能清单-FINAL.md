@@ -1,7 +1,7 @@
 # CodeGuard - 功能清单
 
-> 版本: v4.2
-> 更新日期: 2026-06-30
+> 版本: v4.3
+> 更新日期: 2026-07-07
 > 适用范围: Go 后端 + Web 前端全栈开发
 
 ---
@@ -52,12 +52,15 @@ CodeGuard（代码智能门禁）是一个通过 GitLab Webhook 触发 AI 代码
 - **邮件通知**: 独立的 SMTP 配置与收件人管理，支持快速启用/禁用
 - **企业微信通知**: 多场景通知（任务成功/失败/超时/资源池异常）
 - **敏感数据加密**: AES-256-GCM 加密存储
-- **用户认证**: Token 持久化鉴权，支持密码修改（带可见性切换）
+- **用户认证**: Token 持久化鉴权，支持密码修改（带可见性切换）；支持 GitLab OAuth 登录
 - **全局鉴权拦截**: 前端 `apiFetch` / `fetch` 自动注入 `Authorization` Header，URL 查询 `token` 优先覆盖
 - **Diff 截断保护**: 超过阈值的大代码块在入库前自动截断，防止 DB 写入失败
 - **MR 状态同步**: 定时轮询刷新 GitLab opened MR 的合并/关闭状态
 - **监控告警**: 资源池/大模型异常持续达阈值后自动发送企业微信告警，恢复后发送恢复通知
 - **OpenCode 版本采集**: 健康检查时自动解析并保存 OpenCode 服务端版本号
+- **人工复核与重试**: 支持对 AI 评审结果添加复核意见，重试时可选历史意见注入（倒序排列、默认全选、可折叠）
+- **任务并发调度**: 同一项目深度评审（OpenCode）串行执行，AI 评审（LLM）可并发执行，互不阻塞
+- **队列饥饿防护**: AI 评审失败或停止后自动唤起同项目 pending 深度评审任务，避免永久饿死
 
 ---
 
@@ -216,6 +219,7 @@ CodeGuard（代码智能门禁）是一个通过 GitLab Webhook 触发 AI 代码
 | 功能 | 说明 | 实现状态 |
 |------|------|----------|
 | 账号密码登录 | bcrypt 哈希验证，返回 JWT Token | ✅ |
+| GitLab OAuth 登录 | OAuth2 授权码模式，支持自动创建/绑定用户 | ✅ |
 | Token 持久化 | Token 存入数据库，有效期 7 天 | ✅ |
 | 自动跳转 | 登录后跳转到首页（统计仪表板） | ✅ |
 
@@ -355,6 +359,9 @@ CodeGuard（代码智能门禁）是一个通过 GitLab Webhook 触发 AI 代码
 | 成功评论前缀 | 任务成功时在 MR 下评论：`深度代码审查任务【{taskID}】执行完成，审查报告：` | ✅ |
 | AI 响应提取增强 | 提取 OpenCode 响应中 `reasoning` 类型的文本内容 | ✅ |
 | 任务重试扩展 | `success` 状态任务也可重试（不仅 failed/timeout） | ✅ |
+| **人工复核重试** | 重试时支持选择历史复核意见注入；倒序排列、默认全选、可折叠卡片、 最新高亮 | ✅ |
+| **项目级并发调度** | 深度评审（`chat`）同项目串行；AI 评审（`review`）与深度评审并发，互不阻塞 | ✅ |
+| **队列唤醒机制** | AI 评审成功/失败/停止/超时后自动唤起同项目 pending 深度评审，避免饿死 | ✅ |
 | **模型使用记录** | review 任务完成后记录实际使用的 LLM 模型 ID（含主备切换场景） | ✅ |
 | **主备链路追踪** | 任务列表/详情展示模型角色徽章（`[主]` 紫色 / `[备用N]` 橙色） | ✅ |
 
@@ -755,8 +762,7 @@ SSE `part_updated` 事件触发工具卡片实时更新，支持以下工具：
 - 支持按操作类型筛选
 - 统一分页组件，支持 10/20/50 条/页
 - 支持清理过期日志
-
-clean up expired operation logs
+- **用户关联**：记录操作人用户 ID，接口返回中关联 `username` 字段展示
 
 ### 15.2 System Configuration
 
@@ -777,6 +783,13 @@ clean up expired operation logs
 | Alert Cooldown | 3600 sec | Minimum interval between same-exception alerts | ✅ |
 | Alert Bot ID | 0 (disabled) | Enterprise WeChat bot ID for alerts | ✅ |
 | Alert @ Members | "" | Enterprise WeChat member IDs to @ (comma-separated) | ✅ |
+| **GitLab OAuth Enabled** | false | Enable GitLab OAuth login | ✅ |
+| **GitLab Base URL** | "" | GitLab instance base URL | ✅ |
+| **GitLab OAuth Client ID** | "" | OAuth app client ID | ✅ |
+| **GitLab OAuth Client Secret** | "" | OAuth app client secret | ✅ |
+| **GitLab OAuth Redirect URI** | "" | OAuth callback URI | ✅ |
+| **GitLab OAuth Auto Create User** | true | Automatically create user on first OAuth login | ✅ |
+| **GitLab OAuth Skip Verify** | false | Skip TLS certificate verification for GitLab | ✅ |
 
 ### 15.3 System Info
 
@@ -1291,8 +1304,10 @@ Override window.fetch:
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
-| POST | /api/v1/login | User login | ✅ |
+| POST | /api/v1/login | User login (password) | ✅ |
 | POST | /api/v1/logout | User logout | ✅ |
+| GET | /api/v1/auth/gitlab | GitLab OAuth redirect | ✅ |
+| GET | /api/v1/auth/gitlab/callback | GitLab OAuth callback | ✅ |
 | GET | /api/v1/users/me | Current user info | ✅ |
 | PUT | /api/v1/users/password | Change password | ✅ |
 
@@ -1301,6 +1316,11 @@ Override window.fetch:
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
 | GET | /api/v1/statistics | KPI + trend + TOP10 data | ✅ |
+| GET | /api/v1/dashboard/stats | Dashboard statistics | ✅ |
+| GET | /api/v1/dashboard/trends | Trend data | ✅ |
+| GET | /api/v1/dashboard/recent-projects | Recent active projects | ✅ |
+| GET | /api/v1/dashboard/recent-failures | Recent failures | ✅ |
+| GET | /api/v1/dashboard/task-distribution | Task distribution | ✅ |
 
 ### 18.3 MR Statistics
 
@@ -1329,6 +1349,7 @@ Override window.fetch:
 | PUT | /api/v1/projects/:id | Edit project | ✅ |
 | DELETE | /api/v1/projects/:id | Delete project | ✅ |
 | GET | /api/v1/projects/:id/tasks | Project tasks | ✅ |
+| GET | /api/v1/projects/options | Project dropdown (public) | ✅ |
 
 ### 18.6 Tasks
 
@@ -1336,20 +1357,22 @@ Override window.fetch:
 |------|------|------|----------|
 | GET | /api/v1/tasks | Global task list | ✅ |
 | GET | /api/v1/tasks/:id | Task detail (with used_model preload) | ✅ |
-| POST | /api/v1/tasks | Create task | ✅ |
-| POST | /api/v1/tasks/:id/execute | Execute task | ✅ |
+| POST | /api/v1/tasks | Create task (admin) | ✅ |
+| POST | /api/v1/tasks/:id/execute | Execute task (admin) | ✅ |
 | POST | /api/v1/tasks/:id/retry | Retry task | ✅ |
 | POST | /api/v1/tasks/:id/stop | Stop task | ✅ |
 | POST | /api/v1/tasks/:id/messages | Send message (AI chat) | ✅ |
 | GET | /api/v1/tasks/:id/events | SSE event stream | ✅ |
-| DELETE | /api/v1/tasks/:id/session | Delete OpenCode session | ✅ |
+| GET | /api/v1/tasks/:id/logs | Task logs | ✅ |
+| GET | /api/v1/tasks/:id/review-comments | List review comments | ✅ |
+| DELETE | /api/v1/tasks/:id/session | Delete OpenCode session (admin) | ✅ |
 
 ### 18.7 Webhook
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
-| POST | /api/v1/webhooks/gitlab | GitLab Note Hook | ✅ |
-| POST | /api/v1/tasks/callback | Task callback | ✅ |
+| POST | /api/v1/webhooks/gitlab | GitLab Webhook (Note + MR) | ✅ |
+| POST | /api/v1/tasks/callback | Task callback from OpenCode | ✅ |
 
 ### 18.8 Templates
 
@@ -1357,6 +1380,7 @@ Override window.fetch:
 |------|------|------|----------|
 | GET | /api/v1/templates | Template list | ✅ |
 | POST | /api/v1/templates | Create template | ✅ |
+| GET | /api/v1/templates/:id | Template detail | ✅ |
 | PUT | /api/v1/templates/:id | Edit template | ✅ |
 | DELETE | /api/v1/templates/:id | Delete template | ✅ |
 | POST | /api/v1/templates/:id/clone | Clone template | ✅ |
@@ -1367,10 +1391,14 @@ Override window.fetch:
 |------|------|------|----------|
 | GET | /api/v1/pools | Pool list | ✅ |
 | POST | /api/v1/pools | Create pool | ✅ |
+| GET | /api/v1/pools/:id | Pool detail | ✅ |
 | PUT | /api/v1/pools/:id | Edit pool | ✅ |
 | DELETE | /api/v1/pools/:id | Delete pool | ✅ |
-| POST | /api/v1/pools/:id/check | Health check | ✅ |
+| POST | /api/v1/pools/test | Health test (any pool) | ✅ |
+| POST | /api/v1/pools/:id/check | Health check (specific pool) | ✅ |
+| PUT | /api/v1/pools/:id/toggle | Enable/disable pool | ✅ |
 | PUT | /api/v1/pools/:id/default | Set default | ✅ |
+| DELETE | /api/v1/pools/:id/default | Unset default | ✅ |
 | GET | /api/v1/pools/:id/skills | Get pool skills | ✅ |
 
 ### 18.10 LLM Models
@@ -1379,13 +1407,14 @@ Override window.fetch:
 |------|------|------|----------|
 | GET | /api/v1/models | Model list | ✅ |
 | POST | /api/v1/models | Create model | ✅ |
+| GET | /api/v1/models/:id | Model detail | ✅ |
+| GET | /api/v1/models/:id/edit | Model detail for edit | ✅ |
 | PUT | /api/v1/models/:id | Edit model | ✅ |
 | DELETE | /api/v1/models/:id | Delete model | ✅ |
+| GET | /api/v1/models/default | Get default model | ✅ |
 | PUT | /api/v1/models/:id/default | Set default | ✅ |
 | DELETE | /api/v1/models/:id/default | Unset default | ✅ |
-| PUT | /api/v1/models/:id/primary | Set primary | ✅ |
-| PUT | /api/v1/models/:id/backup | Set backup | ✅ |
-| DELETE | /api/v1/models/:id/backup | Unset backup | ✅ |
+| POST | /api/v1/models/test | Create and test model | ✅ |
 | POST | /api/v1/models/:id/check | API health check | ✅ |
 
 ### 18.11 WeCom Notifier
@@ -1394,11 +1423,26 @@ Override window.fetch:
 |------|------|------|----------|
 | GET | /api/v1/notifiers | Notifier list | ✅ |
 | POST | /api/v1/notifiers | Create notifier | ✅ |
+| GET | /api/v1/notifiers/:id | Notifier detail | ✅ |
 | PUT | /api/v1/notifiers/:id | Edit notifier | ✅ |
+| PUT | /api/v1/notifiers/:id/template | Update message template | ✅ |
 | DELETE | /api/v1/notifiers/:id | Delete notifier | ✅ |
 | POST | /api/v1/notifiers/:id/test | Send test message | ✅ |
+| PUT | /api/v1/notifiers/:id/toggle | Enable/disable notifier | ✅ |
 
-### 18.12 SMTP & Recipients
+### 18.12 Member Mappings
+
+| Method | Path | Description | Implemented |
+|------|------|------|----------|
+| GET | /api/v1/member-mappings | Mapping list | ✅ |
+| POST | /api/v1/member-mappings | Create mapping | ✅ |
+| GET | /api/v1/member-mappings/:id | Mapping detail | ✅ |
+| PUT | /api/v1/member-mappings/:id | Edit mapping | ✅ |
+| DELETE | /api/v1/member-mappings/:id | Delete mapping | ✅ |
+| GET | /api/v1/member-mappings/git-users | GitLab user list | ✅ |
+| GET | /api/v1/member-mappings/check | Check mapping status | ✅ |
+
+### 18.13 SMTP & Recipients
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
@@ -1410,7 +1454,7 @@ Override window.fetch:
 | PUT | /api/v1/reports/recipients/:id | Edit recipient | ✅ |
 | DELETE | /api/v1/reports/recipients/:id | Delete recipient | ✅ |
 
-### 18.13 Report Management
+### 18.14 Report Management
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
@@ -1420,13 +1464,24 @@ Override window.fetch:
 | POST | /api/v1/reports/preview | Preview report | ✅ |
 | POST | /api/v1/reports/send | Manually send report | ✅ |
 
-### 18.14 System
+### 18.15 Users (Admin)
+
+| Method | Path | Description | Implemented |
+|------|------|------|----------|
+| GET | /api/v1/users | User list | ✅ |
+| POST | /api/v1/users | Create user | ✅ |
+| PUT | /api/v1/users/:id | Update user | ✅ |
+| DELETE | /api/v1/users/:id | Delete user | ✅ |
+| POST | /api/v1/users/:id/reset-password | Reset password | ✅ |
+
+### 18.16 System
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
 | GET | /api/v1/system/config | Get system config | ✅ |
 | PUT | /api/v1/system/config | Update system config | ✅ |
 | GET | /api/v1/system/logs | Operation log list | ✅ |
+| DELETE | /api/v1/system/logs | Clear operation logs | ✅ |
 | GET | /api/v1/system/info | System info | ✅ |
 
 ---
@@ -1473,10 +1528,14 @@ Override window.fetch:
 
 | Path Pattern | Description |
 |----------|------|
-| `/api/v1/login` | Login |
-| `/api/v1/logout` | Logout |
-| `/health` | Health check |
-| Non `/api/` prefix | Static files |
+| `/api/v1/login` | 用户登录（密码） |
+| `/api/v1/logout` | 用户登出 |
+| `/api/v1/auth/gitlab` | GitLab OAuth 授权跳转 |
+| `/api/v1/auth/gitlab/callback` | GitLab OAuth 回调 |
+| `/api/v1/webhooks/gitlab` | GitLab Webhook |
+| `/api/v1/tasks/callback` | OpenCode 任务回调 |
+| `/health` | 健康检查 |
+| 非 `/api/` 前缀 | 静态文件 |
 
 ### 20.4 Sensitive Data Encryption
 
