@@ -50,38 +50,38 @@ func fetchMRInfo(projectPath, gitlabToken string, mrIID int) (*MRInfo, error) {
 	}
 	namespaceProject := parts[1]
 	namespaceProject = strings.TrimSuffix(namespaceProject, ".git")
-	
-	url := fmt.Sprintf("%s://%s/api/v4/projects/%s/merge_requests/%d", 
+
+	url := fmt.Sprintf("%s://%s/api/v4/projects/%s/merge_requests/%d",
 		protocol, parts[0], strings.ReplaceAll(namespaceProject, "/", "%2F"), mrIID)
-	
+
 	zap.L().Debug("fetching MR info", zap.String("url", url))
-	
+
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client := &http.Client{Transport: tr}
-	
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("PRIVATE-TOKEN", gitlabToken)
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("fetch MR failed: %d", resp.StatusCode)
 	}
-	
+
 	var mr map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&mr); err != nil {
 		return nil, err
 	}
-	
+
 	info := &MRInfo{}
 	if title, ok := mr["title"].(string); ok {
 		info.Title = title
@@ -141,39 +141,39 @@ func postMRComment(projectPath, gitlabToken string, mrIID int, comment string, n
 	}
 	namespaceProject := parts[1]
 	namespaceProject = strings.TrimSuffix(namespaceProject, ".git")
-	
-	url := fmt.Sprintf("%s://%s/api/v4/projects/%s/merge_requests/%d/notes", 
+
+	url := fmt.Sprintf("%s://%s/api/v4/projects/%s/merge_requests/%d/notes",
 		protocol, parts[0], strings.ReplaceAll(namespaceProject, "/", "%2F"), mrIID)
-	
+
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client := &http.Client{Transport: tr}
-	
+
 	body := map[string]interface{}{"body": comment}
 	if noteID > 0 {
 		body["note_id"] = noteID
 	}
 	jsonBody, _ := json.Marshal(body)
-	
+
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("PRIVATE-TOKEN", gitlabToken)
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != 201 {
 		respBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("post comment failed: %d, body: %s", resp.StatusCode, string(respBody))
 	}
-	
+
 	return nil
 }
 
@@ -269,13 +269,13 @@ func (h *WebhookHandler) handleNoteHook(c *gin.Context, payload map[string]inter
 	// 忽略 bot 评论
 	noteLower := strings.ToLower(note)
 	if strings.HasPrefix(note, "消息已接收") ||
-	   strings.HasPrefix(note, "## ") ||
-	   strings.Contains(noteLower, "现在我可以看到") ||
-	   strings.Contains(noteLower, "task completed") ||
-	   strings.Contains(noteLower, "本次提交总结") ||
-	   strings.Contains(noteLower, "您的代码审查分数低于") ||
-	   strings.Contains(noteLower, "ai 评审") ||
-	   strings.Contains(noteLower, "ai评审") {
+		strings.HasPrefix(note, "## ") ||
+		strings.Contains(noteLower, "现在我可以看到") ||
+		strings.Contains(noteLower, "task completed") ||
+		strings.Contains(noteLower, "本次提交总结") ||
+		strings.Contains(noteLower, "您的代码审查分数低于") ||
+		strings.Contains(noteLower, "ai 评审") ||
+		strings.Contains(noteLower, "ai评审") {
 		zap.L().Debug("ignored bot comment", zap.String("note", note[:minWebhook(len(note), 30)]))
 		c.JSON(200, gin.H{"message": "ignored"})
 		return
@@ -322,13 +322,13 @@ func (h *WebhookHandler) handleNoteHook(c *gin.Context, payload map[string]inter
 	if strings.HasPrefix(note, "@AI") || strings.HasPrefix(note, "@ai") {
 		triggerSource := "manual"
 		taskType := "chat"
-		
+
 		// 兼容保留 @AI BUGFIX 后端逻辑（前端已废弃入口）
 		noteForCheck := strings.ToUpper(strings.TrimSpace(note))
 		if strings.HasPrefix(noteForCheck, "@AI BUGFIX") || strings.HasPrefix(noteForCheck, "@AI\nBUGFIX") {
 			taskType = "bugfix"
 		}
-		
+
 		noteContent := strings.TrimSpace(strings.TrimPrefix(note, "@AI"))
 		noteContent = strings.TrimSpace(strings.TrimPrefix(noteContent, "@AI BUGFIX"))
 		noteContent = strings.TrimSpace(strings.TrimPrefix(noteContent, "@ai"))
@@ -456,19 +456,19 @@ func (h *WebhookHandler) handleMergeRequestHook(c *gin.Context, payload map[stri
 
 	// 创建 AI 评审任务（pool_id 不传入，由 Create 方法默认为 0）
 	taskData := map[string]interface{}{
-		"project_id":           float64(project.ID),
-		"mr_iid":               float64(mrIID),
-		"mr_title":             mrTitle,
-		"mr_url":               mrURL,
-		"author":               author,
-		"author_display_name":  authorDisplayName,
-		"source_branch":        sourceBranch,
-		"target_branch":        targetBranch,
-		"diff_summary":         lastCommitID, // 用于去重和追踪 commit
-		"ai_prompt":            "", // 由执行时动态组装
-		"task_type":            "review",
-		"trigger_type":         "webhook",
-		"trigger_source":       "merge_request",
+		"project_id":          float64(project.ID),
+		"mr_iid":              float64(mrIID),
+		"mr_title":            mrTitle,
+		"mr_url":              mrURL,
+		"author":              author,
+		"author_display_name": authorDisplayName,
+		"source_branch":       sourceBranch,
+		"target_branch":       targetBranch,
+		"diff_summary":        lastCommitID, // 用于去重和追踪 commit
+		"ai_prompt":           "",           // 由执行时动态组装
+		"task_type":           "review",
+		"trigger_type":        "webhook",
+		"trigger_source":      "merge_request",
 	}
 
 	task, err := service.NewTaskService().Create(taskData)
@@ -489,10 +489,10 @@ func (h *WebhookHandler) handleMergeRequestHook(c *gin.Context, payload map[stri
 	c.JSON(200, gin.H{"message": "review task created", "task_id": task.ID})
 }
 
-func buildTaskFromTrigger(project model.Project, noteableIID, noteID int, projectPath string, 
+func buildTaskFromTrigger(project model.Project, noteableIID, noteID int, projectPath string,
 	triggerSource, taskType, prompt string, score int, note string, authorDisplayName string) (*model.Task, error) {
 	var mrTitle, mrURL, mrAuthor, mrDiff, sourceBranch, targetBranch string
-	
+
 	mrInfo, err := fetchMRInfo(projectPath, project.AccessToken, noteableIID)
 	if err != nil {
 		zap.L().Warn("fetch MR info failed", zap.Error(err), zap.String("project_path", projectPath))

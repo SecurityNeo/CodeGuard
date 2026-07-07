@@ -12,11 +12,11 @@ import (
 type Provider string
 
 const (
-	ProviderOpenAI   Provider = "openai"
+	ProviderOpenAI    Provider = "openai"
 	ProviderAnthropic Provider = "anthropic"
-	ProviderAzure    Provider = "azure"
-	ProviderDeepSeek Provider = "deepseek"
-	ProviderVLLM     Provider = "vllm"
+	ProviderAzure     Provider = "azure"
+	ProviderDeepSeek  Provider = "deepseek"
+	ProviderVLLM      Provider = "vllm"
 )
 
 type Message struct {
@@ -63,11 +63,11 @@ type Client interface {
 
 // Config LLM 配置
 type Config struct {
-	Provider  Provider
-	ModelID   string
-	BaseURL   string
-	APIKey    string
-	Timeout   time.Duration
+	Provider Provider
+	ModelID  string
+	BaseURL  string
+	APIKey   string
+	Timeout  time.Duration
 }
 
 // NewClient 创建 LLM 客户端
@@ -87,17 +87,17 @@ func NewClient(cfg Config) (Client, error) {
 // --- OpenAI Compatible Client ---
 
 type openAIClient struct {
-	baseURL   string
-	apiKey    string
+	baseURL    string
+	apiKey     string
 	httpClient *http.Client
-	timeout   time.Duration
+	timeout    time.Duration
 }
 
 func newOpenAICompatibleClient(cfg Config) *openAIClient {
 	return &openAIClient{
-		baseURL:   cfg.BaseURL,
-		apiKey:    cfg.APIKey,
-		timeout:   cfg.Timeout,
+		baseURL: cfg.BaseURL,
+		apiKey:  cfg.APIKey,
+		timeout: cfg.Timeout,
 		httpClient: &http.Client{
 			Timeout: cfg.Timeout,
 		},
@@ -106,7 +106,7 @@ func newOpenAICompatibleClient(cfg Config) *openAIClient {
 
 func (c *openAIClient) Chat(request *ChatRequest) (*ChatResponse, error) {
 	url := c.baseURL + "/chat/completions"
-	
+
 	body, _ := json.Marshal(request)
 	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
@@ -146,10 +146,10 @@ func (c *openAIClient) Close() error { return nil }
 // --- Anthropic Client ---
 
 type anthropicClient struct {
-	baseURL   string
-	apiKey    string
+	baseURL    string
+	apiKey     string
 	httpClient *http.Client
-	timeout   time.Duration
+	timeout    time.Duration
 }
 
 type AnthropicRequest struct {
@@ -160,12 +160,12 @@ type AnthropicRequest struct {
 }
 
 type AnthropicResponse struct {
-	ID           string `json:"id"`
-	Type         string `json:"type"`
-	Role         string `json:"role"`
-	Content      string `json:"content"`
-	StopReason   string `json:"stop_reason"`
-	Usage        struct {
+	ID         string `json:"id"`
+	Type       string `json:"type"`
+	Role       string `json:"role"`
+	Content    string `json:"content"`
+	StopReason string `json:"stop_reason"`
+	Usage      struct {
 		InputTokens  int `json:"input_tokens"`
 		OutputTokens int `json:"output_tokens"`
 	} `json:"usage"`
@@ -173,9 +173,9 @@ type AnthropicResponse struct {
 
 func newAnthropicClient(cfg Config) *anthropicClient {
 	return &anthropicClient{
-		baseURL:   cfg.BaseURL,
-		apiKey:    cfg.APIKey,
-		timeout:   cfg.Timeout,
+		baseURL: cfg.BaseURL,
+		apiKey:  cfg.APIKey,
+		timeout: cfg.Timeout,
 		httpClient: &http.Client{
 			Timeout: cfg.Timeout,
 		},
@@ -184,7 +184,7 @@ func newAnthropicClient(cfg Config) *anthropicClient {
 
 func (c *anthropicClient) Chat(request *ChatRequest) (*ChatResponse, error) {
 	url := c.baseURL + "/v1/messages"
-	
+
 	// Convert OpenAI format to Anthropic format
 	anthropicReq := AnthropicRequest{
 		Model:       request.Model,
@@ -262,9 +262,9 @@ type azureClient struct {
 func newAzureClient(cfg Config) *azureClient {
 	return &azureClient{
 		openAIClient: openAIClient{
-			baseURL:   cfg.BaseURL,
-			apiKey:    cfg.APIKey,
-			timeout:   cfg.Timeout,
+			baseURL:    cfg.BaseURL,
+			apiKey:     cfg.APIKey,
+			timeout:    cfg.Timeout,
 			httpClient: &http.Client{Timeout: cfg.Timeout},
 		},
 		apiVersion: "2024-02-01",
@@ -273,7 +273,7 @@ func newAzureClient(cfg Config) *azureClient {
 
 func (c *azureClient) Chat(request *ChatRequest) (*ChatResponse, error) {
 	url := c.baseURL + "/openai/deployments/" + request.Model + "/chat/completions?api-version=" + c.apiVersion
-	
+
 	body, _ := json.Marshal(request)
 	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {

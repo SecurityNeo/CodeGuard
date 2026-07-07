@@ -15,28 +15,28 @@ import (
 )
 
 type Client struct {
-	baseURL   string
-	token     string
+	baseURL    string
+	token      string
 	httpClient *http.Client
 }
 
 type CommitInfo struct {
-	ID        string `json:"id"`
-	ShortID   string `json:"short_id"`
-	Title     string `json:"title"`
-	Message   string `json:"message"`
-	CreatedAt string `json:"created_at"`
+	ID         string `json:"id"`
+	ShortID    string `json:"short_id"`
+	Title      string `json:"title"`
+	Message    string `json:"message"`
+	CreatedAt  string `json:"created_at"`
 	AuthorName string `json:"author_name"`
 }
 
 type MergeRequestInfo struct {
-	Title        string `json:"title"`
-	State        string `json:"state"`
-	SourceBranch string `json:"source_branch"`
-	TargetBranch string `json:"target_branch"`
-	CreatedAt    string `json:"created_at"`
-	Draft        bool   `json:"draft"`
-	WorkInProgress bool `json:"work_in_progress"`
+	Title          string `json:"title"`
+	State          string `json:"state"`
+	SourceBranch   string `json:"source_branch"`
+	TargetBranch   string `json:"target_branch"`
+	CreatedAt      string `json:"created_at"`
+	Draft          bool   `json:"draft"`
+	WorkInProgress bool   `json:"work_in_progress"`
 }
 
 func NewClient(gitlabHost, token string) *Client {
@@ -149,11 +149,11 @@ func countDiffStats(diffText string) (int, int) {
 // ParseDiffFiles 解析 raw diff 文本（含 diff --git header），返回文件列表和统计信息
 // 备用方法，当 diff 来自 raw unified diff 时使用
 type DiffFile struct {
-	OldPath    string
-	NewPath    string
-	Diff       string
-	Additions  int
-	Deletions  int
+	OldPath   string
+	NewPath   string
+	Diff      string
+	Additions int
+	Deletions int
 }
 
 func ParseDiffFiles(rawDiff string) ([]DiffFile, int, int) {

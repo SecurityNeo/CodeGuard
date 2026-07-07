@@ -493,7 +493,7 @@ func (s *TaskService) Retry(taskID uint, userReviewComment string, selectedComme
 	if userReviewComment != "" {
 		opDetail += ", 新增复核意见"
 	}
-	model.RecordOpLog("任务复核", opDetail, task.ID, "success", "", clientIP)
+	model.RecordOpLog("任务复核", opDetail, task.ID, operatorID, "success", "", clientIP)
 
 	task.Status = model.TaskPending
 	task.ErrorMsg = ""

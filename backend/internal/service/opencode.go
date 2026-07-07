@@ -20,13 +20,13 @@ import (
 )
 
 type OpencodeClient struct {
-	Endpoint     string
-	Username     string
-	Password     string
-	APIKey       string
+	Endpoint      string
+	Username      string
+	Password      string
+	APIKey        string
 	ModelProvider string
-	ModelID      string
-	Client       *http.Client
+	ModelID       string
+	Client        *http.Client
 }
 
 func NewOpencodeClient(endpoint, username, password string) *OpencodeClient {
@@ -104,10 +104,10 @@ func NewOpencodeClientWithAPIKey(endpoint, apiKey string) *OpencodeClient {
 }
 
 type OpencodeConfig struct {
-	Model      string `json:"model"`
-	Provider   map[string]struct {
-		Name     string `json:"name"`
-		Models   map[string]struct{} `json:"models"`
+	Model    string `json:"model"`
+	Provider map[string]struct {
+		Name   string              `json:"name"`
+		Models map[string]struct{} `json:"models"`
 	} `json:"provider"`
 }
 
@@ -118,7 +118,7 @@ func (c *OpencodeClient) loadConfig() {
 		zap.L().Warn("load config request failed", zap.Error(err))
 		return
 	}
-	
+
 	hasAuth := false
 	if c.APIKey != "" {
 		hasAuth = true
@@ -228,7 +228,7 @@ type MessageResponse struct {
 //	  "parts": [{ "type": "text", "text": "用户输入..." }]
 //	}
 type OpenCodeMessage struct {
-	Info  MessageInfo  `json:"info"`
+	Info  MessageInfo    `json:"info"`
 	Parts []OpenCodePart `json:"parts"`
 }
 
@@ -489,14 +489,14 @@ type PartInfo struct {
 
 // OpenCodeProperties payload.properties 结构（支持多种事件类型）
 type OpenCodeProperties struct {
-	SessionID string `json:"sessionID"`
-	MessageID string `json:"messageID"`
-	PartID    string `json:"partID"`     // 用于 message.part.delta
-	Field     string `json:"field"`      // 用于 message.part.delta
-	Delta     string `json:"delta"`      // 用于 message.part.delta
-	Text      string `json:"text"`       // 用于 sync / message.part.updated
+	SessionID string    `json:"sessionID"`
+	MessageID string    `json:"messageID"`
+	PartID    string    `json:"partID"`         // 用于 message.part.delta
+	Field     string    `json:"field"`          // 用于 message.part.delta
+	Delta     string    `json:"delta"`          // 用于 message.part.delta
+	Text      string    `json:"text"`           // 用于 sync / message.part.updated
 	Part      *PartInfo `json:"part,omitempty"` // 用于 message.part.updated（⭐关键！）
-	Time      int64  `json:"time"`       // Unix 毫秒时间戳
+	Time      int64     `json:"time"`           // Unix 毫秒时间戳
 }
 
 // OpenCodeGlobalEvent 代表 /global/event 返回的 NDJSON 事件
@@ -733,8 +733,8 @@ func processNDJSONLine(line, targetSessionID string, eventChan chan SSEEvent, ma
 				MessageID: part.MessageID,
 				Time:      part.Time,
 			}
-		partTypeCache[part.ID] = meta
-		zap.L().Debug("part type cached",
+			partTypeCache[part.ID] = meta
+			zap.L().Debug("part type cached",
 				zap.String("partID", part.ID),
 				zap.String("inferredType", part.Type),
 				zap.String("tool", part.Tool),
@@ -836,30 +836,30 @@ func getTopLevelKeys(m map[string]interface{}) []string {
 // 当 task 状态为 running 时，用于实时查看 AI 处理过程中的对话内容
 func (c *OpencodeClient) GetSessionMessages(sessionID string) ([]OpenCodeMessage, error) {
 	url := fmt.Sprintf("%s/session/%s/message", c.Endpoint, sessionID)
-	
-	 req, err := http.NewRequest("GET", url, nil)
+
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
 	c.setAuth(req)
-	
+
 	resp, err := c.Client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		zap.L().Error("get session messages failed", zap.Int("status", resp.StatusCode), zap.String("body", string(body)))
 		return nil, fmt.Errorf("get session messages failed: %d", resp.StatusCode)
 	}
-	
+
 	var result []OpenCodeMessage
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode session messages failed: %w", err)
 	}
-	
+
 	zap.L().Info("session messages fetched", zap.String("session_id", sessionID), zap.Int("count", len(result)))
 	return result, nil
 }
@@ -1016,7 +1016,7 @@ func (s *OpencodeService) AbortTask(poolID uint, sessionID string) error {
 	if sessionID == "" {
 		return nil
 	}
-	
+
 	var pool model.ResourcePool
 	if err := model.DB.First(&pool, poolID).Error; err != nil {
 		return err
@@ -1041,7 +1041,7 @@ func (s *OpencodeService) DeleteSession(poolID uint, sessionID string) error {
 	if sessionID == "" {
 		return nil
 	}
-	
+
 	var pool model.ResourcePool
 	if err := model.DB.First(&pool, poolID).Error; err != nil {
 		return err
@@ -1141,7 +1141,7 @@ func (s *OpencodeService) ExecuteTaskWithSession(taskID, poolID uint, projectPat
 	zap.L().Info("initial session deleted")
 
 	zap.L().Info("step 4: creating new session with X-Opencode-Directory header")
-	newSession, err := client.CreateSessionWithDirectory("AI Code Review: " + projectName, projectDir)
+	newSession, err := client.CreateSessionWithDirectory("AI Code Review: "+projectName, projectDir)
 	if err != nil {
 		zap.L().Error("create session with directory failed", zap.Error(err))
 		return "", "", err
@@ -1150,8 +1150,8 @@ func (s *OpencodeService) ExecuteTaskWithSession(taskID, poolID uint, projectPat
 
 	now := time.Now()
 	model.DB.Model(&model.Task{}).Where("id = ?", taskID).Updates(map[string]interface{}{
-		"started_at":             now,
-		"opencode_session_id":    newSession.ID,
+		"started_at":          now,
+		"opencode_session_id": newSession.ID,
 	})
 	zap.L().Info("task started_at and session_id updated", zap.Uint("task_id", taskID), zap.Time("started_at", now), zap.String("session_id", newSession.ID))
 

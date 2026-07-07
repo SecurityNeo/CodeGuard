@@ -35,7 +35,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 
 	user, ok := h.service.ValidateLogin(req.Username, req.Password)
 	if !ok {
-		model.RecordOpLog("用户登录", req.Username, 0, "failed", "用户名或密码错误", c.ClientIP())
+		model.RecordOpLog("用户登录", req.Username, 0, uint(0), "failed", "用户名或密码错误", c.ClientIP())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
 		return
 	}
@@ -43,7 +43,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 	// 生成 token
 	token := middleware.GenerateToken(user.ID, user.Username)
 
-	model.RecordOpLog("用户登录", user.Username, user.ID, "success", "", c.ClientIP())
+	model.RecordOpLog("用户登录", user.Username, user.ID, user.ID, "success", "", c.ClientIP())
 	c.JSON(http.StatusOK, gin.H{
 		"message": "登录成功",
 		"data": gin.H{
@@ -90,7 +90,7 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	model.RecordOpLog("修改密码", "用户管理", userID.(uint), "success", "", c.ClientIP())
+	model.RecordOpLog("修改密码", "用户管理", userID.(uint), userID.(uint), "success", "", c.ClientIP())
 	c.JSON(http.StatusOK, gin.H{"message": "密码修改成功"})
 }
 
@@ -177,7 +177,8 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
-	model.RecordOpLog("用户创建", user.Username, user.ID, "success", "", c.ClientIP())
+	currentUserID, _ := c.Get("user_id")
+	model.RecordOpLog("用户创建", user.Username, user.ID, currentUserID.(uint), "success", "", c.ClientIP())
 	c.JSON(http.StatusOK, gin.H{
 		"message": "用户创建成功",
 		"data": gin.H{
@@ -208,7 +209,8 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	model.RecordOpLog("用户更新", "用户ID:"+c.Param("id"), uint(id), "success", "", c.ClientIP())
+	currentUserID, _ := c.Get("user_id")
+	model.RecordOpLog("用户更新", "用户ID:"+c.Param("id"), uint(id), currentUserID.(uint), "success", "", c.ClientIP())
 	c.JSON(http.StatusOK, gin.H{"message": "用户更新成功"})
 }
 
@@ -224,7 +226,7 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		return
 	}
 
-	model.RecordOpLog("用户删除", "用户ID:"+c.Param("id"), uint(id), "success", "", c.ClientIP())
+	model.RecordOpLog("用户删除", "用户ID:"+c.Param("id"), uint(id), currentUserID.(uint), "success", "", c.ClientIP())
 	c.JSON(http.StatusOK, gin.H{"message": "用户已删除"})
 }
 
@@ -246,6 +248,7 @@ func (h *UserHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	model.RecordOpLog("重置密码", "用户ID:"+c.Param("id"), uint(id), "success", "", c.ClientIP())
+	currentUserID, _ := c.Get("user_id")
+	model.RecordOpLog("重置密码", "用户ID:"+c.Param("id"), uint(id), currentUserID.(uint), "success", "", c.ClientIP())
 	c.JSON(http.StatusOK, gin.H{"message": "密码已重置"})
 }

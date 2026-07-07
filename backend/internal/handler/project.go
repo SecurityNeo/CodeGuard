@@ -65,7 +65,8 @@ func (h *ProjectHandler) Update(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	model.RecordOpLog("项目更新", p.Name, uint(id), "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("项目更新", p.Name, uint(id), userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "updated"})
 }
 
@@ -83,7 +84,8 @@ func (h *ProjectHandler) Create(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	model.RecordOpLog("项目创建", p.Name, p.ID, "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("项目创建", p.Name, p.ID, userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "created", "data": p})
 }
 
@@ -95,7 +97,8 @@ func (h *ProjectHandler) Delete(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	model.RecordOpLog("项目删除", p.Name, uint(id), "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("项目删除", p.Name, uint(id), userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "deleted"})
 }
 

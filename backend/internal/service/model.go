@@ -15,9 +15,9 @@ import (
 type ModelService struct{}
 
 var (
-	ErrModelNotFound    = errors.New("模型不存在")
+	ErrModelNotFound       = errors.New("模型不存在")
 	ErrCannotDeleteDefault = errors.New("不能删除默认模型")
-	ErrModelExists      = errors.New("模型已存在")
+	ErrModelExists         = errors.New("模型已存在")
 )
 
 func NewModelService() *ModelService {
@@ -320,8 +320,8 @@ func (s *ModelService) runModelHealthChecks() {
 		}
 
 		updates := map[string]interface{}{
-			"status":        newStatus,
-			"check_error":   errMsg,
+			"status":      newStatus,
+			"check_error": errMsg,
 		}
 		statusChanged := prevStatus != newStatus
 		if statusChanged {
@@ -464,7 +464,7 @@ type UpdateModelRequest struct {
 	Temperature      *float64 `json:"temperature,omitempty"`
 	IsDefault        *bool    `json:"is_default,omitempty"`
 	IsPrimary        *bool    `json:"is_primary,omitempty"`
-	BackupOrder      *int    `json:"backup_order,omitempty"`
+	BackupOrder      *int     `json:"backup_order,omitempty"`
 }
 
 // NormalizeProvider normalizes provider string to standard format

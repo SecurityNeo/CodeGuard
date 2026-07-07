@@ -118,7 +118,6 @@ type sysStatus struct {
 	AvgReviewTime     string
 }
 
-
 func buildPeriod(reportType string) periodInfo {
 	now := time.Now()
 	loc := now.Location()
@@ -165,7 +164,9 @@ func queryKPI(start, end time.Time) kpiData {
 		Where("COALESCE(mr_created_at, synced_at) >= ?", start).
 		Where("COALESCE(mr_created_at, synced_at) < ?", end).
 		Scan(&k)
-	if k.TotalMRs == 0 { return k }
+	if k.TotalMRs == 0 {
+		return k
+	}
 	// AvgScore currently holds sum of scores, compute average
 	var tmp struct{ ScoreCount int64 }
 	model.DB.Model(&model.MergeRequestReviewLog{}).
@@ -489,7 +490,10 @@ func querySysStatus() sysStatus {
 	}
 
 	// 资源池健康度
-	var poolStats struct{ Total int64; Healthy int64 }
+	var poolStats struct {
+		Total   int64
+		Healthy int64
+	}
 	model.DB.Model(&model.ResourcePool{}).
 		Select("COUNT(*) as total, COUNT(CASE WHEN status = 'active' THEN 1 END) as healthy").
 		Scan(&poolStats)
@@ -509,7 +513,10 @@ func querySysStatus() sysStatus {
 	}
 
 	// 大模型健康度
-	var modelStats struct{ Total int64; Healthy int64 }
+	var modelStats struct {
+		Total   int64
+		Healthy int64
+	}
 	model.DB.Model(&model.LLMModel{}).
 		Select("COUNT(*) as total, COUNT(CASE WHEN status = 'active' THEN 1 END) as healthy").
 		Scan(&modelStats)
@@ -537,48 +544,48 @@ func (s *ReportService) GenerateHTML(reportType string) (string, error) {
 	sys := querySysStatus()
 
 	// 获取本周/本月总MR数用于百分比计算
-	if dist.Total == 0 { dist.Total = 1 }
-
+	if dist.Total == 0 {
+		dist.Total = 1
+	}
 
 	data := map[string]interface{}{
-		"Title":           p.Title,
-		"SubTitle":        p.SubTitle,
-		"PeriodName":      p.Name,
-		"TotalMRs":        curKpi.TotalMRs,
-		"TotalChanges":    curKpi.TotalChanges,
-		"AvgScore":        fmt.Sprintf("%.1f", curKpi.AvgScore),
-		"LowQuality":      curKpi.LowQuality,
-		"ActiveProjects":  curKpi.ActiveProjects,
-		"MomMRs":          mom.MRsChange,
-		"MomMRTrend":      mom.MRsTrend,
-		"MomAvg":          mom.AvgScoreChange,
-		"MomAvgTrend":     mom.AvgScoreTrend,
-		"MomLQ":           mom.LowQualityChange,
-		"MomLQTrend":      mom.LowQualityTrend,
+		"Title":          p.Title,
+		"SubTitle":       p.SubTitle,
+		"PeriodName":     p.Name,
+		"TotalMRs":       curKpi.TotalMRs,
+		"TotalChanges":   curKpi.TotalChanges,
+		"AvgScore":       fmt.Sprintf("%.1f", curKpi.AvgScore),
+		"LowQuality":     curKpi.LowQuality,
+		"ActiveProjects": curKpi.ActiveProjects,
+		"MomMRs":         mom.MRsChange,
+		"MomMRTrend":     mom.MRsTrend,
+		"MomAvg":         mom.AvgScoreChange,
+		"MomAvgTrend":    mom.AvgScoreTrend,
+		"MomLQ":          mom.LowQualityChange,
+		"MomLQTrend":     mom.LowQualityTrend,
 		// 第二行 KPI
-		"Additions":        curKpi.Additions,
-		"Deletions":        curKpi.Deletions,
-		"ReviewCount":      curKpi.ReviewCount,
-		"TaskCount":        curKpi.TaskCount,
-		"StateDist":        curKpi.StateDist,
-		"MomAdditions":     mom.AdditionsChange,
-		"MomAdditionsTrend": mom.AdditionsTrend,
-		"MomReviewCount":   mom.ReviewCountChange,
+		"Additions":           curKpi.Additions,
+		"Deletions":           curKpi.Deletions,
+		"ReviewCount":         curKpi.ReviewCount,
+		"TaskCount":           curKpi.TaskCount,
+		"StateDist":           curKpi.StateDist,
+		"MomAdditions":        mom.AdditionsChange,
+		"MomAdditionsTrend":   mom.AdditionsTrend,
+		"MomReviewCount":      mom.ReviewCountChange,
 		"MomReviewCountTrend": mom.ReviewCountTrend,
-		"MomTaskCount":     mom.TaskCountChange,
-		"MomTaskCountTrend": mom.TaskCountTrend,
-		"Dist":             dist,
-		"DevRanks":         devRanks,
-		"ProjectRanks":     projectRanks,
-		"LowQualityList":   lowQuality,
-		"DevChanges":       devChanges,
-		"SysStatus":        sys,
-		"Now":              time.Now().Format("2006-01-02 15:04"),
+		"MomTaskCount":        mom.TaskCountChange,
+		"MomTaskCountTrend":   mom.TaskCountTrend,
+		"Dist":                dist,
+		"DevRanks":            devRanks,
+		"ProjectRanks":        projectRanks,
+		"LowQualityList":      lowQuality,
+		"DevChanges":          devChanges,
+		"SysStatus":           sys,
+		"Now":                 time.Now().Format("2006-01-02 15:04"),
 	}
 
 	return s.renderTemplate(data)
 }
-
 
 // SendEmail 发送邮件
 func (s *ReportService) SendEmail(reportType string, html string, groupNames []string) error {
@@ -667,7 +674,9 @@ func (s *ReportService) renderTemplate(data map[string]interface{}) (string, err
 	// 评分分布百分比
 	dist := data["Dist"].(scoreDist)
 	total := float64(dist.Total)
-	if total <= 0 { total = 1 }
+	if total <= 0 {
+		total = 1
+	}
 	pctParts := []float64{
 		float64(dist.Excellent*100) / total,
 		float64(dist.Good*100) / total,
@@ -683,7 +692,9 @@ func (s *ReportService) renderTemplate(data map[string]interface{}) (string, err
 	// 状态分布百分比
 	sd := data["StateDist"].(stateDist)
 	stTotal := sd.Total
-	if stTotal <= 0 { stTotal = 1 }
+	if stTotal <= 0 {
+		stTotal = 1
+	}
 	stateParts := []float64{
 		float64(sd.Merged*100) / float64(stTotal),
 		float64(sd.Opened*100) / float64(stTotal),
@@ -699,19 +710,33 @@ func (s *ReportService) renderTemplate(data map[string]interface{}) (string, err
 		"ge":  func(a, b float64) bool { return a >= b },
 		"le":  func(a, b float64) bool { return a <= b },
 		"perc": func(n, t int64) string {
-			if t == 0 { return "0%" }
+			if t == 0 {
+				return "0%"
+			}
 			return fmt.Sprintf("%.0f%%", float64(n*100)/float64(t))
 		},
 		"scoreBadgeClass": func(score float64) string {
-			if score >= 90 { return "score-excellent" }
-			if score >= 80 { return "score-good" }
-			if score >= 60 { return "score-pass" }
+			if score >= 90 {
+				return "score-excellent"
+			}
+			if score >= 80 {
+				return "score-good"
+			}
+			if score >= 60 {
+				return "score-pass"
+			}
 			return "score-fail"
 		},
 		"rankClass": func(i int) string {
-			if i == 0 { return "rank-1" }
-			if i == 1 { return "rank-2" }
-			if i == 2 { return "rank-3" }
+			if i == 0 {
+				return "rank-1"
+			}
+			if i == 1 {
+				return "rank-2"
+			}
+			if i == 2 {
+				return "rank-3"
+			}
 			return "rank-other"
 		},
 		"numberFormat": func(n int64) string {

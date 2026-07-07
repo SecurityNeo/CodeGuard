@@ -222,11 +222,12 @@ func Paginate(page, pageSize int) func(db *gorm.DB) *gorm.DB {
 }
 
 // RecordOpLog records an operation log
-func RecordOpLog(opType, opObject string, objectID uint, result, errorMsg, requestIP string) {
+func RecordOpLog(opType, opObject string, objectID, userID uint, result, errorMsg, requestIP string) {
 	log := &OperationLog{
 		OpType:     opType,
 		OpObject:   opObject,
 		OpObjectID: objectID,
+		OpUserID:   userID,
 		OpResult:   result,
 		ErrorMsg:   errorMsg,
 		RequestIP:  requestIP,

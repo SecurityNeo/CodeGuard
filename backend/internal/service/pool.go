@@ -18,7 +18,7 @@ func (s *PoolService) List(name string) ([]model.ResourcePool, error) {
 	var pools []model.ResourcePool
 	query := model.DB
 	if name != "" {
-		query = query.Where("name LIKE ?", "%" + name + "%")
+		query = query.Where("name LIKE ?", "%"+name+"%")
 	}
 	if err := query.Find(&pools).Error; err != nil {
 		return nil, err

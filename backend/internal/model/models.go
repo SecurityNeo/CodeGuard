@@ -196,6 +196,7 @@ type OperationLog struct {
 	OpType     string `gorm:"size:50;index;not null"`
 	OpObject   string `gorm:"size:100"`
 	OpObjectID uint
+	OpUserID   uint      // 操作人ID
 	OpResult   string    `gorm:"size:20"`
 	ErrorMsg   string    `gorm:"size:512"`
 	RequestIP  string    `gorm:"size:45"`

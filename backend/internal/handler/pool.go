@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"github.com/gin-gonic/gin"
 	"github.com/ai-optimizer/backend/internal/model"
 	"github.com/ai-optimizer/backend/internal/service"
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"strconv"
 )
@@ -56,7 +56,8 @@ func (h *PoolHandler) Create(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	model.RecordOpLog("资源池创建", pool.Name, pool.ID, "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("资源池创建", pool.Name, pool.ID, userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "created", "data": pool})
 }
 
@@ -74,7 +75,8 @@ func (h *PoolHandler) Update(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	model.RecordOpLog("资源池更新", pool.Name, uint(id), "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("资源池更新", pool.Name, uint(id), userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "updated"})
 }
 
@@ -86,7 +88,8 @@ func (h *PoolHandler) Delete(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	model.RecordOpLog("资源池删除", pool.Name, uint(id), "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("资源池删除", pool.Name, uint(id), userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "deleted"})
 }
 
@@ -148,7 +151,8 @@ func (h *PoolHandler) Toggle(c *gin.Context) {
 	if !enabled {
 		action = "禁用"
 	}
-	model.RecordOpLog("资源池"+action, pool.Name, uint(id), "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("资源池"+action, pool.Name, uint(id), userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "toggled"})
 }
 
@@ -160,7 +164,8 @@ func (h *PoolHandler) SetDefault(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	model.RecordOpLog("设为默认资源池", pool.Name, uint(id), "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("设为默认资源池", pool.Name, uint(id), userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "set as default"})
 }
 
@@ -184,6 +189,7 @@ func (h *PoolHandler) UnsetDefault(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	model.RecordOpLog("取消默认资源池", pool.Name, uint(id), "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("取消默认资源池", pool.Name, uint(id), userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "unset default"})
 }

@@ -38,7 +38,8 @@ func (h *TemplateHandler) Create(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	model.RecordOpLog("模板创建", t.Name, t.ID, "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("模板创建", t.Name, t.ID, userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "created", "data": t})
 }
 
@@ -66,7 +67,8 @@ func (h *TemplateHandler) Update(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	model.RecordOpLog("模板更新", t.Name, uint(id), "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("模板更新", t.Name, uint(id), userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "updated"})
 }
 
@@ -83,7 +85,8 @@ func (h *TemplateHandler) Delete(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	model.RecordOpLog("模板删除", t.Name, uint(id), "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("模板删除", t.Name, uint(id), userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "deleted"})
 }
 
@@ -107,6 +110,7 @@ func (h *TemplateHandler) Clone(c *gin.Context) {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	model.RecordOpLog("模板克隆", fmt.Sprintf("%s->%s", original.Name, t.Name), t.ID, "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("模板克隆", fmt.Sprintf("%s->%s", original.Name, t.Name), t.ID, userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "cloned", "data": t})
 }

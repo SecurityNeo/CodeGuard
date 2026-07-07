@@ -171,12 +171,13 @@ func (h *SystemHandler) UpdateConfig(c *gin.Context) {
 	isAITemplateOnly := len(data) == 1 && data["ai_log_template"] != nil
 	isReviewTemplateOnly := len(data) == 1 && data["review_template"] != nil
 
+	userID, _ := c.Get("user_id")
 	if isAITemplateOnly {
-		model.RecordOpLog("AI对话模板更新", "AI对话模板", cfg.ID, "success", "", c.ClientIP())
+		model.RecordOpLog("AI对话模板更新", "AI对话模板", cfg.ID, userID.(uint), "success", "", c.ClientIP())
 	} else if isReviewTemplateOnly {
-		model.RecordOpLog("代码审查模版更新", "代码审查模版", cfg.ID, "success", "", c.ClientIP())
+		model.RecordOpLog("代码审查模版更新", "代码审查模版", cfg.ID, userID.(uint), "success", "", c.ClientIP())
 	} else {
-		model.RecordOpLog("系统配置更新", "系统配置", cfg.ID, "success", "", c.ClientIP())
+		model.RecordOpLog("系统配置更新", "系统配置", cfg.ID, userID.(uint), "success", "", c.ClientIP())
 	}
 
 	// 执行数据库更新
@@ -225,8 +226,37 @@ func (h *SystemHandler) OperationLogs(c *gin.Context) {
 	query = query.Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize)
 	query.Find(&logs)
 
+	// 批量查询用户名
+	userMap := make(map[uint]string)
+	var userIDs []uint
+	for _, l := range logs {
+		if l.OpUserID > 0 {
+			userIDs = append(userIDs, l.OpUserID)
+		}
+	}
+	if len(userIDs) > 0 {
+		var users []model.User
+		model.DB.Where("id IN ?", userIDs).Find(&users)
+		for _, u := range users {
+			userMap[u.ID] = u.Username
+		}
+	}
+
+	// 拼装带用户名的响应
+	type logItem struct {
+		model.OperationLog
+		Username string `json:"username"`
+	}
+	result := make([]logItem, 0, len(logs))
+	for _, l := range logs {
+		result = append(result, logItem{
+			OperationLog: l,
+			Username:     userMap[l.OpUserID],
+		})
+	}
+
 	c.JSON(200, gin.H{
-		"data":  logs,
+		"data":  result,
 		"total": total,
 		"page":  page,
 	})

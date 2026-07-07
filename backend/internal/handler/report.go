@@ -158,7 +158,7 @@ func (h *ReportHandler) GetReportConfig(c *gin.Context) {
 		return
 	}
 
-    var cfg model.ReportConfig
+	var cfg model.ReportConfig
 	if err := model.DB.Where("report_type = ?", reportType).First(&cfg).Error; err != nil {
 		// 首次访问时创建默认配置
 		cfg.ReportType = reportType
@@ -191,15 +191,15 @@ func (h *ReportHandler) SaveReportConfig(c *gin.Context) {
 	}
 
 	var req struct {
-		GenerateEnabled  bool     `json:"generate_enabled"`
-		SendEnabled      bool     `json:"send_enabled"`
-		Enabled          bool     `json:"enabled"`
-		SendGroups       []string `json:"send_groups"`
-		DataPeriodDays   int      `json:"data_period_days"`
-		SendHour         int      `json:"send_hour"`
-		SendMinute       int      `json:"send_minute"`
-		SendDayOfWeek    int      `json:"send_day_of_week"`
-		SendDayOfMonth   int      `json:"send_day_of_month"`
+		GenerateEnabled bool     `json:"generate_enabled"`
+		SendEnabled     bool     `json:"send_enabled"`
+		Enabled         bool     `json:"enabled"`
+		SendGroups      []string `json:"send_groups"`
+		DataPeriodDays  int      `json:"data_period_days"`
+		SendHour        int      `json:"send_hour"`
+		SendMinute      int      `json:"send_minute"`
+		SendDayOfWeek   int      `json:"send_day_of_week"`
+		SendDayOfMonth  int      `json:"send_day_of_month"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/ai-optimizer/backend/internal/service"
 	"github.com/ai-optimizer/backend/internal/model"
+	"github.com/ai-optimizer/backend/internal/service"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -35,10 +35,10 @@ func (h *ModelHandler) List(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{
-		"data":       models,
-		"total":      total,
-		"page":       page,
-		"page_size":  pageSize,
+		"data":      models,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
 	})
 }
 
@@ -122,7 +122,8 @@ func (h *ModelHandler) Create(c *gin.Context) {
 		return
 	}
 
-	model.RecordOpLog("模型创建", fmt.Sprintf("%s-%s", llmModel.Provider, llmModel.ModelID), llmModel.ID, "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("模型创建", fmt.Sprintf("%s-%s", llmModel.Provider, llmModel.ModelID), llmModel.ID, userID.(uint), "success", "", c.ClientIP())
 
 	c.JSON(201, gin.H{
 		"message": "模型创建成功",
@@ -170,7 +171,8 @@ func (h *ModelHandler) Update(c *gin.Context) {
 		return
 	}
 
-	model.RecordOpLog("模型更新", fmt.Sprintf("%s-%s", m.Provider, m.ModelID), uint(id), "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("模型更新", fmt.Sprintf("%s-%s", m.Provider, m.ModelID), uint(id), userID.(uint), "success", "", c.ClientIP())
 
 	c.JSON(200, gin.H{"message": "模型更新成功"})
 }
@@ -205,7 +207,8 @@ func (h *ModelHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	model.RecordOpLog("模型删除", fmt.Sprintf("%s-%s", m.Provider, m.ModelID), uint(id), "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("模型删除", fmt.Sprintf("%s-%s", m.Provider, m.ModelID), uint(id), userID.(uint), "success", "", c.ClientIP())
 
 	c.JSON(200, gin.H{"message": "模型删除成功"})
 }
@@ -240,7 +243,8 @@ func (h *ModelHandler) SetDefault(c *gin.Context) {
 		return
 	}
 
-	model.RecordOpLog("设为默认模型", fmt.Sprintf("%s-%s", m.Provider, m.ModelID), uint(id), "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("设为默认模型", fmt.Sprintf("%s-%s", m.Provider, m.ModelID), uint(id), userID.(uint), "success", "", c.ClientIP())
 
 	c.JSON(200, gin.H{"message": "已设为默认模型"})
 }
@@ -275,7 +279,8 @@ func (h *ModelHandler) UnsetDefault(c *gin.Context) {
 		return
 	}
 
-	model.RecordOpLog("取消默认模型", fmt.Sprintf("%s-%s", m.Provider, m.ModelID), uint(id), "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("取消默认模型", fmt.Sprintf("%s-%s", m.Provider, m.ModelID), uint(id), userID.(uint), "success", "", c.ClientIP())
 
 	c.JSON(200, gin.H{"message": "已取消默认模型"})
 }
@@ -291,8 +296,8 @@ func (h *ModelHandler) CheckAPI(c *gin.Context) {
 
 	success, err := h.service.CheckConnectivity(uint(id))
 	if err != nil {
-		zap.L().Error("model API check failed", 
-			zap.Uint("id", uint(id)), 
+		zap.L().Error("model API check failed",
+			zap.Uint("id", uint(id)),
 			zap.Error(err))
 		c.JSON(200, gin.H{
 			"success": false,
@@ -328,13 +333,13 @@ func (h *ModelHandler) GetDefault(c *gin.Context) {
 // POST /api/v1/models/test
 func (h *ModelHandler) CreateTest(c *gin.Context) {
 	var req struct {
-		Provider    string `json:"provider" binding:"required"`
-		ModelID     string `json:"model_id" binding:"required"`
-		BaseURL     string `json:"base_url" binding:"required"`
-		APIKey      string `json:"api_key" binding:"required"`
+		Provider    string  `json:"provider" binding:"required"`
+		ModelID     string  `json:"model_id" binding:"required"`
+		BaseURL     string  `json:"base_url" binding:"required"`
+		APIKey      string  `json:"api_key" binding:"required"`
 		Temperature float64 `json:"temperature"`
 		MaxTokens   int     `json:"max_tokens"`
-		Prompt      string `json:"prompt" binding:"required"`
+		Prompt      string  `json:"prompt" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": "参数错误: " + err.Error()})

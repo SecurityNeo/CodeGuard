@@ -24,14 +24,14 @@ func (h *NotifierHandler) List(c *gin.Context) {
 	}
 
 	type NotifierResponse struct {
-		ID             uint    `json:"id"`
-		Name           string  `json:"name"`
-		WebhookUrl     string  `json:"webhook_url"`
-		HasTemplate    bool    `json:"has_template"`
-		ProjectID      *uint   `json:"project_id"`
-		Enabled        bool    `json:"enabled"`
-		LastTestStatus string  `json:"last_test_status"`
-		CreatedAt      string  `json:"created_at"`
+		ID             uint   `json:"id"`
+		Name           string `json:"name"`
+		WebhookUrl     string `json:"webhook_url"`
+		HasTemplate    bool   `json:"has_template"`
+		ProjectID      *uint  `json:"project_id"`
+		Enabled        bool   `json:"enabled"`
+		LastTestStatus string `json:"last_test_status"`
+		CreatedAt      string `json:"created_at"`
 	}
 
 	result := make([]NotifierResponse, 0, len(notifiers))
@@ -94,7 +94,8 @@ func (h *NotifierHandler) Create(c *gin.Context) {
 		return
 	}
 
-	model.RecordOpLog("通知配置创建", notifier.Name, notifier.ID, "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("通知配置创建", notifier.Name, notifier.ID, userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "created", "data": map[string]interface{}{"id": notifier.ID}})
 }
 
@@ -118,7 +119,8 @@ func (h *NotifierHandler) Update(c *gin.Context) {
 		return
 	}
 
-	model.RecordOpLog("通知配置更新", strconv.Itoa(id), uint(id), "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("通知配置更新", strconv.Itoa(id), uint(id), userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "updated"})
 }
 
@@ -144,7 +146,8 @@ func (h *NotifierHandler) UpdateTemplate(c *gin.Context) {
 		return
 	}
 
-	model.RecordOpLog("通知模板更新", strconv.Itoa(id), uint(id), "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("通知模板更新", strconv.Itoa(id), uint(id), userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "updated"})
 }
 
@@ -159,7 +162,8 @@ func (h *NotifierHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	model.RecordOpLog("通知配置删除", notifier.Name, uint(id), "success", "", c.ClientIP())
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("通知配置删除", notifier.Name, uint(id), userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "deleted"})
 }
 
