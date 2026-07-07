@@ -1636,7 +1636,7 @@ function renderTasks(tasks) {
             const hasSelectedHistory = selectedIds.length > 0;
 
             if (!hasNewComment && !hasSelectedHistory) {
-                if (!confirm('未选择任何复核意见，将直接重新评审（与点击普通重试效果相同），是否继续？')) return;
+                showToast('未添加复核意见，将直接重新评审', 'info');
             }
 
             try {
