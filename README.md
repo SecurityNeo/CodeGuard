@@ -333,22 +333,13 @@ go run ./cmd/main.go
 
 ## 📦 Docker 镜像构建
 
-### 方式一：多阶段构建（推荐，有外网环境）
+### Docker 镜像构建
 
 ```bash
 docker build -t codeguard:latest .
 ```
 
-### 方式二：本地预编译 + 快速构建（离线/CI 环境）
-
-```bash
-cd backend
-go build -ldflags="-w -s" -o ai-optimizer ./cmd/main.go
-cd ..
-docker build -f Dockerfile.quick -t codeguard:latest .
-```
-
-### 方式三：一键脚本
+一键构建脚本：
 
 ```bash
 ./scripts/build-docker.sh 1.2.0 latest

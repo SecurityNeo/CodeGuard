@@ -393,6 +393,8 @@ func (h *StatisticsHandler) Get(c *gin.Context) {
 
 	var sources []trendSource
 	trendQueryDB := model.DB.Model(&model.MergeRequestReviewLog{}).Select("id, mr_created_at, synced_at, score, additions, deletions")
+	// 补上用户角色过滤（Bug：此前遗漏导致普通用户能看到所有人的质量趋势）
+	trendQueryDB = model.FilterByUser(trendQueryDB, user, "author")
 	if projectName != "" {
 		trendQueryDB = trendQueryDB.Where("project_name = ?", projectName)
 	}
