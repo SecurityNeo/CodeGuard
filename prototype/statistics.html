@@ -370,7 +370,7 @@
                 </div>
 
                 <!-- 第六行：时间趋势（仅管理员可见） -->
-                <div class="mb-6" data-admin-only>
+                <div class="mb-6" data-admin-only style="display: none;">
                     <div class="chart-card bg-white rounded-xl p-6 border">
                         <div class="flex items-center justify-between mb-4">
                             <div>
@@ -1201,6 +1201,8 @@
         });
 
         document.addEventListener('DOMContentLoaded', () => {
+            // 先根据角色显隐管理员专属区域，再加载数据，防止普通用户看到不该有的内容
+            applyAdminVisibility();
             initDateRange();
             loadFilterOptions();
             loadStatistics();

@@ -46,11 +46,15 @@
         }
     };
 
-    // ========== 页面加载后自动隐藏无权限元素 ==========
+    // ========== 页面加载后自动隐藏/显示管理员专属元素 ==========
     window.applyAdminVisibility = function() {
         const adminEls = document.querySelectorAll('[data-admin-only]');
         adminEls.forEach(el => {
-            if (!isAdmin()) {
+            if (isAdmin()) {
+                // 管理员：恢复默认显示（移除可能存在的 display:none）
+                el.style.display = '';
+            } else {
+                // 非管理员：隐藏
                 el.style.display = 'none';
             }
         });
