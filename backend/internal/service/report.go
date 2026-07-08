@@ -157,49 +157,40 @@ func buildPeriod(reportType string) periodInfo {
 
 func queryKPI(start, end time.Time) kpiData {
 	var k kpiData
+	// MR 总数（不排除 closed）
 	model.DB.Model(&model.MergeRequestReviewLog{}).
-		Select("COUNT(*) as total_m_rs, COALESCE(SUM(additions + deletions), 0) as total_changes, "+
-			"COALESCE(SUM(CASE WHEN score > 0 THEN score ELSE 0 END), 0) as avg_score, "+
-			"COUNT(CASE WHEN score > 0 THEN 1 END) as score_count").
+		Select("COUNT(*) as total_m_rs").
 		Where("COALESCE(mr_created_at, synced_at) >= ?", start).
 		Where("COALESCE(mr_created_at, synced_at) < ?", end).
 		Scan(&k)
-	if k.TotalMRs == 0 {
-		return k
+	// 评分与代码变更量（排除 closed MR）
+	var scoreChangeKpi struct {
+		TotalChanges int64   `gorm:"column:total_changes"`
+		AvgScore     float64 `gorm:"column:avg_score"`
+		ScoreCount   int64   `gorm:"column:score_count"`
 	}
-	// AvgScore currently holds sum of scores, compute average
-	var tmp struct{ ScoreCount int64 }
 	model.DB.Model(&model.MergeRequestReviewLog{}).
-		Select("COUNT(CASE WHEN score > 0 THEN 1 END) as score_count").
+		Select("COALESCE(SUM(additions + deletions), 0) as total_changes, "+
+			"COALESCE(AVG(CASE WHEN score > 0 THEN score END), 0) as avg_score, "+
+			"COUNT(CASE WHEN score > 0 THEN 1 END) as score_count").
+		Where("mr_state != ?", "closed").
 		Where("COALESCE(mr_created_at, synced_at) >= ?", start).
 		Where("COALESCE(mr_created_at, synced_at) < ?", end).
-		Scan(&tmp)
-	if tmp.ScoreCount > 0 {
-		// re-query correctly
-		var k2 struct {
-			TotalMRs     int64   `gorm:"column:total_mrs"`
-			TotalChanges int64   `gorm:"column:total_changes"`
-			AvgScore     float64 `gorm:"column:avg_score"`
-			ScoreCount   int64   `gorm:"column:score_count"`
-		}
-		model.DB.Model(&model.MergeRequestReviewLog{}).
-			Select("COUNT(*) as total_mrs, COALESCE(SUM(additions + deletions), 0) as total_changes, "+
-				"COALESCE(AVG(CASE WHEN score > 0 THEN score END), 0) as avg_score, "+
-				"COUNT(CASE WHEN score > 0 THEN 1 END) as score_count").
-			Where("COALESCE(mr_created_at, synced_at) >= ?", start).
-			Where("COALESCE(mr_created_at, synced_at) < ?", end).
-			Scan(&k2)
-		k = kpiData{TotalMRs: k2.TotalMRs, TotalChanges: k2.TotalChanges, AvgScore: k2.AvgScore}
-	}
+		Scan(&scoreChangeKpi)
+	k.TotalChanges = scoreChangeKpi.TotalChanges
+	k.AvgScore = scoreChangeKpi.AvgScore
 
+	// 低质量 MR（排除 closed）
 	var lq int64
 	model.DB.Model(&model.MergeRequestReviewLog{}).
 		Where("score > 0 AND score < 60").
+		Where("mr_state != ?", "closed").
 		Where("COALESCE(mr_created_at, synced_at) >= ?", start).
 		Where("COALESCE(mr_created_at, synced_at) < ?", end).
 		Count(&lq)
 	k.LowQuality = lq
 
+	// 活跃项目数（不排除 closed）
 	var ap int64
 	model.DB.Model(&model.MergeRequestReviewLog{}).
 		Select("COUNT(DISTINCT project_name)").
@@ -209,14 +200,15 @@ func queryKPI(start, end time.Time) kpiData {
 	k.ActiveProjects = ap
 
 	// -------- 第二行 KPI --------
-	// 新增/删除行数
+	// 新增/删除行数（排除 closed MR）
 	model.DB.Model(&model.MergeRequestReviewLog{}).
 		Select("COALESCE(SUM(additions), 0) as additions, COALESCE(SUM(deletions), 0) as deletions").
+		Where("mr_state != ?", "closed").
 		Where("COALESCE(mr_created_at, synced_at) >= ?", start).
 		Where("COALESCE(mr_created_at, synced_at) < ?", end).
 		Scan(&k)
 
-	// 代码Review次数
+	// 代码Review次数（不排除 closed）
 	var rc int64
 	model.DB.Model(&model.MergeRequestReviewLog{}).
 		Select("COALESCE(SUM(review_count), 0)").
@@ -355,6 +347,7 @@ func queryDevRanks(start, end time.Time) []devRank {
 			COALESCE(SUM(additions + deletions), 0) as changes
 		FROM merge_request_review_logs
 		WHERE author != ''
+			AND mr_state != 'closed'
 			AND COALESCE(mr_created_at, synced_at) >= ?
 			AND COALESCE(mr_created_at, synced_at) < ?
 		GROUP BY author
@@ -374,7 +367,8 @@ func queryProjectRanks(start, end time.Time) []projectRank {
 			COALESCE(AVG(CASE WHEN score > 0 THEN score END), 0) as avg_score,
 			SUM(CASE WHEN score > 0 AND score < 60 THEN 1 ELSE 0 END) as low_quality_num
 		FROM merge_request_review_logs
-		WHERE COALESCE(mr_created_at, synced_at) >= ?
+		WHERE mr_state != 'closed'
+			AND COALESCE(mr_created_at, synced_at) >= ?
 			AND COALESCE(mr_created_at, synced_at) < ?
 		GROUP BY project_name
 		ORDER BY count DESC
@@ -408,6 +402,7 @@ func queryLowQuality(start, end time.Time) []struct {
 	model.DB.Model(&model.MergeRequestReviewLog{}).
 		Select("project_name as project, mr_title as title, author, score, additions, deletions").
 		Where("score > 0 AND score < 60").
+		Where("mr_state != ?", "closed").
 		Where("COALESCE(mr_created_at, synced_at) >= ?", start).
 		Where("COALESCE(mr_created_at, synced_at) < ?", end).
 		Order("score ASC").Limit(5).
@@ -424,6 +419,7 @@ func queryScoreDist(start, end time.Time) scoreDist {
 				"SUM(CASE WHEN score >= 60 AND score < 80 THEN 1 ELSE 0 END) as pass, "+
 				"SUM(CASE WHEN score < 60 THEN 1 ELSE 0 END) as fail, "+
 				"COUNT(*) as total").
+		Where("mr_state != ?", "closed").
 		Where("COALESCE(mr_created_at, synced_at) >= ?", start).
 		Where("COALESCE(mr_created_at, synced_at) < ?", end).
 		Scan(&d)
@@ -449,6 +445,7 @@ func queryDevChanges(start, end time.Time) []struct {
 	model.DB.Model(&model.MergeRequestReviewLog{}).
 		Select("author, MAX(author_display_name) as author_display_name, COALESCE(SUM(additions + deletions), 0) as changes, COALESCE(SUM(additions), 0) as additions, COALESCE(SUM(deletions), 0) as deletions").
 		Where("author != ''").
+		Where("mr_state != ?", "closed").
 		Where("COALESCE(mr_created_at, synced_at) >= ?", start).
 		Where("COALESCE(mr_created_at, synced_at) < ?", end).
 		Group("author").Order("changes DESC").Limit(5).

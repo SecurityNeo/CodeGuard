@@ -154,23 +154,30 @@ func (h *StatisticsHandler) Get(c *gin.Context) {
 
 	// 按用户角色过滤
 	db = model.FilterByUser(db, user, "author")
+	// 已关闭 MR 不参与评分与代码变更量统计
+	// 注意：MR 数量统计（如项目活跃度、开发者提交数）不排除 closed
+	scoreChangeDB := db.Where("mr_state != ?", "closed")
 	if projectName != "" {
 		db = db.Where("project_name = ?", projectName)
+		scoreChangeDB = scoreChangeDB.Where("project_name = ?", projectName)
 	}
 	if author != "" {
 		db = db.Where("author = ?", author)
+		scoreChangeDB = scoreChangeDB.Where("author = ?", author)
 	}
 	if startDate != "" {
 		db = db.Where(dateCol+" >= ?", startDate)
+		scoreChangeDB = scoreChangeDB.Where(dateCol+" >= ?", startDate)
 	}
 	// endDate 仅在用户真正指定了日期才过滤；days=0 不限制时间时不设 endDate
 	if endDate != "" {
 		db = db.Where(dateCol+" <= ?", endDate)
+		scoreChangeDB = scoreChangeDB.Where(dateCol+" <= ?", endDate)
 	}
 
 	var resp StatisticsResponse
 
-	// 1. KPI 统计
+	// 1. KPI 统计（排除 closed MR 的评分与代码变更量）
 	type kpiAgg struct {
 		TotalMRs     int64   `gorm:"column:total_mrs"`
 		TotalChanges int64   `gorm:"column:total_changes"`
@@ -179,7 +186,7 @@ func (h *StatisticsHandler) Get(c *gin.Context) {
 		ActiveProjs  int64   `gorm:"column:active_projs"`
 	}
 	var kpi kpiAgg
-	_ = db.Session(&gorm.Session{}).Select(
+	_ = scoreChangeDB.Session(&gorm.Session{}).Select(
 		"COUNT(*) as total_mrs, " +
 			"COALESCE(SUM(additions + deletions), 0) as total_changes, " +
 			"COALESCE(SUM(CASE WHEN score > 0 THEN score ELSE 0 END), 0) as avg_score, " +
@@ -202,14 +209,14 @@ func (h *StatisticsHandler) Get(c *gin.Context) {
 	model.DB.Model(&model.Project{}).Count(&totalProjs)
 	resp.KPI.TotalProjects = totalProjs
 
-	// 2. 项目活跃度 TOP10
+	// 2. 项目活跃度 TOP10（MR 数量，不排除 closed）
 	var projectActivity []ProjectItem
 	_ = db.Session(&gorm.Session{}).Select("project_name as project, COUNT(*) as count").
 		Group("project_name").Order("count DESC").Limit(10).
 		Scan(&projectActivity).Error
 	resp.ProjectActivity = projectActivity
 
-	// 3. 开发者提交统计（全量）
+	// 3. 开发者提交统计（全量，MR 数量，不排除 closed）
 	var devCommits []AuthorItem
 	_ = db.Session(&gorm.Session{}).Select("author, COUNT(*) as count").
 		Where("author != ?", "").
@@ -217,14 +224,14 @@ func (h *StatisticsHandler) Get(c *gin.Context) {
 		Scan(&devCommits).Error
 	resp.DeveloperCommits = devCommits
 
-	// 4. 开发者平均得分（全量）
+	// 4. 开发者平均得分（排除 closed MR）
 	type devScoreRow struct {
 		Author string
 		Avg    float64
 		Count  int64
 	}
 	var devScores []devScoreRow
-	_ = db.Session(&gorm.Session{}).Select(
+	_ = scoreChangeDB.Session(&gorm.Session{}).Select(
 		"author, "+
 			"COALESCE(AVG(CASE WHEN score > 0 THEN score END), 0) as avg, "+
 			"COUNT(CASE WHEN score > 0 THEN 1 END) as count").
@@ -239,9 +246,9 @@ func (h *StatisticsHandler) Get(c *gin.Context) {
 		})
 	}
 
-	// 5. 人员代码变更统计（全量）
+	// 5. 人员代码变更统计（排除 closed MR）
 	var codeChanges []CodeChange
-	_ = db.Session(&gorm.Session{}).Select(
+	_ = scoreChangeDB.Session(&gorm.Session{}).Select(
 		"author, COALESCE(SUM(additions), 0) as additions, COALESCE(SUM(deletions), 0) as deletions").
 		Where("author != ?", "").
 		Group("author").
@@ -252,9 +259,9 @@ func (h *StatisticsHandler) Get(c *gin.Context) {
 	})
 	resp.CodeChanges = codeChanges
 
-	// 6. 评分分布
+	// 6. 评分分布（排除 closed MR）
 	var scoreDist ScoreDist
-	_ = db.Session(&gorm.Session{}).Select(
+	_ = scoreChangeDB.Session(&gorm.Session{}).Select(
 		"SUM(CASE WHEN score >= 90 THEN 1 ELSE 0 END) as excellent, " +
 			"SUM(CASE WHEN score >= 80 AND score < 90 THEN 1 ELSE 0 END) as good, " +
 			"SUM(CASE WHEN score >= 60 AND score < 80 THEN 1 ELSE 0 END) as pass, " +
@@ -262,7 +269,7 @@ func (h *StatisticsHandler) Get(c *gin.Context) {
 		Scan(&scoreDist).Error
 	resp.ScoreDistribution = scoreDist
 
-	// 7. MR 状态分布（排除 draft，draft 只是临时标记）
+	// 7. MR 状态分布（排除 draft，展示状态本身，不排除 closed）
 	var mrStatus []StatusItem
 	_ = db.Session(&gorm.Session{}).Select("mr_state as status, COUNT(*) as count").
 		Where("mr_state != ?", "draft").
@@ -270,18 +277,18 @@ func (h *StatisticsHandler) Get(c *gin.Context) {
 		Scan(&mrStatus).Error
 	resp.MRStatus = mrStatus
 
-	// 8. 低质量 MR TOP10（score < 60 或 score > 0 且最低）
+	// 8. 低质量 MR TOP10（排除 closed MR）
 	var lowQuality []LowQualityMR
-	_ = db.Session(&gorm.Session{}).Select(
+	_ = scoreChangeDB.Session(&gorm.Session{}).Select(
 		"project_name as project, mr_title as title, author, score, additions, deletions, additions + deletions as total_changes").
 		Where("score > 0 AND score < 60").
 		Order("score ASC").Limit(10).
 		Scan(&lowQuality).Error
 	resp.LowQualityMRs = lowQuality
 
-	// 9. 散点图数据（最多 500 个点，避免前端性能问题）
+	// 9. 散点图数据（排除 closed MR）
 	var scatter []ScatterPoint
-	_ = db.Session(&gorm.Session{}).Select(
+	_ = scoreChangeDB.Session(&gorm.Session{}).Select(
 		"additions + deletions as x, score as y, review_count, author, project_name as project, mr_title").
 		Where("score > 0").Order("id DESC").Limit(500).
 		Scan(&scatter).Error
@@ -348,6 +355,7 @@ func (h *StatisticsHandler) Get(c *gin.Context) {
 			}
 			_ = model.DB.Model(&model.MergeRequestReviewLog{}).
 				Where("project_name = ?", proj).
+				Where("mr_state != ?", "closed").
 				Select(
 					"COALESCE(AVG(CASE WHEN score > 0 THEN score END), 0) as avg_score, " +
 						"COALESCE(AVG(CASE WHEN additions + deletions > 0 THEN score / (additions + deletions) * 1000 ELSE 0 END), 0) as efficiency, " +
