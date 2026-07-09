@@ -384,29 +384,37 @@ func queryProjectRanks(start, end time.Time) []projectRank {
 }
 
 func queryLowQuality(start, end time.Time) []struct {
-	Project   string  `json:"project"`
-	Title     string  `json:"title"`
-	Author    string  `json:"author"`
-	Score     float64 `json:"score"`
-	Additions int     `json:"additions"`
-	Deletions int     `json:"deletions"`
+	Project             string  `json:"project"`
+	Title               string  `json:"title"`
+	Author              string  `json:"author"`
+	AuthorDisplayName   string  `json:"author_display_name"`
+	DisplayName         string  `json:"display_name"`
+	Score               float64 `json:"score"`
+	Additions           int     `json:"additions"`
+	Deletions           int     `json:"deletions"`
 } {
 	var list []struct {
-		Project   string  `json:"project"`
-		Title     string  `json:"title"`
-		Author    string  `json:"author"`
-		Score     float64 `json:"score"`
-		Additions int     `json:"additions"`
-		Deletions int     `json:"deletions"`
+		Project           string  `json:"project"`
+		Title             string  `json:"title"`
+		Author            string  `json:"author"`
+		AuthorDisplayName string  `json:"author_display_name"`
+		DisplayName       string  `json:"display_name"`
+		Score             float64 `json:"score"`
+		Additions         int     `json:"additions"`
+		Deletions         int     `json:"deletions"`
 	}
 	model.DB.Model(&model.MergeRequestReviewLog{}).
-		Select("project_name as project, mr_title as title, author, score, additions, deletions").
+		Select("project_name as project, mr_title as title, author, MAX(author_display_name) as author_display_name, score, additions, deletions").
 		Where("score > 0 AND score < 60").
 		Where("mr_state != ?", "closed").
 		Where("COALESCE(mr_created_at, synced_at) >= ?", start).
 		Where("COALESCE(mr_created_at, synced_at) < ?", end).
+		Group("project_name, mr_title, author, score, additions, deletions").
 		Order("score ASC").Limit(5).
 		Scan(&list)
+	for i := range list {
+		list[i].DisplayName = buildDisplayName(list[i].AuthorDisplayName, list[i].Author)
+	}
 	return list
 }
 
@@ -941,11 +949,27 @@ const reportTemplate = `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitiona
 <br><br>
 <!-- Low Quality Alerts -->
 {{if .LowQualityList}}
-<table cellpadding="0" cellspacing="0" border="0" width="852" bgcolor="#fff5f5"><tr><td style="padding:20px 28px;border:1px solid #ffcdd2;">
-<font face="Arial,Helvetica,sans-serif" size="2" color="#c62828"><b>&#128680; 低质量 MR 列表（评分 &lt; 60）</b></font><br><br>
+<table cellpadding="0" cellspacing="0" border="0" width="852" bgcolor="#ffffff"><tr><td style="padding:20px 28px;border-top:3px solid #f44336;">
+<font face="Arial,Helvetica,sans-serif" size="2" color="#c62828"><b>&#128680; 低质量 MR 列表（评分 &lt; 60）</b></font>
+<br><br>
+<table cellpadding="0" cellspacing="0" border="0" width="796">
+  <tr>
+    <td style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="130"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>项目</b></font></td>
+    <td style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="310"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>MR 标题</b></font></td>
+    <td align="center" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="140"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>作者</b></font></td>
+    <td align="center" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="55"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>评分</b></font></td>
+    <td align="right" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="105"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>变更量</b></font></td>
+  </tr>
 {{range .LowQualityList}}
-<font face="Arial,Helvetica,sans-serif" size="2" color="#666666">&nbsp;&nbsp;&nbsp;&nbsp;&#8226; <b>{{.Project}}</b> — {{.Title}} — {{.Author}} — <b>评分 {{printf "%.0f" .Score}}</b> — +{{.Additions}} / -{{.Deletions}}</font><br>
+  <tr>
+    <td style="padding:8px;border-bottom:1px solid #f0f0f0;" valign="top"><font face="Arial,Helvetica,sans-serif" size="1" color="#333333"><b>{{.Project}}</b></font></td>
+    <td style="padding:8px;border-bottom:1px solid #f0f0f0;" valign="top"><font face="Arial,Helvetica,sans-serif" size="1" color="#333333">{{.Title}}</font></td>
+    <td align="center" style="padding:8px;border-bottom:1px solid #f0f0f0;" valign="top"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666">{{.DisplayName}}</font></td>
+    <td align="center" style="padding:8px;border-bottom:1px solid #f0f0f0;" valign="top"><font face="Arial,Helvetica,sans-serif" size="2" color="#c62828"><b>{{printf "%.0f" .Score}}</b></font></td>
+    <td align="right" style="padding:8px;border-bottom:1px solid #f0f0f0;" valign="top"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666">+{{.Additions}} / -{{.Deletions}}</font></td>
+  </tr>
 {{end}}
+</table>
 </td></tr></table>
 <br>
 {{end}}
