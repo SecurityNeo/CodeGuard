@@ -154,9 +154,9 @@ func (h *StatisticsHandler) Get(c *gin.Context) {
 
 	// 按用户角色过滤
 	db = model.FilterByUser(db, user, "author")
-	// 已关闭 MR 不参与评分与代码变更量统计
-	// 注意：MR 数量统计（如项目活跃度、开发者提交数）不排除 closed
-	scoreChangeDB := db.Where("mr_state != ?", "closed")
+	// 已关闭 MR 不参与评分与代码变更量统计，但 MR 状态分布不排除 closed
+	// 使用 Session 复制避免修改原始 db，否则状态分布也会跟着排除 closed
+	scoreChangeDB := db.Session(&gorm.Session{}).Where("mr_state != ?", "closed")
 	if projectName != "" {
 		db = db.Where("project_name = ?", projectName)
 		scoreChangeDB = scoreChangeDB.Where("project_name = ?", projectName)
