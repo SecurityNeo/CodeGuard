@@ -26,7 +26,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern=v{{version}}
+            type=ref,event=tag
           flavor: |
             latest=auto
 
