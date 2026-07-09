@@ -949,7 +949,7 @@ const reportTemplate = `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitiona
 <br><br>
 <!-- Low Quality Alerts -->
 {{if .LowQualityList}}
-<table cellpadding="0" cellspacing="0" border="0" width="852"><tr><td style="padding:20px 28px;">
+<table cellpadding="0" cellspacing="0" border="0" width="852"><tr><td style="padding:20px 0px;">
 <font face="Arial,Helvetica,sans-serif" size="3" color="#1a1a2e"><b>&#128680; 低质量 MR 列表（评分 &lt; 60）</b></font>
 <br><br>
 <table cellpadding="0" cellspacing="0" border="0" width="796">
