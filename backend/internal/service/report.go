@@ -949,14 +949,14 @@ const reportTemplate = `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitiona
 <br><br>
 <!-- Low Quality Alerts -->
 {{if .LowQualityList}}
-<table cellpadding="0" cellspacing="0" border="0" width="852" bgcolor="#ffffff"><tr><td style="padding:20px 28px;border-top:3px solid #f44336;">
-<font face="Arial,Helvetica,sans-serif" size="2" color="#c62828"><b>&#128680; 低质量 MR 列表（评分 &lt; 60）</b></font>
+<table cellpadding="0" cellspacing="0" border="0" width="852"><tr><td style="padding:20px 28px;">
+<font face="Arial,Helvetica,sans-serif" size="3" color="#1a1a2e"><b>&#128680; 低质量 MR 列表（评分 &lt; 60）</b></font>
 <br><br>
 <table cellpadding="0" cellspacing="0" border="0" width="796">
   <tr>
-    <td style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="130"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>项目</b></font></td>
+    <td style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="110"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>项目</b></font></td>
     <td style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="310"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>MR 标题</b></font></td>
-    <td align="center" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="140"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>作者</b></font></td>
+    <td align="center" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="180"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>作者</b></font></td>
     <td align="center" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="55"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>评分</b></font></td>
     <td align="right" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="105"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>变更量</b></font></td>
   </tr>
