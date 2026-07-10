@@ -32,6 +32,10 @@ func (h *TemplateHandler) Create(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+	// 如果未设置 Prompt 但有 CustomInstruction，动态生成
+	if t.Prompt == "" && t.CustomInstruction != "" {
+		t.Prompt = "请根据以下规则进行代码审查：\n\n" + t.CustomInstruction
+	}
 	err := service.NewTemplateService().Create(&t)
 	if err != nil {
 		zap.L().Error("create template failed", zap.Error(err))
@@ -39,7 +43,7 @@ func (h *TemplateHandler) Create(c *gin.Context) {
 		return
 	}
 	userID, _ := c.Get("user_id")
-	model.RecordOpLog("模板创建", t.Name, t.ID, userID.(uint), "success", "", c.ClientIP())
+	model.RecordOpLog("配置化模板创建", t.Name, t.ID, userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "created", "data": t})
 }
 
@@ -60,15 +64,40 @@ func (h *TemplateHandler) Update(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+	updates := make(map[string]interface{})
+
+	// 支持所有新的配置化字段
+	if v, ok := req["name"]; ok {
+		updates["name"] = v.(string)
+	}
+	if v, ok := req["description"]; ok {
+		updates["description"] = v.(string)
+	}
+	if v, ok := req["prompt"]; ok {
+		updates["prompt"] = v.(string)
+	}
+	if v, ok := req["custom_instruction"]; ok {
+		updates["custom_instruction"] = v.(string)
+	}
+	if v, ok := req["dimension_weights"]; ok {
+		updates["dimension_weights"] = v.(string)
+	}
+	if v, ok := req["max_rules_per_review"]; ok {
+		updates["max_rules_per_review"] = int(v.(float64))
+	}
+	if v, ok := req["gitlab_comment_template"]; ok {
+		updates["gitlab_comment_template"] = v.(string)
+	}
+
 	t, _ := service.NewTemplateService().Get(uint(id))
-	err := service.NewTemplateService().Update(uint(id), req)
+	err := service.NewTemplateService().Update(uint(id), updates)
 	if err != nil {
 		zap.L().Error("update template failed", zap.Error(err))
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 	userID, _ := c.Get("user_id")
-	model.RecordOpLog("模板更新", t.Name, uint(id), userID.(uint), "success", "", c.ClientIP())
+	model.RecordOpLog("配置化模板更新", t.Name, uint(id), userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "updated"})
 }
 

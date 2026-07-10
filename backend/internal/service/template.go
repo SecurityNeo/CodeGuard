@@ -50,9 +50,13 @@ func (s *TemplateService) Clone(id uint, newName string) (*model.ProjectTemplate
 		return nil, err
 	}
 	clone := model.ProjectTemplate{
-		Name:        newName,
-		Description: original.Description,
-		Prompt:      original.Prompt,
+		Name:                  newName,
+		Description:           original.Description,
+		Prompt:                original.Prompt,
+		CustomInstruction:     original.CustomInstruction,
+		DimensionWeights:      original.DimensionWeights,
+		MaxRulesPerReview:     original.MaxRulesPerReview,
+		GitLabCommentTemplate: original.GitLabCommentTemplate,
 	}
 	if err := model.DB.Create(&clone).Error; err != nil {
 		return nil, err

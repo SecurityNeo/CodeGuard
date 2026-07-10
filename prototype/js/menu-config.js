@@ -54,6 +54,14 @@ const MENU_CONFIG = [
         role: ['admin']
     },
 
+    {
+        id: 'project-templates',
+        name: '配置化模板管理',
+        href: 'project-templates.html',
+        icon: 'fa-cogs',
+        role: ['admin']
+    },
+
     // ========== 通知管理（折叠组）==========
     {
         id: 'notify-group',

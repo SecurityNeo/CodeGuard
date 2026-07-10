@@ -166,6 +166,9 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 	r.GET("/templates.html", func(c *gin.Context) {
 		c.File(frontendPath + "/templates.html")
 	})
+	r.GET("/project-templates.html", func(c *gin.Context) {
+		c.File(frontendPath + "/project-templates.html")
+	})
 	r.GET("/project-detail.html", func(c *gin.Context) {
 		c.File(frontendPath + "/project-detail.html")
 	})
