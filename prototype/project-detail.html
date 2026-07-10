@@ -29,8 +29,9 @@
         input:checked + .slider { background-color: #3b82f6; }
         input:checked + .slider:before { transform: translateX(18px); }
         .severity-critical { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
-        .severity-error { background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
-        .severity-warning { background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        .severity-high { background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        .severity-medium { background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        .severity-low { background: #ede9fe; color: #6d28d9; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
         .severity-info { background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
         .rule-category-filter { padding: 4px 12px; border-radius: 16px; font-size: 13px; cursor: pointer; border: 1px solid #e5e7eb; }
         .rule-category-filter.active { background: #3b82f6; color: white; border-color: #3b82f6; }
@@ -486,7 +487,7 @@
         tbody.innerHTML = filtered.map(r => {
             const cfg = projectRulesMap[r.ID] || {};
             const isEnabled = typeof cfg.is_enabled === 'boolean' ? cfg.is_enabled : (r.is_builtin ? true : false);
-            const severity = cfg.severity || r.default_severity || 'warning';
+            const severity = cfg.severity || r.default_severity || 'medium';
             return `
                 <tr class="hover:bg-gray-50 ${isEnabled ? '' : 'opacity-50'}">
                     <td class="px-4 py-3">
@@ -521,11 +522,11 @@
     function renderSeverityBadge(sev) {
         const cls = {
             critical: 'severity-critical',
-            high: 'severity-error',
-            medium: 'severity-warning',
-            low: 'severity-info',
+            high: 'severity-high',
+            medium: 'severity-medium',
+            low: 'severity-low',
             info: 'severity-info'
-        }[sev] || 'severity-warning';
+        }[sev] || 'severity-info';
         const label = { critical: '严重', high: '高危', medium: '中危', low: '低危', info: '提示' }[sev] || sev;
         return `<span class="${cls}">${label}</span>`;
     }
