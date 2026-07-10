@@ -311,7 +311,7 @@ func initBuiltInReviewRules() {
 
 	for _, rule := range rules {
 		var existing ReviewRule
-		if err := DB.Where("code = ?", rule.Code).First(&existing).Error; err != nil {
+		if err := SilentFirst(DB.Where("code = ?", rule.Code), &existing); err != nil {
 			// 不存在则插入
 			if err := DB.Create(&rule).Error; err != nil {
 				zap.L().Warn("init built-in rule failed", zap.String("code", rule.Code), zap.Error(err))
