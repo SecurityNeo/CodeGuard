@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <style>html{background-color:#1e293b;}</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>评审规则库 - CodeGuard</title>
+    <script src="js/auth.js?v=5"></script>
+    <script src="js/menu-config.js?v=2"></script>
+    <script src="js/sidebar.js?v=2"></script>
+    <link rel="stylesheet" href="/static/fontawesome/6.5.0/css/all.min.css">
+    <style>
+        .sidebar-item:hover { background-color: rgba(255,255,255,0.1); }
+        .sidebar-item.active { background-color: rgba(255,255,255,0.15); border-left: 3px solid #3b82f6; }
+        .modal { display: none; }
+        .modal.active { display: flex; }
+        .drawer { transform: translateX(100%); transition: transform 0.3s ease; }
+        .drawer.active { transform: translateX(0); }
+        .rule-card { transition: all 0.2s ease; }
+        .rule-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .severity-critical { border-left-color: #dc2626; }
+        .severity-high { border-left-color: #ea580c; }
+        .severity-medium { border-left-color: #ca8a04; }
+        .severity-low { border-left-color: #2563eb; }
+        .severity-info { border-left-color: #6b7280; }
+        .category-security { background-color: #fef2f2; color: #dc2626; }
+        .category-performance { background-color: #fff7ed; color: #ea580c; }
+        .category-readability { background-color: #eff6ff; color: #2563eb; }
+        .category-maintainability { background-color: #f0fdf4; color: #16a34a; }
+        .category-test_coverage { background-color: #faf5ff; color: #9333ea; }
+        .switch { position: relative; display: inline-block; width: 36px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .3s; border-radius: 20px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background-color: #3b82f6; }
+        input:checked + .slider:before { transform: translateX(16px); }
+        .toast { position: fixed; top: 20px; right: 20px; z-index: 9999; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .language-tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; background-color: #f3f4f6; color: #6b7280; }
+        .built-in-badge { font-size: 10px; padding: 1px 6px; border-radius: 4px; background-color: #dbeafe; color: #1e40af; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+
+<div id="page-transition" style="position:fixed;top:0;left:0;right:0;bottom:0;background:#1e293b;z-index:99999;transition:opacity .25s ease;"></div>
+<script>
+(function(){
+  function hide(){var el=document.getElementById('page-transition');if(el){el.style.opacity='0';setTimeout(function(){el.remove();},250);}}
+  if(document.readyState==='complete'){hide();}else{window.addEventListener('load',hide);}
+})();
+</script>
+<div id="toastContainer"></div>
+
+<div class="flex h-screen">
+    <!-- 侧边栏 -->
+    <aside id="sidebar" class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
+        <div class="p-6">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-robot text-xl"></i>
+                </div>
+                <div><h1 class="font-bold text-lg">CodeGuard</h1><p class="text-xs text-gray-400">代码智能门禁</p></div>
+            </div>
+        </div>
+        <nav class="flex-1 px-3 py-4 space-y-1"></nav>
+        <div class="p-4 border-t border-slate-700">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center"><i class="fas fa-user text-sm"></i></div>
+                <div class="text-sm flex-1">
+                    <div class="font-medium" id="currentUser">加载中…</div>
+                    <div class="text-xs text-gray-400">开发者</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 overflow-y-auto">
+        <header class="bg-white border-b px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+            <div>
+                <h2 class="text-xl font-bold text-gray-800">AI 评审规则库</h2>
+                <p class="text-sm text-gray-500 mt-1">管理代码审查规则，按语言和维度分类</p>
+            </div>
+            <button data-admin-only onclick="openCreateModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 flex items-center gap-2">
+                <i class="fas fa-plus"></i>创建自定义规则
+            </button>
+        </header>
+
+        <div class="p-8 space-y-6">
+            <!-- 筛选栏 -->
+            <div class="bg-white rounded-xl p-4 border flex items-center gap-4 flex-wrap">
+                <div class="flex-1 min-w-[200px]">
+                    <input type="text" id="searchInput" placeholder="搜索规则名称或编码..."
+                           class="w-full px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                           onkeyup="if(event.key==='Enter')loadRules()">
+                </div>
+                <select id="categoryFilter" onchange="loadRules()" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <option value="">全部维度</option>
+                    <option value="security">安全性</option>
+                    <option value="performance">性能</option>
+                    <option value="readability">可读性</option>
+                    <option value="maintainability">可维护性</option>
+                    <option value="test_coverage">测试覆盖</option>
+                </select>
+                <select id="languageFilter" onchange="loadRules()" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <option value="">全部语言</option>
+                    <option value="common">通用</option>
+                    <option value="golang">Go</option>
+                    <option value="python">Python</option>
+                    <option value="frontend">前端</option>
+                    <option value="java">Java</option>
+                </select>
+                <select id="severityFilter" onchange="loadRules()" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <option value="">全部级别</option>
+                    <option value="critical">严重</option>
+                    <option value="high">高危</option>
+                    <option value="medium">中危</option>
+                    <option value="low">低危</option>
+                    <option value="info">提示</option>
+                </select>
+                <button onclick="loadRules()" class="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50">
+                    <i class="fas fa-redo mr-1"></i>刷新
+                </button>
+            </div>
+
+            <!-- 统计 -->
+            <div class="flex items-center gap-6 text-sm text-gray-500">
+                <span>共 <b id="totalCount" class="text-gray-800">0</b> 条规则</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500"></span>严重</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-orange-500"></span>高危</span>
+                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-yellow-500"></span>中危</span>
+            </div>
+
+            <!-- 规则卡片列表 -->
+            <div id="rulesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- 动态加载 -->
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- 规则详情 Drawer -->
+<div id="detailDrawer" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/30" onclick="closeDetailDrawer()"></div>
+    <div class="absolute right-0 top-0 bottom-0 w-[480px] bg-white shadow-2xl drawer" id="detailDrawerContent">
+        <div class="h-full flex flex-col">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="font-bold text-lg" id="drawerTitle">规则详情</h3>
+                <button onclick="closeDetailDrawer()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 space-y-4" id="drawerBody">
+                <!-- 动态填充 -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 创建规则 Modal -->
+<div id="createModal" class="modal fixed inset-0 z-50 items-center justify-center bg-black/50 hidden">
+    <div class="bg-white rounded-xl w-[600px] max-h-[80vh] overflow-y-auto shadow-2xl">
+        <div class="px-6 py-4 border-b flex items-center justify-between">
+            <h3 class="font-bold text-lg">创建自定义规则</h3>
+            <button onclick="closeCreateModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="p-6 space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">规则编码 <span class="text-red-500">*</span></label>
+                <input type="text" id="createCode" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="如 custom-sql-check">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">规则名称 <span class="text-red-500">*</span></label>
+                <input type="text" id="createName" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="如 SQL注入检查">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">维度 <span class="text-red-500">*</span></label>
+                    <select id="createCategory" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="security">安全性</option>
+                        <option value="performance">性能</option>
+                        <option value="readability">可读性</option>
+                        <option value="maintainability">可维护性</option>
+                        <option value="test_coverage">测试覆盖</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">编程语言 <span class="text-red-500">*</span></label>
+                    <select id="createLanguage" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="common">通用</option>
+                        <option value="golang">Go</option>
+                        <option value="python">Python</option>
+                        <option value="frontend">前端</option>
+                        <option value="java">Java</option>
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">严重级别 <span class="text-red-500">*</span></label>
+                <select id="createSeverity" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    <option value="critical">严重</option>
+                    <option value="high">高危</option>
+                    <option value="medium">中危</option>
+                    <option value="low">低危</option>
+                    <option value="info">提示</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">规则说明</label>
+                <textarea id="createDescription" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="简要描述此规则检查的内容..."></textarea>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Prompt 片段 <span class="text-red-500">*</span></label>
+                <textarea id="createPrompt" rows="4" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono" placeholder="输入给 LLM 的检查指令..."></textarea>
+            </div>
+        </div>
+        <div class="px-6 py-4 border-t flex justify-end gap-3">
+            <button onclick="closeCreateModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">取消</button>
+            <button onclick="submitCreateRule()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">创建</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let rulesData = [];
+
+const severityLabels = { critical: '严重', high: '高危', medium: '中危', low: '低危', info: '提示' };
+const severityColors = { critical: 'text-red-600 bg-red-50', high: 'text-orange-600 bg-orange-50', medium: 'text-yellow-600 bg-yellow-50', low: 'text-blue-600 bg-blue-50', info: 'text-gray-600 bg-gray-50' };
+const categoryLabels = { security: '安全性', performance: '性能', readability: '可读性', maintainability: '可维护性', test_coverage: '测试覆盖' };
+const languageLabels = { common: '通用', golang: 'Go', python: 'Python', frontend: '前端', java: 'Java' };
+
+async function loadRules() {
+    const keyword = document.getElementById('searchInput').value;
+    const category = document.getElementById('categoryFilter').value;
+    const language = document.getElementById('languageFilter').value;
+    const severity = document.getElementById('severityFilter').value;
+
+    const params = new URLSearchParams();
+    if (keyword) params.append('keyword', keyword);
+    if (category) params.append('category', category);
+    if (language) params.append('language', language);
+    if (severity) params.append('severity', severity);
+
+    const grid = document.getElementById('rulesGrid');
+    grid.innerHTML = '<div class="col-span-full text-center py-12 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>加载中...</div>';
+
+    try {
+        const res = await fetch(API_BASE + '/admin/review-rules?' + params.toString(), { headers: authHeaders() });
+        const data = await res.json();
+        rulesData = data.data || [];
+        renderRules();
+        document.getElementById('totalCount').textContent = rulesData.length;
+    } catch (err) {
+        grid.innerHTML = '<div class="col-span-full text-center py-12 text-red-500">加载失败: ' + err.message + '</div>';
+    }
+}
+
+function renderRules() {
+    const grid = document.getElementById('rulesGrid');
+    if (rulesData.length === 0) {
+        grid.innerHTML = '<div class="col-span-full text-center py-12 text-gray-400">暂无规则</div>';
+        return;
+    }
+
+    grid.innerHTML = rulesData.map(rule => `
+        <div class="rule-card bg-white rounded-lg border border-gray-200 p-4 cursor-pointer severity-${rule.severity}" style="border-left-width: 4px;" onclick="showRuleDetail(${rule.id})">
+            <div class="flex items-start justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-medium px-2 py-0.5 rounded ${severityColors[rule.severity] || 'text-gray-600 bg-gray-50'}">${severityLabels[rule.severity] || rule.severity}</span>
+                    <span class="text-xs px-2 py-0.5 rounded category-${rule.category}">${categoryLabels[rule.category] || rule.category}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    ${rule.is_built_in ? '<span class="built-in-badge">内置</span>' : '<span class="text-xs px-2 py-0.5 rounded bg-green-50 text-green-600">自定义</span>'}
+                    <label class="switch" onclick="event.stopPropagation();toggleRuleEnabled(${rule.id}, this)">
+                        <input type="checkbox" ${rule.is_enabled ? 'checked' : ''}>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            <h4 class="font-semibold text-gray-800 text-sm mb-1">${rule.name}</h4>
+            <p class="text-xs text-gray-500 mb-2 font-mono">${rule.code}</p>
+            <p class="text-xs text-gray-600 line-clamp-2 mb-3">${rule.description || '暂无说明'}</p>
+            <div class="flex items-center gap-2">
+                <span class="language-tag">${languageLabels[rule.language] || rule.language}</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function toggleRuleEnabled(ruleId, switchEl) {
+    const checkbox = switchEl.querySelector('input');
+    const newState = checkbox.checked;
+
+    try {
+        const res = await fetch(API_BASE + '/admin/review-rules/batch-enable', {
+            method: 'PUT',
+            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rule_ids: [ruleId], is_enabled: newState })
+        });
+        if (!res.ok) throw new Error('更新失败');
+        showToast(newState ? '规则已启用' : '规则已禁用');
+    } catch (err) {
+        checkbox.checked = !newState;
+        showToast('操作失败: ' + err.message, 'error');
+    }
+}
+
+function showRuleDetail(ruleId) {
+    const rule = rulesData.find(r => r.id === ruleId);
+    if (!rule) return;
+
+    document.getElementById('drawerTitle').textContent = rule.name;
+    document.getElementById('drawerBody').innerHTML = `
+        <div class="space-y-4">
+            <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs font-medium px-2 py-0.5 rounded ${severityColors[rule.severity] || ''}">${severityLabels[rule.severity] || rule.severity}</span>
+                <span class="text-xs px-2 py-0.5 rounded category-${rule.category}">${categoryLabels[rule.category] || rule.category}</span>
+                <span class="language-tag">${languageLabels[rule.language] || rule.language}</span>
+                ${rule.is_built_in ? '<span class="built-in-badge">内置规则</span>' : '<span class="text-xs px-2 py-0.5 rounded bg-green-50 text-green-600">自定义规则</span>'}
+            </div>
+            <div>
+                <label class="text-xs text-gray-500">规则编码</label>
+                <p class="text-sm font-mono bg-gray-50 px-3 py-2 rounded">${rule.code}</p>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500">规则说明</label>
+                <p class="text-sm text-gray-700 bg-gray-50 px-3 py-2 rounded">${rule.description || '暂无说明'}</p>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500">Prompt 片段</label>
+                <pre class="text-xs bg-gray-900 text-gray-100 px-3 py-3 rounded overflow-x-auto">${rule.prompt || '暂无'}</pre>
+            </div>
+            ${!rule.is_built_in ? `
+            <div class="pt-4 border-t flex gap-2">
+                <button onclick="deleteRule(${rule.id})" class="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm hover:bg-red-100">
+                    <i class="fas fa-trash mr-1"></i>删除规则
+                </button>
+            </div>
+            ` : ''}
+        </div>
+    `;
+
+    document.getElementById('detailDrawer').classList.remove('hidden');
+    setTimeout(() => document.getElementById('detailDrawerContent').classList.add('active'), 10);
+}
+
+function closeDetailDrawer() {
+    document.getElementById('detailDrawerContent').classList.remove('active');
+    setTimeout(() => document.getElementById('detailDrawer').classList.add('hidden'), 300);
+}
+
+async function deleteRule(ruleId) {
+    if (!confirm('确定要删除此自定义规则吗？')) return;
+    try {
+        const res = await fetch(API_BASE + '/admin/review-rules/' + ruleId, {
+            method: 'DELETE',
+            headers: authHeaders()
+        });
+        if (!res.ok) throw new Error('删除失败');
+        closeDetailDrawer();
+        loadRules();
+        showToast('规则已删除');
+    } catch (err) {
+        showToast('删除失败: ' + err.message, 'error');
+    }
+}
+
+function openCreateModal() {
+    document.getElementById('createModal').classList.remove('hidden');
+    document.getElementById('createModal').classList.add('active');
+}
+
+function closeCreateModal() {
+    document.getElementById('createModal').classList.remove('active');
+    setTimeout(() => document.getElementById('createModal').classList.add('hidden'), 200);
+}
+
+async function submitCreateRule() {
+    const payload = {
+        code: document.getElementById('createCode').value.trim(),
+        name: document.getElementById('createName').value.trim(),
+        category: document.getElementById('createCategory').value,
+        language: document.getElementById('createLanguage').value,
+        severity: document.getElementById('createSeverity').value,
+        description: document.getElementById('createDescription').value.trim(),
+        prompt: document.getElementById('createPrompt').value.trim()
+    };
+
+    if (!payload.code || !payload.name || !payload.prompt) {
+        showToast('请填写必填项', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch(API_BASE + '/admin/review-rules', {
+            method: 'POST',
+            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('创建失败');
+        closeCreateModal();
+        loadRules();
+        showToast('规则创建成功');
+    } catch (err) {
+        showToast('创建失败: ' + err.message, 'error');
+    }
+}
+
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = 'toast bg-white border rounded-lg shadow-lg px-4 py-3 mb-2 flex items-center gap-2';
+    toast.innerHTML = type === 'success'
+        ? `<i class="fas fa-check-circle text-green-500"></i><span class="text-sm">${message}</span>`
+        : `<i class="fas fa-exclamation-circle text-red-500"></i><span class="text-sm">${message}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => { toast.remove(); }, 3000);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadRules();
+});
+</script>
+</body>
+</html>

@@ -294,8 +294,56 @@
 
                 <!-- AI 评审内容展示 -->
                 <div id="detailContentContainer" class="hidden">
-                    <label class="text-xs text-gray-500 font-medium">评审内容</label>
-                    <div class="mt-2 p-3 bg-gray-50 rounded-lg text-sm border border-gray-100 max-h-[400px] overflow-y-auto markdown-body" id="detailContentBody">-</div>
+                    <!-- Tab 切换 -->
+                    <div class="flex border-b mb-3">
+                        <button id="tabStructured" onclick="switchReviewTab('structured')" class="tab-btn review-tab active px-4 py-2 text-sm font-medium border-b-2 border-blue-500 text-blue-600">结构化评审</button>
+                        <button id="tabRaw" onclick="switchReviewTab('raw')" class="tab-btn review-tab px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">原始内容</button>
+                    </div>
+                    
+                    <!-- 结构化评审面板 -->
+                    <div id="structuredReviewPanel" class="review-panel">
+                        <!-- 维度评分 -->
+                        <div id="dimensionScoresArea" class="mb-4 hidden">
+                            <div class="flex items-center gap-4 mb-3">
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold text-blue-600" id="structuredTotalScore">-</div>
+                                    <div class="text-xs text-gray-500">综合评分</div>
+                                </div>
+                                <div class="flex-1 grid grid-cols-5 gap-2" id="dimensionBars"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Issue 筛选 -->
+                        <div class="flex items-center gap-2 mb-3 flex-wrap">
+                            <span class="text-xs text-gray-500">筛选：</span>
+                            <button onclick="filterIssues('all')" class="issue-filter-btn active text-xs px-2 py-1 rounded bg-blue-100 text-blue-700" data-filter="all">全部</button>
+                            <button onclick="filterIssues('pending')" class="issue-filter-btn text-xs px-2 py-1 rounded bg-gray-100 text-gray-600" data-filter="pending">待处理</button>
+                            <button onclick="filterIssues('accepted')" class="issue-filter-btn text-xs px-2 py-1 rounded bg-green-100 text-green-700" data-filter="accepted">已采纳</button>
+                            <button onclick="filterIssues('rejected')" class="issue-filter-btn text-xs px-2 py-1 rounded bg-red-100 text-red-700" data-filter="rejected">已拒绝</button>
+                            <select id="issueFileFilter" onchange="renderIssues()" class="text-xs px-2 py-1 border rounded ml-auto">
+                                <option value="">所有文件</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Issue 列表 -->
+                        <div id="issuesListArea" class="space-y-2 max-h-[400px] overflow-y-auto">
+                            <div class="text-center text-gray-400 py-8">加载中...</div>
+                        </div>
+                        
+                        <!-- 批量操作 -->
+                        <div id="batchActionBar" class="mt-3 pt-3 border-t hidden">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-gray-500">已选 <span id="selectedIssueCount" class="font-bold">0</span> 项</span>
+                                <button onclick="batchAcceptIssues()" class="text-xs px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700">批量采纳</button>
+                                <button onclick="batchRejectIssues()" class="text-xs px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700">批量拒绝</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 原始内容面板 -->
+                    <div id="rawReviewPanel" class="review-panel hidden">
+                        <div class="mt-2 p-3 bg-gray-50 rounded-lg text-sm border border-gray-100 max-h-[400px] overflow-y-auto markdown-body" id="detailContentBody">-</div>
+                    </div>
                 </div>
             </div>
             <div class="px-6 py-4 border-t flex justify-end gap-3">
@@ -597,9 +645,17 @@ function renderTasks(tasks) {
                     errorContainer.classList.add('hidden');
                 }
                 
-                // 任务详情弹窗不展示评审内容
+                // 任务详情弹窗展示评审内容
                 const contentContainer = document.getElementById('detailContentContainer');
-                contentContainer.classList.add('hidden');
+                if (isReviewDetail && t.status === 'success') {
+                    contentContainer.classList.remove('hidden');
+                    // 加载结构化评审
+                    loadStructuredReview(t.id);
+                    // 也填充原始内容作为 fallback
+                    document.getElementById('detailContentBody').innerHTML = t.ai_response ? marked.parse(maskSensitive(t.ai_response)) : '-';
+                } else {
+                    contentContainer.classList.add('hidden');
+                }
 
                 showModal('taskDetailModal');
             } catch (e) {
@@ -1693,6 +1749,228 @@ function renderTasks(tasks) {
                 loadTasks();
             } catch (e) {
                 showToast('删除失败: ' + e.message, 'error');
+            }
+        }
+
+        // ================== 结构化评审相关函数 ==================
+        let currentStructuredReview = null;
+        let currentTaskId = null;
+        let issueFilter = 'all';
+
+        function switchReviewTab(tab) {
+            document.querySelectorAll('.review-tab').forEach(btn => {
+                btn.classList.remove('active', 'border-blue-500', 'text-blue-600');
+                btn.classList.add('border-transparent', 'text-gray-500');
+            });
+            document.querySelectorAll('.review-panel').forEach(panel => panel.classList.add('hidden'));
+            
+            if (tab === 'structured') {
+                document.getElementById('tabStructured').classList.add('active', 'border-blue-500', 'text-blue-600');
+                document.getElementById('tabStructured').classList.remove('border-transparent', 'text-gray-500');
+                document.getElementById('structuredReviewPanel').classList.remove('hidden');
+            } else {
+                document.getElementById('tabRaw').classList.add('active', 'border-blue-500', 'text-blue-600');
+                document.getElementById('tabRaw').classList.remove('border-transparent', 'text-gray-500');
+                document.getElementById('rawReviewPanel').classList.remove('hidden');
+            }
+        }
+
+        async function loadStructuredReview(taskId) {
+            try {
+                const res = await apiFetch(`${API_BASE}/tasks/${taskId}/structured-review`);
+                const data = await res.json();
+                if (data.code === 0 && data.data) {
+                    currentStructuredReview = data.data;
+                    currentTaskId = taskId;
+                    renderStructuredReview();
+                }
+            } catch (err) {
+                console.warn('结构化评审加载失败:', err);
+            }
+        }
+
+        function renderStructuredReview() {
+            const data = currentStructuredReview;
+            if (!data) return;
+
+            // 总分
+            document.getElementById('structuredTotalScore').textContent = data.total_score || '-';
+            
+            // 维度评分条
+            const dimContainer = document.getElementById('dimensionBars');
+            if (data.dimension_scores && data.dimension_scores !== '{}') {
+                document.getElementById('dimensionScoresArea').classList.remove('hidden');
+                try {
+                    const dims = typeof data.dimension_scores === 'string' ? JSON.parse(data.dimension_scores) : data.dimension_scores;
+                    const dimLabels = { security: '安全性', code_quality: '代码质量', readability: '可读性', maintainability: '可维护性', test_coverage: '测试覆盖' };
+                    dimContainer.innerHTML = Object.entries(dims).map(([key, val]) => {
+                        const score = typeof val === 'object' ? val.score : val;
+                        const label = dimLabels[key] || key;
+                        const color = score >= 80 ? 'bg-green-500' : score >= 60 ? 'bg-yellow-500' : 'bg-red-500';
+                        return `
+                            <div class="text-center">
+                                <div class="text-xs font-bold ${score >= 60 ? 'text-gray-700' : 'text-red-600'}">${score}</div>
+                                <div class="h-8 bg-gray-200 rounded-full overflow-hidden relative mt-1">
+                                    <div class="${color} absolute bottom-0 left-0 right-0 rounded-full" style="height:${score}%"></div>
+                                </div>
+                                <div class="text-[10px] text-gray-500 mt-0.5">${label}</div>
+                            </div>
+                        `;
+                    }).join('');
+                } catch (e) {
+                    dimContainer.innerHTML = '';
+                }
+            } else {
+                document.getElementById('dimensionScoresArea').classList.add('hidden');
+            }
+
+            // 文件筛选下拉框
+            const fileSelect = document.getElementById('issueFileFilter');
+            if (data.issues && data.issues.length > 0) {
+                const files = [...new Set(data.issues.map(i => i.file).filter(f => f))];
+                fileSelect.innerHTML = '<option value="">所有文件</option>' + 
+                    files.map(f => `<option value="${f}">${f}</option>`).join('');
+            }
+
+            renderIssues();
+        }
+
+        function renderIssues() {
+            const data = currentStructuredReview;
+            if (!data || !data.issues) {
+                document.getElementById('issuesListArea').innerHTML = '<div class="text-center text-gray-400 py-8">暂无问题</div>';
+                return;
+            }
+
+            const fileFilter = document.getElementById('issueFileFilter').value;
+            let issues = data.issues;
+
+            // 按状态筛选
+            if (issueFilter !== 'all') {
+                issues = issues.filter(i => i.status === issueFilter);
+            }
+            // 按文件筛选
+            if (fileFilter) {
+                issues = issues.filter(i => i.file === fileFilter);
+            }
+
+            if (issues.length === 0) {
+                document.getElementById('issuesListArea').innerHTML = '<div class="text-center text-gray-400 py-8">没有符合条件的问题</div>';
+                return;
+            }
+
+            const severityColors = { critical: 'border-red-500 bg-red-50', high: 'border-orange-500 bg-orange-50', medium: 'border-yellow-500 bg-yellow-50', low: 'border-blue-500 bg-blue-50', info: 'border-gray-400 bg-gray-50' };
+            const severityLabels = { critical: '严重', high: '高危', medium: '中危', low: '低危', info: '提示' };
+            const statusLabels = { pending: '待处理', accepted: '已采纳', rejected: '已拒绝' };
+            const statusColors = { pending: 'text-gray-500', accepted: 'text-green-600', rejected: 'text-red-600' };
+
+            document.getElementById('issuesListArea').innerHTML = issues.map(issue => `
+                <div class="border-l-4 rounded-lg p-3 ${severityColors[issue.severity] || 'border-gray-300 bg-gray-50'}">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                <input type="checkbox" class="issue-checkbox rounded" value="${issue.id}" onchange="updateBatchActionBar()">
+                                <span class="text-xs font-medium px-1.5 py-0.5 rounded ${issue.severity === 'critical' ? 'bg-red-100 text-red-700' : issue.severity === 'high' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}">${severityLabels[issue.severity] || issue.severity}</span>
+                                <span class="text-xs text-gray-500">${issue.rule_code || '自定义'}</span>
+                                <span class="text-xs ${statusColors[issue.status] || 'text-gray-500'}">[${statusLabels[issue.status] || issue.status}]</span>
+                            </div>
+                            <p class="text-sm font-medium text-gray-800">${issue.message}</p>
+                            ${issue.file ? `<p class="text-xs text-gray-500 mt-0.5"><i class="fas fa-file-code mr-1"></i>${issue.file}${issue.line_start > 0 ? ' (第' + issue.line_start + '行)' : ''}</p>` : ''}
+                            ${issue.code_snippet ? `<pre class="text-xs bg-gray-800 text-gray-100 p-2 rounded mt-1 overflow-x-auto">${issue.code_snippet}</pre>` : ''}
+                            ${issue.suggestion ? `<p class="text-xs text-gray-600 mt-1"><i class="fas fa-lightbulb mr-1 text-yellow-500"></i>${issue.suggestion}</p>` : ''}
+                            ${issue.reject_reason ? `<p class="text-xs text-red-500 mt-1"><i class="fas fa-info-circle mr-1"></i>拒绝原因：${issue.reject_reason}</p>` : ''}
+                        </div>
+                        <div class="flex gap-1 ml-2 ${issue.status === 'pending' ? '' : 'hidden'}">
+                            <button onclick="resolveIssue(${issue.id}, 'accepted')" class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200" title="采纳"><i class="fas fa-check"></i></button>
+                            <button onclick="showRejectInput(${issue.id})" class="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200" title="拒绝"><i class="fas fa-times"></i></button>
+                        </div>
+                    </div>
+                    <div id="rejectInput-${issue.id}" class="hidden mt-2">
+                        <input type="text" placeholder="填写拒绝原因..." class="text-xs px-2 py-1 border rounded w-full mb-1" id="rejectReason-${issue.id}">
+                        <div class="flex gap-1">
+                            <button onclick="resolveIssue(${issue.id}, 'rejected', document.getElementById('rejectReason-${issue.id}').value)" class="text-xs px-2 py-1 bg-red-600 text-white rounded">确认拒绝</button>
+                            <button onclick="hideRejectInput(${issue.id})" class="text-xs px-2 py-1 bg-gray-200 text-gray-600 rounded">取消</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            updateBatchActionBar();
+        }
+
+        function filterIssues(filter) {
+            issueFilter = filter;
+            document.querySelectorAll('.issue-filter-btn').forEach(btn => {
+                if (btn.dataset.filter === filter) {
+                    btn.classList.add('active', 'bg-blue-100', 'text-blue-700');
+                    btn.classList.remove('bg-gray-100', 'text-gray-600');
+                } else {
+                    btn.classList.remove('active', 'bg-blue-100', 'text-blue-700');
+                    btn.classList.add('bg-gray-100', 'text-gray-600');
+                }
+            });
+            renderIssues();
+        }
+
+        function showRejectInput(issueId) {
+            document.getElementById(`rejectInput-${issueId}`).classList.remove('hidden');
+        }
+
+        function hideRejectInput(issueId) {
+            document.getElementById(`rejectInput-${issueId}`).classList.add('hidden');
+        }
+
+        async function resolveIssue(issueId, status, rejectReason) {
+            try {
+                const res = await apiFetch(`${API_BASE}/tasks/review-issues/batch-resolve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        issues: [{ id: issueId, status: status, reject_reason: rejectReason || '' }]
+                    })
+                });
+                if (!res.ok) throw new Error('操作失败');
+                showToast(status === 'accepted' ? '已采纳' : '已拒绝', 'success');
+                // 刷新
+                loadStructuredReview(currentTaskId);
+            } catch (err) {
+                showToast('操作失败: ' + err.message, 'error');
+            }
+        }
+
+        function updateBatchActionBar() {
+            const checked = document.querySelectorAll('.issue-checkbox:checked');
+            const bar = document.getElementById('batchActionBar');
+            document.getElementById('selectedIssueCount').textContent = checked.length;
+            bar.classList.toggle('hidden', checked.length === 0);
+        }
+
+        async function batchAcceptIssues() {
+            const checked = document.querySelectorAll('.issue-checkbox:checked');
+            const issues = Array.from(checked).map(cb => ({ id: parseInt(cb.value), status: 'accepted' }));
+            await batchResolve(issues, '批量采纳成功');
+        }
+
+        async function batchRejectIssues() {
+            const reason = prompt('请输入批量拒绝的原因（可留空）：');
+            if (reason === null) return;
+            const checked = document.querySelectorAll('.issue-checkbox:checked');
+            const issues = Array.from(checked).map(cb => ({ id: parseInt(cb.value), status: 'rejected', reject_reason: reason }));
+            await batchResolve(issues, '批量拒绝成功');
+        }
+
+        async function batchResolve(issues, successMsg) {
+            try {
+                const res = await apiFetch(`${API_BASE}/tasks/review-issues/batch-resolve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ issues })
+                });
+                if (!res.ok) throw new Error('操作失败');
+                showToast(successMsg, 'success');
+                loadStructuredReview(currentTaskId);
+            } catch (err) {
+                showToast('操作失败: ' + err.message, 'error');
             }
         }
 

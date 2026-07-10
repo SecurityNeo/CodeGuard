@@ -46,6 +46,13 @@ const MENU_CONFIG = [
         icon: 'fa-brain',
         role: ['admin']
     },
+    {
+        id: 'review-rules',
+        name: '评审规则库',
+        href: 'review-rules.html',
+        icon: 'fa-shield-alt',
+        role: ['admin']
+    },
 
     // ========== 通知管理（折叠组）==========
     {
