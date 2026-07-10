@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/ai-optimizer/backend/internal/model"
 	"github.com/gin-gonic/gin"
@@ -133,4 +135,50 @@ func (h *ProjectReviewHandler) QueryStructuredReview(c *gin.Context) {
 			"markdown_comment": task.AIResponse,
 		},
 	})
+}
+
+// BatchResolveIssues 批量处理 Issue 状态（接纳/拒绝/恢复待处理）
+func (h *ProjectReviewHandler) BatchResolveIssues(c *gin.Context) {
+	var req struct {
+		Issues []struct {
+			ID           uint   `json:"id"`
+			Status       string `json:"status" binding:"required"` // accepted / rejected / pending
+			RejectReason string `json:"reject_reason"`
+		} `json:"issues" binding:"required,min=1"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID, exist := c.Get("user_id")
+	if !exist {
+		c.JSON(401, gin.H{"error": "未认证"})
+		return
+	}
+	operatorID := userID.(uint)
+	now := time.Now()
+
+	for _, item := range req.Issues {
+		if item.Status != "accepted" && item.Status != "rejected" && item.Status != "pending" {
+			c.JSON(400, gin.H{"error": fmt.Sprintf("invalid status for issue %d", item.ID)})
+			return
+		}
+
+		updates := map[string]interface{}{
+			"status":       item.Status,
+			"resolved_by":  operatorID,
+			"resolved_at":  now,
+			"is_resolved":  item.Status == "accepted" || item.Status == "rejected",
+			"reject_reason": item.RejectReason,
+		}
+
+		if err := model.DB.Model(&model.ReviewIssue{}).Where("id = ?", item.ID).Updates(updates).Error; err != nil {
+			zap.L().Warn("update review issue status failed",
+				zap.Uint("issue_id", item.ID),
+				zap.Error(err))
+		}
+	}
+
+	c.JSON(200, gin.H{"message": "updated", "count": len(req.Issues)})
 }

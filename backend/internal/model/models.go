@@ -127,6 +127,10 @@ type ReviewIssue struct {
 	CodeSnippet        string    `gorm:"type:text" json:"code_snippet"`
 	Message            string    `gorm:"type:text" json:"message"`
 	Suggestion         string    `gorm:"type:text" json:"suggestion"`
+	Status             string    `gorm:"size:20;default:'pending'" json:"status"`                   // pending / accepted / rejected / dismissed
+	ResolvedBy         uint      `gorm:"index;default:0" json:"resolved_by"`                       // 操作人ID
+	ResolvedAt         *time.Time `json:"resolved_at"`                                               // 操作时间
+	RejectReason       string    `gorm:"type:text;column:reject_reason" json:"reject_reason"`      // 拒绝/不采纳原因
 	GitlabDiscussionID string    `gorm:"size:64;column:gitlab_discussion_id" json:"gitlab_discussion_id"`
 	IsResolved         bool      `gorm:"default:false;column:is_resolved" json:"is_resolved"`
 	CreatedAt          time.Time `json:"created_at"`

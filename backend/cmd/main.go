@@ -253,6 +253,8 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			// 任务详情：结构化评审结果查询
 			reviewH := handler.NewProjectReviewHandler()
 			task.GET("/:id/structured-review", reviewH.QueryStructuredReview)
+			// Issue 状态管理：批量接纳/拒绝
+			task.POST("/review-issues/batch-resolve", reviewH.BatchResolveIssues)
 		}
 
 		// MR 审查日志（数据已按user过滤）
