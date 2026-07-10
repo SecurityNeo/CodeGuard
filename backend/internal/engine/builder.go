@@ -89,9 +89,9 @@ func BuildReviewPrompt(ctx *PromptContext) string {
 }
 
 // selectTopRules 按严重级别排序并截断规则列表
-// 严重级别枚举: critical > error > warning > info > suggestion
+// 严重级别枚举: critical > high > medium > low > info
 func selectTopRules(rules []model.ReviewRule, max int) []model.ReviewRule {
-	severityOrder := map[string]int{"critical": 5, "error": 4, "warning": 3, "info": 2, "suggestion": 1}
+	severityOrder := map[string]int{"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1}
 
 	sorted := make([]model.ReviewRule, len(rules))
 	copy(sorted, rules)

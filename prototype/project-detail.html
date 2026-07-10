@@ -507,8 +507,9 @@
                         <select class="severity-select text-xs border rounded px-2 py-1" data-rule-id="${r.ID}" onchange="onSeverityChange(${r.ID}, this.value)">
                             <option value="">默认</option>
                             <option value="critical" ${severity === 'critical' ? 'selected' : ''}>严重</option>
-                            <option value="error" ${severity === 'error' ? 'selected' : ''}>错误</option>
-                            <option value="warning" ${severity === 'warning' ? 'selected' : ''}>警告</option>
+                            <option value="high" ${severity === 'high' ? 'selected' : ''}>高危</option>
+                            <option value="medium" ${severity === 'medium' ? 'selected' : ''}>中危</option>
+                            <option value="low" ${severity === 'low' ? 'selected' : ''}>低危</option>
                             <option value="info" ${severity === 'info' ? 'selected' : ''}>提示</option>
                         </select>
                     </td>
@@ -520,11 +521,12 @@
     function renderSeverityBadge(sev) {
         const cls = {
             critical: 'severity-critical',
-            error: 'severity-error',
-            warning: 'severity-warning',
+            high: 'severity-error',
+            medium: 'severity-warning',
+            low: 'severity-info',
             info: 'severity-info'
         }[sev] || 'severity-warning';
-        const label = { critical: '严重', error: '错误', warning: '警告', info: '提示' }[sev] || sev;
+        const label = { critical: '严重', high: '高危', medium: '中危', low: '低危', info: '提示' }[sev] || sev;
         return `<span class="${cls}">${label}</span>`;
     }
 

@@ -131,8 +131,12 @@ func (h *TemplateHandler) Update(c *gin.Context) {
 
 func (h *TemplateHandler) Delete(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	t, _ := service.NewTemplateService().Get(uint(id))
-	err := service.NewTemplateService().Delete(uint(id))
+	t, err := service.NewTemplateService().Get(uint(id))
+	if err != nil {
+		c.JSON(404, gin.H{"error": "template not found"})
+		return
+	}
+	err = service.NewTemplateService().Delete(uint(id))
 	if err != nil {
 		zap.L().Error("delete template failed", zap.Error(err))
 		if err == service.ErrTemplateInUse {

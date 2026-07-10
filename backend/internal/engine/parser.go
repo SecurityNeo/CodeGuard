@@ -186,7 +186,6 @@ func fallbackMarkdown(content string) *llm.AIReviewResult {
 }
 
 // extractScoreFromText 从文本中提取分数
-// extractScoreFromText 从文本中提取分数
 var scoreRegex = regexp.MustCompile(`(?i)(?:总分|综合评分|score|AI评分)[:：\s]*(\d+)`)
 
 func extractScoreFromText(text string) int {

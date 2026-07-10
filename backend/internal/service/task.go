@@ -1362,16 +1362,31 @@ func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.
 		}
 	}
 
-	// 2. 收集规则列表
+	// 2. 收集规则列表，批量查询避免 N+1
 	var rules []model.ReviewRule
+	var ruleIDs []uint
 	for _, cfg := range configs {
-		var rule model.ReviewRule
-		if err := model.DB.First(&rule, cfg.RuleID).Error; err == nil {
-			if cfg.Severity != "" {
-				rule.Severity = cfg.Severity
-			}
-			rules = append(rules, rule)
+		ruleIDs = append(ruleIDs, cfg.RuleID)
+	}
+
+	ruleMap := make(map[uint]model.ReviewRule)
+	if len(ruleIDs) > 0 {
+		var allRules []model.ReviewRule
+		model.DB.Where("id IN ?", ruleIDs).Find(&allRules)
+		for _, r := range allRules {
+			ruleMap[r.ID] = r
 		}
+	}
+
+	for _, cfg := range configs {
+		rule := ruleMap[cfg.RuleID]
+		if rule.ID == 0 {
+			continue // 规则不存在，跳过
+		}
+		if cfg.Severity != "" {
+			rule.Severity = cfg.Severity
+		}
+		rules = append(rules, rule)
 	}
 
 	// 3. 解析维度权重（使用项目模板配置）

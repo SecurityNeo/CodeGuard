@@ -63,8 +63,7 @@ func (h *ProjectReviewHandler) UpdateRules(c *gin.Context) {
 	projectID, _ := strconv.Atoi(c.Param("id"))
 
 	var req struct {
-		Rules []struct {
-			RuleID    uint   `json:"rule_id"`
+		Rules map[string]struct {
 			IsEnabled bool   `json:"is_enabled"`
 			Severity  string `json:"severity"`
 		} `json:"rules"`
@@ -74,13 +73,14 @@ func (h *ProjectReviewHandler) UpdateRules(c *gin.Context) {
 		return
 	}
 
-	for _, r := range req.Rules {
+	for ruleIDStr, r := range req.Rules {
+		ruleID, _ := strconv.ParseUint(ruleIDStr, 10, 64)
 		updates := map[string]interface{}{
 			"is_enabled": r.IsEnabled,
 			"severity":   r.Severity,
 		}
 		model.DB.Model(&model.ProjectReviewConfig{}).
-			Where("project_id = ? AND rule_id = ?", projectID, r.RuleID).
+			Where("project_id = ? AND rule_id = ?", projectID, uint(ruleID)).
 			Updates(updates)
 	}
 
@@ -174,7 +174,7 @@ func (h *ProjectReviewHandler) BatchResolveIssues(c *gin.Context) {
 	now := time.Now()
 
 	for _, item := range req.Issues {
-		if item.Status != "accepted" && item.Status != "rejected" && item.Status != "pending" {
+		if item.Status != "accepted" && item.Status != "rejected" && item.Status != "pending" && item.Status != "dismissed" {
 			c.JSON(400, gin.H{"error": fmt.Sprintf("invalid status for issue %d", item.ID)})
 			return
 		}
