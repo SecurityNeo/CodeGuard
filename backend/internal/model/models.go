@@ -18,6 +18,7 @@ type Project struct {
 	DefaultModelID  *uint           `gorm:"index" json:"default_model_id"` // NULL = 未指定，不触发review任务;
 	AIEnabled       bool            `gorm:"default:false" json:"ai_enabled"`
 	Source          string          `gorm:"size:20;default:'manual'" json:"source"`
+	Language        string          `gorm:"size:32;default:'golang'" json:"language"` // 项目主要编程语言
 	AccessToken     string          `gorm:"size:500" json:"access_token"`
 	LastSyncAt      *time.Time      `json:"last_sync_at"`
 	SyncStatus      string          `gorm:"size:20;default:'success'" json:"sync_status"`
@@ -68,6 +69,9 @@ type Task struct {
 	DiffSummary         string              `gorm:"type:text" json:"diff_summary"`
 	AIPrompt            string              `gorm:"type:longtext;column:ai_prompt" json:"ai_prompt"`
 	AIResponse          string              `gorm:"type:longtext" json:"ai_response"`
+	AIResponseJSON      string              `gorm:"type:json;column:ai_response_json" json:"ai_response_json"`       // 结构化评审原始 JSON
+	DimensionScores     string              `gorm:"type:json;column:dimension_scores" json:"dimension_scores"`     // 各维度评分
+	IssueCount          int                 `gorm:"default:0;column:issue_count" json:"issue_count"`               // issue 总数
 	RetryCount          int                 `gorm:"default:0" json:"retry_count"`
 	ScoreValue          int                 `gorm:"default:0" json:"score_value"` // 评分值
 	CreatedAt           time.Time           `json:"created_at"`
@@ -76,6 +80,56 @@ type Task struct {
 	Project             Project             `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
 	Pool                ResourcePool        `gorm:"foreignKey:PoolID" json:"pool,omitempty"`
 	UsedModel           LLMModel            `gorm:"foreignKey:UsedModelID;references:ID" json:"used_model,omitempty"`
+}
+
+// --- ReviewRule --- 评审规则库
+
+type ReviewRule struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Code        string    `gorm:"uniqueIndex;size:64" json:"code"`
+	Name        string    `gorm:"size:100" json:"name"`
+	Category    string    `gorm:"size:32" json:"category"`                  // security/performance/readability/maintainability/test_coverage
+	Severity    string    `gorm:"size:16" json:"severity"`                  // critical/high/medium/low/info
+	Language    string    `gorm:"size:32;default:'common'" json:"language"` // golang/python/frontend/java/common
+	Description string    `gorm:"type:text" json:"description"`
+	Prompt      string    `gorm:"type:text" json:"prompt"`
+	SortOrder   int       `gorm:"default:0" json:"sort_order"`
+	IsBuiltIn   bool      `gorm:"default:true" json:"is_built_in"`
+	IsEnabled   bool      `gorm:"default:true" json:"is_enabled"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// --- ProjectReviewConfig --- 项目评审规则配置
+
+type ProjectReviewConfig struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	ProjectID uint      `gorm:"index" json:"project_id"`
+	RuleID    uint      `gorm:"index" json:"rule_id"`
+	IsEnabled bool      `gorm:"default:true" json:"is_enabled"`
+	Severity  string    `gorm:"size:16" json:"severity"` // NULL=使用规则默认
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// --- ReviewIssue --- 结构化评审结果明细
+
+type ReviewIssue struct {
+	ID                 uint      `gorm:"primaryKey" json:"id"`
+	TaskID             uint      `gorm:"index" json:"task_id"`
+	RuleID             *uint     `gorm:"index" json:"rule_id"`                                    // NULL=AI自主发现
+	RuleCode           string    `gorm:"size:64" json:"rule_code"`
+	Category           string    `gorm:"size:32" json:"category"`
+	Severity           string    `gorm:"size:16" json:"severity"`
+	File               string    `gorm:"size:255" json:"file"`
+	LineStart          int       `gorm:"default:0" json:"line_start"`
+	LineEnd            int       `gorm:"default:0" json:"line_end"`
+	CodeSnippet        string    `gorm:"type:text" json:"code_snippet"`
+	Message            string    `gorm:"type:text" json:"message"`
+	Suggestion         string    `gorm:"type:text" json:"suggestion"`
+	GitlabDiscussionID string    `gorm:"size:64;column:gitlab_discussion_id" json:"gitlab_discussion_id"`
+	IsResolved         bool      `gorm:"default:false;column:is_resolved" json:"is_resolved"`
+	CreatedAt          time.Time `json:"created_at"`
 }
 
 // --- TaskReviewComment 任务人工复核意见 ---
@@ -109,12 +163,17 @@ type MemberMapping struct {
 // --- ProjectTemplate ---
 
 type ProjectTemplate struct {
-	ID          uint   `gorm:"primaryKey"`
-	Name        string `gorm:"size:100;uniqueIndex;not null"`
-	Description string `gorm:"size:512"`
-	Prompt      string `gorm:"type:text;not null"`
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID                     uint      `gorm:"primaryKey"`
+	Name                   string    `gorm:"size:100;uniqueIndex;not null"`
+	Description            string    `gorm:"size:512"`
+	Prompt                 string    `gorm:"type:text;not null"` // 旧版自定义 prompt（废弃兼容）
+	CustomInstruction      string    `gorm:"type:text;column:custom_instruction"` // 项目特殊说明
+	DimensionWeights       string    `gorm:"type:json;column:dimension_weights"`   // 维度权重 JSON
+	MaxRulesPerReview      int       `gorm:"default:5;column:max_rules_per_review"` // 每次评审最多规则数
+	IsDefault              bool      `gorm:"default:false"`
+	GitLabCommentTemplate  string    `gorm:"type:text;column:gitlab_comment_template"` // GitLab 评论模板
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
 }
 
 // --- ResourcePool ---
@@ -246,6 +305,15 @@ type SystemConfig struct {
 	AlertCooldownSec        int    `gorm:"default:3600" json:"alert_cooldown_sec"`
 	AlertNotifierID         uint   `gorm:"default:0" json:"alert_notifier_id"`
 	AlertMentionUserIDs     string `gorm:"size:512" json:"alert_mention_user_ids"`
+
+	// JSON 结构化输出重试配置
+	JSONRetryMaxAttempts       int     `gorm:"default:3;column:json_retry_max_attempts" json:"json_retry_max_attempts"`
+	JSONRetryInitialDelaySec   int     `gorm:"default:2;column:json_retry_initial_delay_sec" json:"json_retry_initial_delay_sec"`
+	JSONRetryBackoffMultiplier float64 `gorm:"default:2.0;column:json_retry_backoff_multiplier" json:"json_retry_backoff_multiplier"`
+	JSONRetryMaxDelaySec       int     `gorm:"default:30;column:json_retry_max_delay_sec" json:"json_retry_max_delay_sec"`
+	JSONRetryFallbackStrategy  string  `gorm:"size:20;default:'regex';column:json_retry_fallback_strategy" json:"json_retry_fallback_strategy"`
+	DefaultDimensionWeights    string  `gorm:"type:json;column:default_dimension_weights" json:"default_dimension_weights"`
+	DefaultGitLabCommentTemplate string `gorm:"type:text;column:default_gitlab_comment_template" json:"default_gitlab_comment_template"`
 
 	// GitLab OAuth 配置（从环境变量迁移到数据库动态配置）
 	GitlabOAuthEnabled        bool   `gorm:"default:false;column:gitlab_oauth_enabled" json:"gitlab_oauth_enabled"`

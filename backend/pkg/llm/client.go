@@ -22,15 +22,29 @@ const (
 type Message struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+	Refusal string `json:"refusal,omitempty"` // 新增：拒绝回答标记
 }
 
 type ChatRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Temperature float64   `json:"temperature,omitempty"`
-	MaxTokens   int       `json:"max_tokens,omitempty"`
+	Model          string            `json:"model"`
+	Messages       []Message         `json:"messages"`
+	Temperature    float64           `json:"temperature,omitempty"`
+	MaxTokens      int               `json:"max_tokens,omitempty"`
+	ResponseFormat *ResponseFormat   `json:"response_format,omitempty"` // 新增：结构化输出格式
 }
 
+type ResponseFormat struct {
+	Type       string      `json:"type,omitempty"`        // "json_schema" | "json_object"
+	JSONSchema *JSONSchema `json:"json_schema,omitempty"`
+}
+
+type JSONSchema struct {
+	Name   string      `json:"name"`
+	Strict bool        `json:"strict"`
+	Schema interface{} `json:"schema"`
+}
+
+// ChatResponse 扩展 Refusal 字段
 type ChatResponse struct {
 	ID      string   `json:"id"`
 	Choices []Choice `json:"choices"`
