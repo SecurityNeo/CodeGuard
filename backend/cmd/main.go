@@ -199,6 +199,9 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 	r.GET("/member-mappings.html", func(c *gin.Context) {
 		c.File(frontendPath + "/member-mappings.html")
 	})
+	r.GET("/review-rules.html", func(c *gin.Context) {
+		c.File(frontendPath + "/review-rules.html")
+	})
 
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
