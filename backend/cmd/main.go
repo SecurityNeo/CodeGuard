@@ -250,6 +250,9 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			task.GET("/:id/review-comments", h.ListReviewComments)
 			task.POST("/:id/retry", h.Retry)
 			task.POST("/:id/stop", h.Stop)
+			// 任务详情：结构化评审结果查询
+			reviewH := handler.NewProjectReviewHandler()
+			task.GET("/:id/structured-review", reviewH.QueryStructuredReview)
 		}
 
 		// MR 审查日志（数据已按user过滤）
@@ -291,6 +294,23 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			project.PUT("/:id", h.Update)
 			project.DELETE("/:id", h.Delete)
 			project.GET("/:id/tasks", h.Tasks)
+			// 项目评审规则配置
+			reviewH := handler.NewProjectReviewHandler()
+			project.GET("/:id/review-rules", reviewH.ListRules)
+			project.PUT("/:id/review-rules", reviewH.UpdateRules)
+			project.POST("/:id/review-rules/reset", reviewH.ResetRules)
+		}
+
+		// 评审规则库管理
+		reviewRules := adminOnly.Group("/review-rules")
+		{
+			h := handler.NewReviewRuleHandler()
+			reviewRules.GET("", h.List)
+			reviewRules.GET("/tree", h.Tree)
+			reviewRules.POST("", h.Create)
+			reviewRules.PUT("/:id", h.Update)
+			reviewRules.DELETE("/:id", h.Delete)
+			reviewRules.PUT("/batch-enable", h.BatchEnable)
 		}
 
 		// 模版管理
