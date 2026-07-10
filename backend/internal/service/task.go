@@ -1501,8 +1501,8 @@ func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.
 
 	// 11. 组装 Markdown 评论
 	commentTemplate := ""
-	if task.Project.TemplateID > 0 && task.Project.Template.GitLabCommentTemplate != "" {
-		commentTemplate = task.Project.Template.GitLabCommentTemplate
+	if template.ID > 0 && template.GitLabCommentTemplate != "" {
+		commentTemplate = template.GitLabCommentTemplate
 	} else if sysCfg.DefaultGitLabCommentTemplate != "" {
 		commentTemplate = sysCfg.DefaultGitLabCommentTemplate
 	}
