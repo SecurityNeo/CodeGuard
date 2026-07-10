@@ -107,7 +107,26 @@ func tryParseJSON(content string) (*llm.AIReviewResult, error) {
 	if result.Recommendations == nil {
 		result.Recommendations = []string{}
 	}
+	// 非阻塞校验：权重之和
+	if err := ValidateResult(&result); err != nil {
+		zap.L().Warn("review result validation warning", zap.Error(err))
+	}
 	return &result, nil
+}
+
+// ValidateResult 校验评审结果数据质量（非阻塞，仅记录警告）
+func ValidateResult(result *llm.AIReviewResult) error {
+	if len(result.Dimensions) == 0 {
+		return fmt.Errorf("dimensions empty")
+	}
+	totalWeight := 0
+	for _, d := range result.Dimensions {
+		totalWeight += d.Weight
+	}
+	if totalWeight != 100 {
+		return fmt.Errorf("dimension weights sum not 100: got %d", totalWeight)
+	}
+	return nil
 }
 
 // sanitizeJSON 清洗可能的 JSON 包装
@@ -167,9 +186,11 @@ func fallbackMarkdown(content string) *llm.AIReviewResult {
 }
 
 // extractScoreFromText 从文本中提取分数
+// extractScoreFromText 从文本中提取分数
+var scoreRegex = regexp.MustCompile(`(?i)(?:总分|综合评分|score|AI评分)[:：\s]*(\d+)`)
+
 func extractScoreFromText(text string) int {
-	re := regexp.MustCompile(`(?i)AI评分[:：]\s*(\d+)`)
-	matches := re.FindStringSubmatch(text)
+	matches := scoreRegex.FindStringSubmatch(text)
 	if len(matches) > 1 {
 		var score int
 		fmt.Sscanf(matches[1], "%d", &score)

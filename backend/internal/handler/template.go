@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/ai-optimizer/backend/internal/model"
@@ -79,8 +80,31 @@ func (h *TemplateHandler) Update(c *gin.Context) {
 	if v, ok := req["custom_instruction"]; ok {
 		updates["custom_instruction"] = v.(string)
 	}
-	if v, ok := req["dimension_weights"]; ok {
+	var v interface{}
+	var dwOk bool
+	if v, dwOk = req["dimension_weights"]; dwOk {
 		updates["dimension_weights"] = v.(string)
+		// 校验权重 JSON 格式合法且和为 100
+		dwStr := v.(string)
+		if dwStr != "" && dwStr != "{}" {
+			parsed, err := parseDimWeights(dwStr)
+			if err != nil {
+				c.JSON(400, gin.H{"error": "维度权重 JSON 格式无效: " + err.Error()})
+				return
+			}
+			total := 0
+			for _, w := range parsed {
+				total += w
+				if w < 0 || w > 100 {
+					c.JSON(400, gin.H{"error": "维度权重必须在 0-100 之间"})
+					return
+				}
+			}
+			if total != 100 {
+				c.JSON(400, gin.H{"error": fmt.Sprintf("维度权重之和必须等于 100，当前为 %d", total)})
+				return
+			}
+		}
 	}
 	if v, ok := req["max_rules_per_review"]; ok {
 		updates["max_rules_per_review"] = int(v.(float64))
@@ -89,8 +113,12 @@ func (h *TemplateHandler) Update(c *gin.Context) {
 		updates["gitlab_comment_template"] = v.(string)
 	}
 
-	t, _ := service.NewTemplateService().Get(uint(id))
-	err := service.NewTemplateService().Update(uint(id), updates)
+	t, err := service.NewTemplateService().Get(uint(id))
+	if err != nil {
+		c.JSON(404, gin.H{"error": "template not found"})
+		return
+	}
+	err = service.NewTemplateService().Update(uint(id), updates)
 	if err != nil {
 		zap.L().Error("update template failed", zap.Error(err))
 		c.JSON(500, gin.H{"error": err.Error()})
@@ -132,7 +160,11 @@ func (h *TemplateHandler) Clone(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "name is required"})
 		return
 	}
-	original, _ := service.NewTemplateService().Get(uint(id))
+	original, err := service.NewTemplateService().Get(uint(id))
+	if err != nil {
+		c.JSON(404, gin.H{"error": "template not found"})
+		return
+	}
 	t, err := service.NewTemplateService().Clone(uint(id), req.Name)
 	if err != nil {
 		zap.L().Error("clone template failed", zap.Error(err))
@@ -142,4 +174,13 @@ func (h *TemplateHandler) Clone(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	model.RecordOpLog("模板克隆", fmt.Sprintf("%s->%s", original.Name, t.Name), t.ID, userID.(uint), "success", "", c.ClientIP())
 	c.JSON(200, gin.H{"message": "cloned", "data": t})
+}
+
+// parseDimWeights 解析维度权重 JSON 字符串
+func parseDimWeights(jsonStr string) (map[string]int, error) {
+	var result map[string]int
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }

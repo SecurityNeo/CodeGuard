@@ -26,16 +26,30 @@ func (h *ProjectReviewHandler) ListRules(c *gin.Context) {
 		return
 	}
 
+	// 预加载所有规则，避免 N+1 查询
+	var ruleIDs []uint
+	for _, cfg := range configs {
+		ruleIDs = append(ruleIDs, cfg.RuleID)
+	}
+
+	var rules []model.ReviewRule
+	ruleMap := make(map[uint]model.ReviewRule)
+	if len(ruleIDs) > 0 {
+		model.DB.Where("id IN ?", ruleIDs).Find(&rules)
+		for _, r := range rules {
+			ruleMap[r.ID] = r
+		}
+	}
+
 	var result []gin.H
 	for _, cfg := range configs {
-		var rule model.ReviewRule
-		model.DB.First(&rule, cfg.RuleID)
+		rule := ruleMap[cfg.RuleID]
 		result = append(result, gin.H{
-			"rule_id":        cfg.RuleID,
-			"code":           rule.Code,
-			"name":           rule.Name,
-			"category":       rule.Category,
-			"is_enabled":     cfg.IsEnabled,
+			"rule_id":          cfg.RuleID,
+			"code":             rule.Code,
+			"name":             rule.Name,
+			"category":         rule.Category,
+			"is_enabled":       cfg.IsEnabled,
 			"default_severity": rule.Severity,
 			"project_severity": cfg.Severity,
 		})
@@ -170,7 +184,10 @@ func (h *ProjectReviewHandler) BatchResolveIssues(c *gin.Context) {
 			"resolved_by":  operatorID,
 			"resolved_at":  now,
 			"is_resolved":  item.Status == "accepted" || item.Status == "rejected",
-			"reject_reason": item.RejectReason,
+		}
+		// 仅拒绝/不采纳时记录原因
+		if item.Status == "rejected" || item.Status == "dismissed" {
+			updates["reject_reason"] = item.RejectReason
 		}
 
 		if err := model.DB.Model(&model.ReviewIssue{}).Where("id = ?", item.ID).Updates(updates).Error; err != nil {

@@ -1349,7 +1349,18 @@ func min(a, b int) int {
 func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.DiffFile, commitsText string) (string, int, string, uint, string, error) {
 	// 1. 加载项目评审规则配置
 	var configs []model.ProjectReviewConfig
-	model.DB.Where("project_id = ? AND is_enabled = ?", task.ProjectID, true).Find(&configs)
+	if err := model.DB.Where("project_id = ? AND is_enabled = ?", task.ProjectID, true).Find(&configs).Error; err != nil {
+		zap.L().Warn("load project review configs failed", zap.Uint("project_id", task.ProjectID), zap.Error(err))
+	}
+
+	// 1.5 预加载项目及其模板信息（避免 task.Project 空值）
+	var project model.Project
+	var template model.ProjectTemplate
+	if err := model.DB.First(&project, task.ProjectID).Error; err == nil {
+		if project.TemplateID > 0 {
+			model.DB.First(&template, project.TemplateID)
+		}
+	}
 
 	// 2. 收集规则列表
 	var rules []model.ReviewRule
@@ -1357,30 +1368,30 @@ func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.
 		var rule model.ReviewRule
 		if err := model.DB.First(&rule, cfg.RuleID).Error; err == nil {
 			if cfg.Severity != "" {
-				rule.Severity = cfg.Severity // 使用项目覆盖的严重级别
+				rule.Severity = cfg.Severity
 			}
 			rules = append(rules, rule)
 		}
 	}
 
-	// 3. 解析维度权重
+	// 3. 解析维度权重（使用项目模板配置）
 	dimWeights := engine.DefaultDimensionWeights()
-	if task.Project.TemplateID > 0 && task.Project.Template.DimensionWeights != "" {
-		if parsed, err := engine.ParseDimensionWeights(task.Project.Template.DimensionWeights); err == nil {
+	if template.ID > 0 && template.DimensionWeights != "" {
+		if parsed, err := engine.ParseDimensionWeights(template.DimensionWeights); err == nil {
 			dimWeights = parsed
 		}
 	}
 
 	// 4. 获取 max_rules_per_review（默认 5）
 	maxRules := 5
-	if task.Project.TemplateID > 0 && task.Project.Template.MaxRulesPerReview > 0 {
-		maxRules = task.Project.Template.MaxRulesPerReview
+	if template.ID > 0 && template.MaxRulesPerReview > 0 {
+		maxRules = template.MaxRulesPerReview
 	}
 
 	// 5. 组装 Prompt
 	customInstruction := ""
-	if task.Project.TemplateID > 0 {
-		customInstruction = task.Project.Template.CustomInstruction
+	if template.ID > 0 {
+		customInstruction = template.CustomInstruction
 	}
 
 	promptCtx := &engine.PromptContext{

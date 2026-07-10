@@ -45,10 +45,13 @@ func BuildReviewPrompt(ctx *PromptContext) string {
 	}
 
 	// 3. 维度评分权重说明
+	var order = []string{"security", "code_quality", "readability", "maintainability", "test_coverage"}
 	sb.WriteString("【评分维度及权重】\n")
 	sb.WriteString("请严格按照以下维度和权重进行评分，所有维度得分必须在 0-100 之间，权重之和为 100：\n")
-	for name, dim := range ctx.DimensionWeights {
-		sb.WriteString(fmt.Sprintf("- %s（权重 %d%%）：%s\n", dim.Label, dim.Weight, name))
+	for _, name := range order {
+		if dim, ok := ctx.DimensionWeights[name]; ok {
+			sb.WriteString(fmt.Sprintf("- %s（权重 %d%%）：%s\n", dim.Label, dim.Weight, name))
+		}
 	}
 	sb.WriteString("\n")
 
@@ -86,8 +89,9 @@ func BuildReviewPrompt(ctx *PromptContext) string {
 }
 
 // selectTopRules 按严重级别排序并截断规则列表
+// 严重级别枚举: critical > error > warning > info > suggestion
 func selectTopRules(rules []model.ReviewRule, max int) []model.ReviewRule {
-	severityOrder := map[string]int{"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1}
+	severityOrder := map[string]int{"critical": 5, "error": 4, "warning": 3, "info": 2, "suggestion": 1}
 
 	sorted := make([]model.ReviewRule, len(rules))
 	copy(sorted, rules)
