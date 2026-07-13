@@ -363,6 +363,48 @@ func (h *ReportHandler) DeleteLog(c *gin.Context) {
 	c.JSON(200, gin.H{"message": "deleted"})
 }
 
+func (h *ReportHandler) ResendReport(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+	var log model.ReportLog
+	if err := model.DB.First(&log, id).Error; err != nil {
+		c.JSON(404, gin.H{"error": "report log not found"})
+		return
+	}
+
+	if log.HtmlContent == "" {
+		c.JSON(400, gin.H{"error": "no html content in this report"})
+		return
+	}
+
+	if err := service.NewReportService().ResendEmail(&log); err != nil {
+		// 记录新日志
+		newLog := model.ReportLog{
+			ReportType:  log.ReportType,
+			TriggerType: "manual",
+			Status:      "sent_failed",
+			Recipients:  log.Recipients,
+			HtmlContent: log.HtmlContent,
+			ErrorMsg:    err.Error(),
+			SentAt:      time.Now(),
+		}
+		model.DB.Create(&newLog)
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 记录新日志
+	newLog := model.ReportLog{
+		ReportType:  log.ReportType,
+		TriggerType: "manual",
+		Status:      "sent_success",
+		Recipients:  log.Recipients,
+		HtmlContent: log.HtmlContent,
+		SentAt:      time.Now(),
+	}
+	model.DB.Create(&newLog)
+	c.JSON(200, gin.H{"message": "报告已重新发送"})
+}
+
 // InitReportConfigs 初始化周报/月报默认配置
 func InitReportConfigs() {
 	for _, t := range []string{"weekly", "monthly"} {

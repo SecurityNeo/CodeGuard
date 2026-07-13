@@ -46,6 +46,7 @@ type IssueContext struct {
 	Severity      string
 	SeverityLabel string
 	SeverityEmoji string
+	DeductScore   int
 	RuleCode      string
 	RuleName      string // 可从 rule_code 映射
 	Category      string
@@ -147,6 +148,7 @@ func buildCommentContext(result *llm.AIReviewResult) *CommentTemplateContext {
 			Severity:      issue.Severity,
 			SeverityLabel: severityLabel(issue.Severity),
 			SeverityEmoji: severityEmoji(issue.Severity),
+			DeductScore:   issue.DeductScore,
 			RuleCode:      issue.RuleCode,
 			Category:      issue.Category,
 			File:          issue.File,
@@ -194,7 +196,11 @@ func buildIssuesList(issues []IssueContext) string {
 		if group, ok := grouped[sev]; ok && len(group) > 0 {
 			b.WriteString(fmt.Sprintf("#### %s (%d)\n\n", severitySectionLabel(sev), len(group)))
 			for _, issue := range group {
-				b.WriteString(fmt.Sprintf("**%s [%s] %s**\n\n", issue.SeverityEmoji, issue.RuleCode, issue.Message))
+				scoreLabel := ""
+				if issue.DeductScore > 0 {
+					scoreLabel = fmt.Sprintf("【扣%d分】", issue.DeductScore)
+				}
+				b.WriteString(fmt.Sprintf("**%s [%s] %s%s**\n\n", issue.SeverityEmoji, issue.RuleCode, scoreLabel, issue.Message))
 				if issue.File != "" {
 					b.WriteString(fmt.Sprintf("- **文件**：`%s`", issue.File))
 					if issue.LineStart > 0 {

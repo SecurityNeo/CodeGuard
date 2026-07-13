@@ -77,7 +77,7 @@ func NewMRSyncService() *MRSyncService {
 	return &MRSyncService{}
 }
 
-// SyncOpenedMRs 轮询 GitLab API，刷新本地 opened 状态 MR 的 mr_state、is_draft 等字段
+// SyncOpenedMRs 轮询 GitLab API，刷新本地非 merged 状态 MR 的 mr_state、is_draft 等字段
 func (s *MRSyncService) SyncOpenedMRs() {
 	var cfg model.SystemConfig
 	if err := model.SilentFirst(model.DB, &cfg); err != nil {
@@ -93,13 +93,13 @@ func (s *MRSyncService) SyncOpenedMRs() {
 		return
 	}
 
-	// 每次最多同步 50 条最久未同步的 opened MR
+	// 每次最多同步 50 条最久未同步的 非 merged 状态 MR（opened、closed 都需要刷新）
 	var logs []model.MergeRequestReviewLog
-	if err := model.DB.Where("mr_state = ?", "opened").
+	if err := model.DB.Where("mr_state != ?", "merged").
 		Order("synced_at ASC").
 		Limit(50).
 		Find(&logs).Error; err != nil {
-		zap.L().Error("mr sync: query opened mr failed", zap.Error(err))
+		zap.L().Error("mr sync: query non-merged mr failed", zap.Error(err))
 		return
 	}
 

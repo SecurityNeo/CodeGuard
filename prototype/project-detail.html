@@ -33,7 +33,17 @@
         .severity-medium { background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
         .severity-low { background: #ede9fe; color: #6d28d9; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
         .severity-info { background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
-        .rule-category-filter { padding: 4px 12px; border-radius: 16px; font-size: 13px; cursor: pointer; border: 1px solid #e5e7eb; }
+        .switch-sm { position: relative; display: inline-block; width: 36px; height: 20px; }
+        .switch-sm input { opacity: 0; width: 0; height: 0; }
+        .switch-sm .slider-sm { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #d1d5db; transition: .3s; border-radius: 20px; }
+        .switch-sm .slider-sm:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+        .switch-sm input:checked + .slider-sm { background-color: #3b82f6; }
+        .switch-sm input:checked + .slider-sm:before { transform: translateX(16px); }
+        .status-disabled { opacity: .45; background-color: #f9fafb; }
+        .status-disabled td { color: #9ca3af !important; }
+        .status-disabled .font-medium { color: #9ca3af !important; text-decoration: line-through; }
+        .rule-category-filter { padding: 3px 10px; border-radius: 12px; font-size: 12px; cursor: pointer; border: 1px solid transparent; background: white; color: #6b7280; transition: all 0.15s; }
+        .rule-category-filter:hover { background: #f3f4f6; border-color: #e5e7eb; }
         .rule-category-filter.active { background: #3b82f6; color: white; border-color: #3b82f6; }
         .toast { position: fixed; top: 20px; right: 20px; z-index: 9999; animation: slideIn 0.3s ease; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
@@ -109,7 +119,7 @@
                         <div class="font-medium text-sm" id="createdAt">-</div>
                     </div>
                     <div>
-                        <div class="text-xs text-gray-500 mb-1">AI审核提示词</div>
+                        <div class="text-xs text-gray-500 mb-1">AI审核模版</div>
                         <div class="font-medium text-sm" id="templateName">-</div>
                     </div>
                     <div>
@@ -211,49 +221,70 @@
                             <button onclick="resetProjectRules()" class="px-3 py-2 border rounded-lg text-sm hover:bg-gray-50 text-gray-600">
                                 <i class="fas fa-undo mr-1"></i>重置默认
                             </button>
-                            <button onclick="saveProjectRules()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
-                                <i class="fas fa-save mr-1"></i>保存配置
-                            </button>
                         </div>
                     </div>
 
-                    <!-- 分类筛选 -->
-                    <div class="flex flex-wrap gap-2 mb-4" id="ruleCategoryFilters">
-                        <span class="rule-category-filter active" data-cat="all" onclick="filterRuleCategory('all')">全部</span>
-                        <span class="rule-category-filter" data-cat="common" onclick="filterRuleCategory('common')">通用</span>
-                        <span class="rule-category-filter" data-cat="security" onclick="filterRuleCategory('security')">安全</span>
-                        <span class="rule-category-filter" data-cat="code_quality" onclick="filterRuleCategory('code_quality')">代码质量</span>
-                        <span class="rule-category-filter" data-cat="readability" onclick="filterRuleCategory('readability')">可读性</span>
-                        <span class="rule-category-filter" data-cat="maintainability" onclick="filterRuleCategory('maintainability')">可维护性</span>
-                        <span class="rule-category-filter" data-cat="test_coverage" onclick="filterRuleCategory('test_coverage')">测试覆盖</span>
-                        <span class="rule-category-filter" data-cat="go" onclick="filterRuleCategory('go')">Go</span>
-                        <span class="rule-category-filter" data-cat="python" onclick="filterRuleCategory('python')">Python</span>
-                        <span class="rule-category-filter" data-cat="frontend" onclick="filterRuleCategory('frontend')">前端</span>
-                        <span class="rule-category-filter" data-cat="java" onclick="filterRuleCategory('java')">Java</span>
-                    </div>
-
-                    <div class="flex gap-2 mb-4">
-                        <input type="text" id="ruleSearch" placeholder="搜索规则..." class="px-3 py-2 border rounded-lg text-sm w-64 focus:ring-2 focus:ring-blue-500 focus:outline-none" onkeyup="if(event.key==='Enter')renderProjectRules()">
-                        <button onclick="renderProjectRules()" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200">搜索</button>
+                    <!-- 筛选区域 -->
+                    <div class="bg-gray-50 rounded-lg p-4 mb-4 space-y-3">
+                        <!-- 分类筛选 -->
+                        <div class="flex items-start gap-3">
+                            <span class="text-xs text-gray-500 font-medium whitespace-nowrap mt-1 shrink-0 w-16 text-right">分类</span>
+                            <div class="flex flex-wrap gap-1.5" id="ruleCategoryFilters">
+                                <!-- 动态渲染 -->
+                            </div>
+                        </div>
+                        <!-- 严重程度筛选 -->
+                        <div class="flex items-start gap-3">
+                            <span class="text-xs text-gray-500 font-medium whitespace-nowrap mt-1 shrink-0 w-16 text-right">严重程度</span>
+                            <div class="flex flex-wrap gap-1.5" id="ruleSeverityFilters">
+                                <span class="rule-category-filter active" data-sev="all" onclick="filterRuleSeverity('all')">全部</span>
+                                <span class="rule-category-filter" data-sev="critical" onclick="filterRuleSeverity('critical')">严重</span>
+                                <span class="rule-category-filter" data-sev="high" onclick="filterRuleSeverity('high')">高危</span>
+                                <span class="rule-category-filter" data-sev="medium" onclick="filterRuleSeverity('medium')">中危</span>
+                                <span class="rule-category-filter" data-sev="low" onclick="filterRuleSeverity('low')">低危</span>
+                                <span class="rule-category-filter" data-sev="info" onclick="filterRuleSeverity('info')">提示</span>
+                            </div>
+                        </div>
+                        <!-- 开发语言筛选 -->
+                        <div class="flex items-start gap-3">
+                            <span class="text-xs text-gray-500 font-medium whitespace-nowrap mt-1 shrink-0 w-16 text-right">开发语言</span>
+                            <div class="flex flex-wrap gap-1.5" id="ruleLanguageFilters">
+                                <span class="rule-category-filter active" data-lang="all" onclick="filterRuleLanguage('all')">全部</span>
+                                <span class="rule-category-filter" data-lang="common" onclick="filterRuleLanguage('common')">通用</span>
+                                <span class="rule-category-filter" data-lang="golang" onclick="filterRuleLanguage('golang')">Go</span>
+                                <span class="rule-category-filter" data-lang="python" onclick="filterRuleLanguage('python')">Python</span>
+                                <span class="rule-category-filter" data-lang="frontend" onclick="filterRuleLanguage('frontend')">前端</span>
+                                <span class="rule-category-filter" data-lang="java" onclick="filterRuleLanguage('java')">Java</span>
+                            </div>
+                        </div>
+                        <!-- 搜索 -->
+                        <div class="flex gap-2 pt-3 border-t border-gray-200">
+                            <input type="text" id="ruleSearch" placeholder="搜索规则名称或代码..." class="px-3 py-2 border rounded-lg text-sm w-72 focus:ring-2 focus:ring-blue-500 focus:outline-none" onkeyup="if(event.key==='Enter'){ruleCurrentPage=1;renderProjectRules();}">
+                            <button onclick="ruleCurrentPage=1;renderProjectRules();" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200">搜索</button>
+                            <span id="ruleFilterCount" class="text-xs text-gray-400 self-center ml-auto"></span>
+                        </div>
                     </div>
 
                     <div class="overflow-x-auto max-h-[600px] overflow-y-auto border rounded-lg">
                         <table class="w-full text-sm">
                             <thead class="bg-gray-50 border-b sticky top-0">
                                 <tr>
-                                    <th class="px-4 py-3 text-left w-10">
-                                        <input type="checkbox" onchange="toggleAllRules(this.checked)">
-                                    </th>
                                     <th class="px-4 py-3 text-left font-semibold text-gray-500">规则名称</th>
                                     <th class="px-4 py-3 text-left font-semibold text-gray-500">描述</th>
                                     <th class="px-4 py-3 text-center font-semibold text-gray-500">分类</th>
+                                    <th class="px-4 py-3 text-center font-semibold text-gray-500">开发语言</th>
                                     <th class="px-4 py-3 text-center font-semibold text-gray-500">严重程度</th>
                                     <th class="px-4 py-3 text-center font-semibold text-gray-500">严重程度(覆盖)</th>
+                                    <th class="px-4 py-3 text-center font-semibold text-gray-500 w-28">状态</th>
                                 </tr>
                             </thead>
                             <tbody id="projectRulesBody" class="divide-y">
                             </tbody>
                         </table>
+                    </div>
+                    <div class="px-4 py-3 border-t flex items-center justify-between">
+                        <span id="rulePageInfo" class="text-sm text-gray-500"></span>
+                        <div class="flex gap-2" id="rulePagination"></div>
                     </div>
                 </div>
             </div>
@@ -425,7 +456,35 @@
     // ========== 评审规则配置 ==========
     let allReviewRules = [];
     let projectRulesMap = {}; // rule_id -> { is_enabled, severity }
+    let reviewCategories = [];
     let currentRuleCategory = 'all';
+    let currentRuleSeverity = 'all';
+    let currentRuleLanguage = 'all';
+    let ruleCurrentPage = 1;
+    let rulePageSize = 15;
+    let ruleTotalPages = 1;
+
+    async function loadReviewCategories() {
+        try {
+            const res = await apiFetch(`${API_BASE}/review-categories`);
+            const json = await res.json();
+            reviewCategories = json.data || [];
+            renderCategoryFilters();
+        } catch (e) {
+            console.error('加载分类失败:', e);
+            reviewCategories = [];
+        }
+    }
+
+    function renderCategoryFilters() {
+        const container = document.getElementById('ruleCategoryFilters');
+        if (!container) return;
+        let html = `<span class="rule-category-filter active" data-cat="all" onclick="filterRuleCategory('all')">全部</span>`;
+        reviewCategories.forEach(cat => {
+            html += `<span class="rule-category-filter" data-cat="${escapeHtml(cat.code)}" onclick="filterRuleCategory('${escapeHtml(cat.code)}')">${escapeHtml(cat.name)}</span>`;
+        });
+        container.innerHTML = html;
+    }
 
     async function loadProjectRules() {
         const projectId = getProjectId();
@@ -433,7 +492,7 @@
         try {
             // 并行获取全部规则库和项目的规则配置
             const [rulesRes, configRes] = await Promise.all([
-                apiFetch(`${API_BASE}/admin/review-rules?page=1&page_size=1000&is_builtin=true`),
+                apiFetch(`${API_BASE}/review-rules?page=1&page_size=1000`),
                 apiFetch(`${API_BASE}/projects/${projectId}/review-rules`)
             ]);
             const rulesJson = await rulesRes.json();
@@ -442,7 +501,10 @@
             // 构建项目规则 map
             projectRulesMap = {};
             (configJson.data || []).forEach(cfg => {
-                projectRulesMap[cfg.rule_id] = { is_enabled: cfg.is_enabled, severity: cfg.severity };
+                projectRulesMap[cfg.rule_id] = { 
+                    is_enabled: cfg.is_enabled, 
+                    severity: cfg.project_severity || cfg.severity  // 优先使用项目自定义严重程度
+                };
             });
             renderProjectRules();
         } catch (e) {
@@ -452,8 +514,27 @@
 
     function filterRuleCategory(cat) {
         currentRuleCategory = cat;
+        ruleCurrentPage = 1;
         document.querySelectorAll('#ruleCategoryFilters .rule-category-filter').forEach(el => {
             el.classList.toggle('active', el.dataset.cat === cat);
+        });
+        renderProjectRules();
+    }
+
+    function filterRuleSeverity(sev) {
+        currentRuleSeverity = sev;
+        ruleCurrentPage = 1;
+        document.querySelectorAll('#ruleSeverityFilters .rule-category-filter').forEach(el => {
+            el.classList.toggle('active', el.dataset.sev === sev);
+        });
+        renderProjectRules();
+    }
+
+    function filterRuleLanguage(lang) {
+        currentRuleLanguage = lang;
+        ruleCurrentPage = 1;
+        document.querySelectorAll('#ruleLanguageFilters .rule-category-filter').forEach(el => {
+            el.classList.toggle('active', el.dataset.lang === lang);
         });
         renderProjectRules();
     }
@@ -465,47 +546,59 @@
         const search = (document.getElementById('ruleSearch')?.value || '').toLowerCase().trim();
         let filtered = allReviewRules.filter(r => {
             if (currentRuleCategory !== 'all' && r.category !== currentRuleCategory) return false;
+            if (currentRuleSeverity !== 'all' && r.severity !== currentRuleSeverity) return false;
+            if (currentRuleLanguage !== 'all' && (r.language || 'common') !== currentRuleLanguage) return false;
             if (search) {
-                const text = (r.name + ' ' + r.name_cn + ' ' + r.description + ' ' + r.rule_code).toLowerCase();
+                const text = (r.name + ' ' + r.code + ' ' + r.description).toLowerCase();
                 return text.includes(search);
             }
             return true;
         });
 
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">暂无匹配规则</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">暂无匹配规则</td></tr>';
+            document.getElementById('rulePagination').innerHTML = '';
+            document.getElementById('rulePageInfo').textContent = '';
+            document.getElementById('ruleFilterCount').textContent = '';
             return;
         }
 
+        document.getElementById('ruleFilterCount').textContent = `共 ${filtered.length} 条规则`;
+
         // 排序：已启用的排前面
         filtered.sort((a, b) => {
-            const aEnabled = projectRulesMap[a.ID]?.is_enabled ?? a.is_builtin;
-            const bEnabled = projectRulesMap[b.ID]?.is_enabled ?? b.is_builtin;
+            const aEnabled = projectRulesMap[a.id]?.is_enabled ?? a.is_built_in;
+            const bEnabled = projectRulesMap[b.id]?.is_enabled ?? b.is_built_in;
             return bEnabled - aEnabled;
         });
 
-        tbody.innerHTML = filtered.map(r => {
-            const cfg = projectRulesMap[r.ID] || {};
-            const isEnabled = typeof cfg.is_enabled === 'boolean' ? cfg.is_enabled : (r.is_builtin ? true : false);
-            const severity = cfg.severity || r.default_severity || 'medium';
+        // 分页
+        ruleTotalPages = Math.ceil(filtered.length / rulePageSize) || 1;
+        if (ruleCurrentPage > ruleTotalPages) ruleCurrentPage = ruleTotalPages;
+        if (ruleCurrentPage < 1) ruleCurrentPage = 1;
+        const start = (ruleCurrentPage - 1) * rulePageSize;
+        const pageItems = filtered.slice(start, start + rulePageSize);
+
+        tbody.innerHTML = pageItems.map(r => {
+            const cfg = projectRulesMap[r.id] || {};
+            const isEnabled = typeof cfg.is_enabled === 'boolean' ? cfg.is_enabled : (r.is_built_in ? true : false);
+            const severity = cfg.severity || r.severity || 'medium';
             return `
-                <tr class="hover:bg-gray-50 ${isEnabled ? '' : 'opacity-50'}">
+                <tr class="hover:bg-gray-50 ${isEnabled ? '' : 'status-disabled'}">
                     <td class="px-4 py-3">
-                        <input type="checkbox" class="rule-checkbox" data-rule-id="${r.ID}" ${isEnabled ? 'checked' : ''}>
+                        <div class="font-medium ${isEnabled ? 'text-gray-800' : ''}">${escapeHtml(r.name)}</div>
+                        <div class="text-xs ${isEnabled ? 'text-gray-400' : ''}">${escapeHtml(r.code)}</div>
                     </td>
-                    <td class="px-4 py-3">
-                        <div class="font-medium text-gray-800">${escapeHtml(r.name_cn || r.name)}</div>
-                        <div class="text-xs text-gray-400">${escapeHtml(r.rule_code)}</div>
-                    </td>
-                    <td class="px-4 py-3 text-gray-600">${escapeHtml(r.description)}</td>
+                    <td class="px-4 py-3">${escapeHtml(r.description)}</td>
                     <td class="px-4 py-3 text-center">
                         <span class="text-xs px-2 py-1 bg-gray-100 rounded">${getCategoryName(r.category)}</span>
                     </td>
                     <td class="px-4 py-3 text-center">
-                        ${renderSeverityBadge(r.default_severity)}
+                        <span class="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded">${getLanguageName(r.language)}</span>
                     </td>
+                    <td class="px-4 py-3 text-center">${renderSeverityBadge(r.severity)}</td>
                     <td class="px-4 py-3 text-center">
-                        <select class="severity-select text-xs border rounded px-2 py-1" data-rule-id="${r.ID}" onchange="onSeverityChange(${r.ID}, this.value)">
+                        <select class="severity-select text-xs border rounded px-2 py-1" data-rule-id="${r.id}" onchange="onSeverityChange(${r.id}, this.value)">
                             <option value="">默认</option>
                             <option value="critical" ${severity === 'critical' ? 'selected' : ''}>严重</option>
                             <option value="high" ${severity === 'high' ? 'selected' : ''}>高危</option>
@@ -514,9 +607,49 @@
                             <option value="info" ${severity === 'info' ? 'selected' : ''}>提示</option>
                         </select>
                     </td>
-                </tr>
-            `;
+                    <td class="px-4 py-3 text-center">
+                        <label class="switch-sm" title="${isEnabled ? '点击禁用此规则' : '点击启用此规则'}">
+                            <input type="checkbox" class="rule-toggle" data-rule-id="${r.id}" ${isEnabled ? 'checked' : ''} onchange="onRuleToggleChange(${r.id}, this.checked)">
+                            <span class="slider-sm"></span>
+                        </label>
+                        <div class="rule-status-text text-[10px] mt-1 ${isEnabled ? 'text-blue-600 font-medium' : 'text-gray-400'}">${isEnabled ? '已启用' : '已禁用'}</div>
+                    </td>
+                </tr>`;
         }).join('');
+
+        // 渲染分页
+        renderRulePagination(filtered.length);
+    }
+
+    function renderRulePagination(totalCount) {
+        const page = ruleCurrentPage;
+        const total = ruleTotalPages;
+        const pg = document.getElementById('rulePagination');
+        const info = document.getElementById('rulePageInfo');
+        if (!pg) return;
+
+        info.textContent = `共 ${totalCount} 条，每页 ${rulePageSize} 条`;
+
+        if (total <= 1) {
+            pg.innerHTML = '';
+            return;
+        }
+
+        let html = '';
+        html += `<button onclick="goToRulePage(${page - 1})" class="px-3 py-1 border rounded text-sm ${page === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 bg-white'}" ${page === 1 ? 'disabled' : ''}>上一页</button>`;
+
+        for (let i = Math.max(1, page - 2); i <= Math.min(total, page + 2); i++) {
+            html += `<button onclick="goToRulePage(${i})" class="px-3 py-1 border rounded text-sm ${i === page ? 'bg-blue-600 text-white' : 'hover:bg-gray-50 bg-white'}">${i}</button>`;
+        }
+
+        html += `<button onclick="goToRulePage(${page + 1})" class="px-3 py-1 border rounded text-sm ${page === total ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 bg-white'}" ${page === total ? 'disabled' : ''}>下一页</button>`;
+        pg.innerHTML = html;
+    }
+
+    function goToRulePage(page) {
+        if (page < 1 || page > ruleTotalPages) return;
+        ruleCurrentPage = page;
+        renderProjectRules();
     }
 
     function renderSeverityBadge(sev) {
@@ -533,7 +666,7 @@
 
     function getCategoryName(cat) {
         const map = {
-            common: '通用', security: '安全', code_quality: '代码质量',
+            common: '通用', security: '安全', performance: '性能', code_quality: '代码质量',
             readability: '可读性', maintainability: '可维护性',
             test_coverage: '测试覆盖', go: 'Go', python: 'Python',
             frontend: '前端', java: 'Java'
@@ -541,37 +674,78 @@
         return map[cat] || cat;
     }
 
+    function getLanguageName(lang) {
+        const map = {
+            common: '通用',
+            golang: 'Go',
+            python: 'Python',
+            frontend: '前端',
+            java: 'Java'
+        };
+        return map[lang] || lang || '通用';
+    }
+
     function toggleAllRules(checked) {
-        document.querySelectorAll('.rule-checkbox').forEach(cb => {
-            cb.checked = checked;
+        document.querySelectorAll('.rule-toggle').forEach(el => {
+            const ruleId = parseInt(el.dataset.ruleId);
+            el.checked = checked;
+            if (!projectRulesMap[ruleId]) projectRulesMap[ruleId] = {};
+            projectRulesMap[ruleId].is_enabled = checked;
         });
+        renderProjectRules();
+    }
+
+    function onRuleToggleChange(ruleId, checked) {
+        if (!projectRulesMap[ruleId]) projectRulesMap[ruleId] = {};
+        projectRulesMap[ruleId].is_enabled = checked;
+
+        // 只更新当前行的视觉状态，不重新渲染整个表格
+        const checkbox = document.querySelector(`.rule-toggle[data-rule-id="${ruleId}"]`);
+        if (!checkbox) return;
+        const row = checkbox.closest('tr');
+        const label = checkbox.closest('label');
+        const statusText = row.querySelector('.rule-status-text');
+
+        if (checked) {
+            row.classList.remove('status-disabled');
+            if (statusText) {
+                statusText.textContent = '已启用';
+                statusText.className = 'rule-status-text text-[10px] mt-1 text-blue-600 font-medium';
+            }
+            label.title = '点击禁用此规则';
+            row.querySelector('.font-medium')?.classList.remove('text-gray-400');
+        } else {
+            row.classList.add('status-disabled');
+            if (statusText) {
+                statusText.textContent = '已禁用';
+                statusText.className = 'rule-status-text text-[10px] mt-1 text-gray-400';
+            }
+            label.title = '点击启用此规则';
+            row.querySelector('.font-medium')?.classList.add('text-gray-400');
+        }
+
+        persistProjectRules();
     }
 
     function onSeverityChange(ruleId, value) {
-        // 实时更新 map（不保存到后端，等点击保存按钮）
         if (!projectRulesMap[ruleId]) projectRulesMap[ruleId] = {};
         projectRulesMap[ruleId].severity = value || null;
+        persistProjectRules();
     }
 
-    async function saveProjectRules() {
+    async function persistProjectRules() {
         const projectId = getProjectId();
         if (!projectId) return;
 
-        const enabledRuleIds = [];
-        const allRuleIds = allReviewRules.map(r => r.ID);
         const ruleUpdates = {};
-
-        document.querySelectorAll('.rule-checkbox').forEach(cb => {
-            const ruleId = parseInt(cb.dataset.ruleId);
-            const isEnabled = cb.checked;
-            const severitySelect = document.querySelector(`.severity-select[data-rule-id="${ruleId}"]`);
-            let severity = severitySelect ? severitySelect.value : '';
-
+        // 从内存中的 projectRulesMap 收集所有规则状态（而不是DOM，否则分页后只保存当前页）
+        for (const [ruleIdStr, cfg] of Object.entries(projectRulesMap)) {
+            const ruleId = parseInt(ruleIdStr);
             ruleUpdates[ruleId] = {
-                is_enabled: isEnabled,
-                severity: severity || null
+                is_enabled: cfg.is_enabled,
+                severity: cfg.severity || null
             };
-        });
+        }
 
         try {
             const res = await apiFetch(`${API_BASE}/projects/${projectId}/review-rules`, {
@@ -581,7 +755,6 @@
             });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             showToast('规则配置已保存');
-            loadProjectRules();
         } catch (e) {
             showToast('保存失败: ' + e.message, 'error');
         }
@@ -604,6 +777,12 @@
     document.addEventListener('DOMContentLoaded', () => {
         loadProjectDetail();
         renderSidebar('projects');
+        loadReviewCategories();
+        // 根据 URL 参数切换 Tab
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('tab') === 'rules') {
+            switchTab('rules');
+        }
     });
 </script>
 <script defer src="/static/js/tailwindcss.min.js"></script>

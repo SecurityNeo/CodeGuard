@@ -26,17 +26,23 @@ func (h *SystemHandler) GetConfig(c *gin.Context) {
 	var cfg model.SystemConfig
 	if err := model.DB.First(&cfg).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			cfg = model.SystemConfig{
-				TaskTimeoutMin:          30,
-				MaxParallelTask:         20,
-				LogRetentionDay:         90,
-				DiffTruncationThreshold: 5000,
-				AlertDurationSec:        300,
-				AlertCooldownSec:        3600,
-				AlertNotifierID:         0,
-				AlertMentionUserIDs:     "",
-				AILogTemplate:           "请先执行以下命令拉取代码：\ngit clone {{CLONE_URL}}\n\n变更摘要：\n{{MR_DIFF}}\n\n{{USER_INPUT}}\n\n请审查以上代码变更，给出审查意见。",
-			}
+		cfg = model.SystemConfig{
+			TaskTimeoutMin:          30,
+			MaxParallelTask:         20,
+			LogRetentionDay:         90,
+			DiffTruncationThreshold: 5000,
+			AlertDurationSec:        300,
+			AlertCooldownSec:        3600,
+			AlertNotifierID:         0,
+			AlertMentionUserIDs:     "",
+			JSONRetryMaxAttempts:       3,
+			JSONRetryInitialDelaySec:   2,
+			JSONRetryBackoffMultiplier: 2.0,
+			JSONRetryMaxDelaySec:       30,
+			JSONRetryFallbackStrategy:  "regex",
+			DefaultDimensionWeights: `{"security":30,"code_quality":25,"readability":20,"maintainability":15,"test_coverage":10}`,
+			AILogTemplate: "请先执行以下命令拉取代码：\ngit clone {{CLONE_URL}}\n\n变更摘要：\n{{MR_DIFF}}\n\n{{USER_INPUT}}\n\n请审查以上代码变更，给出审查意见。",
+		}
 			if err := model.DB.Create(&cfg).Error; err != nil {
 				zap.L().Error("create system config failed", zap.Error(err))
 				c.JSON(500, gin.H{"error": err.Error()})
@@ -165,6 +171,43 @@ func (h *SystemHandler) UpdateConfig(c *gin.Context) {
 	}
 	if v, ok := data["gitlab_oauth_skip_verify"]; ok {
 		updates["gitlab_oauth_skip_verify"] = v.(bool)
+	}
+
+	// JSON Retry 配置字段
+	if v, ok := data["json_retry_max_attempts"]; ok {
+		val := int(v.(float64))
+		if val < 0 { val = 0 }
+		updates["json_retry_max_attempts"] = val
+	}
+	if v, ok := data["json_retry_initial_delay_sec"]; ok {
+		val := int(v.(float64))
+		if val < 0 { val = 0 }
+		updates["json_retry_initial_delay_sec"] = val
+	}
+	if v, ok := data["json_retry_backoff_multiplier"]; ok {
+		val := v.(float64)
+		if val < 1.0 { val = 1.0 }
+		updates["json_retry_backoff_multiplier"] = val
+	}
+	if v, ok := data["json_retry_max_delay_sec"]; ok {
+		val := int(v.(float64))
+		if val < 0 { val = 0 }
+		updates["json_retry_max_delay_sec"] = val
+	}
+	if v, ok := data["json_retry_fallback_strategy"]; ok {
+		str := v.(string)
+		if str != "regex" && str != "markdown" && str != "fail" {
+			str = "regex"
+		}
+		updates["json_retry_fallback_strategy"] = str
+	}
+
+	// 模板相关字段
+	if v, ok := data["default_dimension_weights"]; ok {
+		updates["default_dimension_weights"] = v.(string)
+	}
+	if v, ok := data["default_gitlab_comment_template"]; ok {
+		updates["default_gitlab_comment_template"] = v.(string)
 	}
 
 	// 判断是更新哪种模板或系统配置

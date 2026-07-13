@@ -86,6 +86,19 @@
         </header>
 
         <div class="p-8 space-y-6">
+            <!-- 维度管理 -->
+            <div class="bg-white rounded-xl p-4 border">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-semibold text-gray-700">评审维度</h3>
+                    <button data-admin-only onclick="openCategoryDrawer()" class="text-blue-600 text-sm hover:text-blue-700">
+                        <i class="fas fa-cog mr-1"></i>管理维度
+                    </button>
+                </div>
+                <div class="flex flex-wrap gap-2 mt-3" id="categoryTags">
+                    <!-- 动态加载 -->
+                </div>
+            </div>
+
             <!-- 筛选栏 -->
             <div class="bg-white rounded-xl p-4 border flex items-center gap-4 flex-wrap">
                 <div class="flex-1 min-w-[200px]">
@@ -95,11 +108,6 @@
                 </div>
                 <select id="categoryFilter" onchange="loadRules()" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
                     <option value="">全部维度</option>
-                    <option value="security">安全性</option>
-                    <option value="performance">性能</option>
-                    <option value="readability">可读性</option>
-                    <option value="maintainability">可维护性</option>
-                    <option value="test_coverage">测试覆盖</option>
                 </select>
                 <select id="languageFilter" onchange="loadRules()" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
                     <option value="">全部语言</option>
@@ -156,75 +164,257 @@
 
 <!-- 创建规则 Modal -->
 <div id="createModal" class="modal fixed inset-0 z-50 items-center justify-center bg-black/50 hidden">
-    <div class="bg-white rounded-xl w-[600px] max-h-[80vh] overflow-y-auto shadow-2xl">
+    <div class="bg-white rounded-xl w-[640px] max-h-[85vh] flex flex-col shadow-2xl">
         <div class="px-6 py-4 border-b flex items-center justify-between">
-            <h3 class="font-bold text-lg">创建自定义规则</h3>
+            <h3 class="font-bold text-lg" id="createModalTitle">创建自定义规则</h3>
             <button onclick="closeCreateModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            <!-- 基础信息 -->
+            <div>
+                <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <span class="w-1 h-3 bg-blue-500 rounded-full"></span>基础信息 <span class="text-red-500">*</span>
+                </h4>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5"><i class="fas fa-fingerprint text-blue-400 mr-1"></i>规则编码</label>
+                        <input type="text" id="createCode" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="如 custom-sql-check">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5"><i class="fas fa-tag text-blue-400 mr-1"></i>规则名称</label>
+                        <input type="text" id="createName" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="如 SQL注入检查">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 配置属性 -->
+            <div>
+                <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <span class="w-1 h-3 bg-purple-500 rounded-full"></span>配置属性
+                </h4>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5"><i class="fas fa-cubes text-purple-400 mr-1"></i>维度</label>
+                        <select id="createCategory" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                            <option value="security">安全性</option>
+                            <option value="performance">性能</option>
+                            <option value="readability">可读性</option>
+                            <option value="maintainability">可维护性</option>
+                            <option value="test_coverage">测试覆盖</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5"><i class="fas fa-code text-purple-400 mr-1"></i>编程语言</label>
+                        <select id="createLanguage" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                            <option value="common">通用</option>
+                            <option value="golang">Go</option>
+                            <option value="python">Python</option>
+                            <option value="frontend">前端</option>
+                            <option value="java">Java</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5"><i class="fas fa-exclamation-triangle text-red-400 mr-1"></i>严重级别</label>
+                        <select id="createSeverity" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                            <option value="critical">严重</option>
+                            <option value="high">高危</option>
+                            <option value="medium">中危</option>
+                            <option value="low">低危</option>
+                            <option value="info">提示</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 内容定义 -->
+            <div>
+                <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <span class="w-1 h-3 bg-green-500 rounded-full"></span>内容定义
+                </h4>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5"><i class="fas fa-align-left text-gray-400 mr-1"></i>规则说明</label>
+                        <textarea id="createDescription" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="简要描述此规则检查的内容、触发条件及修复建议..."></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1.5"><i class="fas fa-terminal text-gray-700 mr-1"></i>Prompt 片段</label>
+                        <textarea id="createPrompt" rows="4" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono bg-gray-50" placeholder="输入给 LLM 的检查指令，这是 AI 评审时会使用的提示词片段..."></textarea>
+                        <p class="text-xs text-gray-400 mt-1.5 flex items-start gap-1"><i class="fas fa-lightbulb text-yellow-400 mt-0.5"></i>Prompt 片段会直接包含在 AI 评审请求中，建议清晰描述检查目标和示例。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="px-6 py-4 border-t flex justify-end gap-3 flex-shrink-0">
+            <button onclick="closeCreateModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">取消</button>
+            <button onclick="submitCreateRule()" class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">创建规则</button>
+        </div>
+    </div>
+</div>
+
+<!-- 维度管理 Drawer -->
+<div id="categoryDrawer" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/30" onclick="closeCategoryDrawer()"></div>
+    <div class="absolute right-0 top-0 bottom-0 w-[480px] bg-white shadow-2xl drawer" id="categoryDrawerContent">
+        <div class="h-full flex flex-col">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="font-bold text-lg">维度管理</h3>
+                <button onclick="closeCategoryDrawer()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 space-y-3" id="categoryDrawerBody">
+                <!-- 动态填充 -->
+    </div>
+    <div class="px-6 py-4 border-t">
+        <button onclick="openCreateCategoryModal()" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+            <i class="fas fa-plus mr-1"></i>新建维度
+        </button>
+    </div>
+</div>
+</div>
+
+<!-- 编辑维度 Modal -->
+<div id="editCategoryModal" class="modal fixed inset-0 z-50 items-center justify-center bg-black/50 hidden">
+<div class="bg-white rounded-xl w-[400px]">
+    <div class="px-6 py-4 border-b flex items-center justify-between">
+        <h3 class="font-bold text-lg">编辑维度</h3>
+        <button onclick="closeEditCategoryModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="p-6 space-y-4">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">维度名称 <span class="text-red-500">*</span></label>
+            <input type="text" id="editCatName" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="维度名称">
+            <input type="hidden" id="editCatId">
+        </div>
+    </div>
+    <div class="px-6 py-4 border-t flex justify-end gap-3">
+        <button onclick="closeEditCategoryModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">取消</button>
+        <button onclick="submitEditCategory()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">保存</button>
+    </div>
+</div>
+</div>
+
+<!-- 删除维度确认 Modal -->
+<div id="deleteCategoryModal" class="modal fixed inset-0 z-50 items-center justify-center bg-black/50 hidden">
+<div class="bg-white rounded-xl w-[400px]">
+    <div class="px-6 py-4 border-b flex items-center justify-between">
+        <h3 class="font-bold text-lg text-red-600"><i class="fas fa-exclamation-triangle mr-2"></i>确认删除</h3>
+        <button onclick="closeDeleteCategoryModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="p-6">
+        <p class="text-sm text-gray-700">确定删除维度 <strong id="deleteCatNameDisplay" class="text-gray-900"></strong> 吗？</p>
+        <p class="text-xs text-gray-500 mt-2">如果该维度下有关联规则，将无法删除。</p>
+        <input type="hidden" id="deleteCatId">
+    </div>
+    <div class="px-6 py-4 border-t flex justify-end gap-3">
+        <button onclick="closeDeleteCategoryModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">取消</button>
+        <button onclick="submitDeleteCategory()" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">确定删除</button>
+    </div>
+</div>
+</div>
+
+<!-- 创建维度 Modal -->
+<div id="createCategoryModal" class="modal fixed inset-0 z-50 items-center justify-center bg-black/50 hidden">
+    <div class="bg-white rounded-xl w-[400px]">
+        <div class="px-6 py-4 border-b flex items-center justify-between">
+            <h3 class="font-bold text-lg">新建评审维度</h3>
+            <button onclick="closeCreateCategoryModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
         </div>
         <div class="p-6 space-y-4">
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">规则编码 <span class="text-red-500">*</span></label>
-                <input type="text" id="createCode" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="如 custom-sql-check">
+                <label class="block text-sm font-medium text-gray-700 mb-1">维度编码 <span class="text-red-500">*</span></label>
+                <input type="text" id="catCode" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="如 custom_style">
+                <p class="text-xs text-gray-400 mt-1">仅支持小写字母、数字和下划线</p>
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">规则名称 <span class="text-red-500">*</span></label>
-                <input type="text" id="createName" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="如 SQL注入检查">
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">维度 <span class="text-red-500">*</span></label>
-                    <select id="createCategory" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                        <option value="security">安全性</option>
-                        <option value="performance">性能</option>
-                        <option value="readability">可读性</option>
-                        <option value="maintainability">可维护性</option>
-                        <option value="test_coverage">测试覆盖</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">编程语言 <span class="text-red-500">*</span></label>
-                    <select id="createLanguage" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                        <option value="common">通用</option>
-                        <option value="golang">Go</option>
-                        <option value="python">Python</option>
-                        <option value="frontend">前端</option>
-                        <option value="java">Java</option>
-                    </select>
-                </div>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">严重级别 <span class="text-red-500">*</span></label>
-                <select id="createSeverity" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                    <option value="critical">严重</option>
-                    <option value="high">高危</option>
-                    <option value="medium">中危</option>
-                    <option value="low">低危</option>
-                    <option value="info">提示</option>
-                </select>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">规则说明</label>
-                <textarea id="createDescription" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="简要描述此规则检查的内容..."></textarea>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Prompt 片段 <span class="text-red-500">*</span></label>
-                <textarea id="createPrompt" rows="4" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-mono" placeholder="输入给 LLM 的检查指令..."></textarea>
+                <label class="block text-sm font-medium text-gray-700 mb-1">维度名称 <span class="text-red-500">*</span></label>
+                <input type="text" id="catName" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="如 代码风格">
             </div>
         </div>
         <div class="px-6 py-4 border-t flex justify-end gap-3">
-            <button onclick="closeCreateModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">取消</button>
-            <button onclick="submitCreateRule()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">创建</button>
+            <button onclick="closeCreateCategoryModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">取消</button>
+            <button onclick="createCategory()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">创建</button>
         </div>
     </div>
 </div>
 
 <script>
+const API_BASE = '/api/v1';
+
+// authHeaders 与 apiFetch 兼容性辅助（review-rules.html 独立使用）
+function authHeaders() {
+    const token = localStorage.getItem('auth_token');
+    return token ? { 'Authorization': 'Bearer ' + token } : {};
+}
+
+async function apiFetch(url, options = {}) {
+    const token = localStorage.getItem('auth_token');
+    const headers = Object.assign({}, options.headers || {});
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    if (!headers['Content-Type'] && options.body) headers['Content-Type'] = 'application/json';
+    const resp = await fetch(url, Object.assign({}, options, { headers }));
+    if (resp.status === 401) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user_info');
+        window.location.href = '/login.html';
+        throw new Error('未登录');
+    }
+    return resp;
+}
+
 let rulesData = [];
+let categoriesData = [];
 
 const severityLabels = { critical: '严重', high: '高危', medium: '中危', low: '低危', info: '提示' };
 const severityColors = { critical: 'text-red-600 bg-red-50', high: 'text-orange-600 bg-orange-50', medium: 'text-yellow-600 bg-yellow-50', low: 'text-blue-600 bg-blue-50', info: 'text-gray-600 bg-gray-50' };
-const categoryLabels = { security: '安全性', performance: '性能', readability: '可读性', maintainability: '可维护性', test_coverage: '测试覆盖' };
 const languageLabels = { common: '通用', golang: 'Go', python: 'Python', frontend: '前端', java: 'Java' };
+
+const categoryStyleMap = {
+    'security': { bg: 'bg-red-50', text: 'text-red-700' },
+    'performance': { bg: 'bg-orange-50', text: 'text-orange-700' },
+    'readability': { bg: 'bg-blue-50', text: 'text-blue-700' },
+    'maintainability': { bg: 'bg-green-50', text: 'text-green-700' },
+    'test_coverage': { bg: 'bg-purple-50', text: 'text-purple-700' }
+};
+
+async function loadCategories() {
+    try {
+        const res = await apiFetch(API_BASE + '/review-categories');
+        const data = await res.json();
+        categoriesData = data.data || [];
+        renderCategoryFilter();
+        renderCategoryTags();
+        renderCreateCategorySelect();
+    } catch (e) {
+        console.error('加载维度失败:', e);
+    }
+}
+
+function renderCategoryFilter() {
+    const sel = document.getElementById('categoryFilter');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">全部维度</option>' +
+        categoriesData.map(c => `<option value="${c.code}">${c.name}</option>`).join('');
+}
+
+function renderCreateCategorySelect() {
+    const sel = document.getElementById('createCategory');
+    if (!sel) return;
+    sel.innerHTML = categoriesData.map(c => `<option value="${c.code}">${c.name}</option>`).join('');
+}
+
+function renderCategoryTags() {
+    const container = document.getElementById('categoryTags');
+    if (!container) return;
+    if (categoriesData.length === 0) {
+        container.innerHTML = '<span class="text-gray-400 text-sm">加载中...</span>';
+        return;
+    }
+    container.innerHTML = categoriesData.map(c => {
+        const isBuiltin = c.is_built_in;
+        return `<span class="px-3 py-1 rounded-full text-xs font-medium ${isBuiltin ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700'} border">
+            ${c.name}${isBuiltin ? ' <span class="text-gray-400">(内置)</span>' : ''}
+        </span>`;
+    }).join('');
+}
 
 async function loadRules() {
     const keyword = document.getElementById('searchInput').value;
@@ -242,7 +432,7 @@ async function loadRules() {
     grid.innerHTML = '<div class="col-span-full text-center py-12 text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>加载中...</div>';
 
     try {
-        const res = await fetch(API_BASE + '/admin/review-rules?' + params.toString(), { headers: authHeaders() });
+        const res = await apiFetch(API_BASE + '/review-rules?' + params.toString());
         const data = await res.json();
         rulesData = data.data || [];
         renderRules();
@@ -264,7 +454,7 @@ function renderRules() {
             <div class="flex items-start justify-between mb-2">
                 <div class="flex items-center gap-2">
                     <span class="text-xs font-medium px-2 py-0.5 rounded ${severityColors[rule.severity] || 'text-gray-600 bg-gray-50'}">${severityLabels[rule.severity] || rule.severity}</span>
-                    <span class="text-xs px-2 py-0.5 rounded category-${rule.category}">${categoryLabels[rule.category] || rule.category}</span>
+                    <span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">${getCategoryName(rule.category)}</span>
                 </div>
                 <div class="flex items-center gap-2">
                     ${rule.is_built_in ? '<span class="built-in-badge">内置</span>' : '<span class="text-xs px-2 py-0.5 rounded bg-green-50 text-green-600">自定义</span>'}
@@ -284,14 +474,19 @@ function renderRules() {
     `).join('');
 }
 
+function getCategoryName(code) {
+    const cat = categoriesData.find(c => c.code === code);
+    return cat ? cat.name : code;
+}
+
 async function toggleRuleEnabled(ruleId, switchEl) {
     const checkbox = switchEl.querySelector('input');
     const newState = checkbox.checked;
 
     try {
-        const res = await fetch(API_BASE + '/admin/review-rules/batch-enable', {
+        const res = await apiFetch(API_BASE + '/review-rules/batch-enable', {
             method: 'PUT',
-            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ rule_ids: [ruleId], is_enabled: newState })
         });
         if (!res.ok) throw new Error('更新失败');
@@ -306,35 +501,48 @@ function showRuleDetail(ruleId) {
     const rule = rulesData.find(r => r.id === ruleId);
     if (!rule) return;
 
+    const cat = categoriesData.find(c => c.code === rule.category);
+    const catStyle = categoryStyleMap[rule.category] || { bg: 'bg-gray-50', text: 'text-gray-700' };
+
     document.getElementById('drawerTitle').textContent = rule.name;
     document.getElementById('drawerBody').innerHTML = `
-        <div class="space-y-4">
-            <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-xs font-medium px-2 py-0.5 rounded ${severityColors[rule.severity] || ''}">${severityLabels[rule.severity] || rule.severity}</span>
-                <span class="text-xs px-2 py-0.5 rounded category-${rule.category}">${categoryLabels[rule.category] || rule.category}</span>
-                <span class="language-tag">${languageLabels[rule.language] || rule.language}</span>
-                ${rule.is_built_in ? '<span class="built-in-badge">内置规则</span>' : '<span class="text-xs px-2 py-0.5 rounded bg-green-50 text-green-600">自定义规则</span>'}
-            </div>
-            <div>
-                <label class="text-xs text-gray-500">规则编码</label>
-                <p class="text-sm font-mono bg-gray-50 px-3 py-2 rounded">${rule.code}</p>
-            </div>
-            <div>
-                <label class="text-xs text-gray-500">规则说明</label>
-                <p class="text-sm text-gray-700 bg-gray-50 px-3 py-2 rounded">${rule.description || '暂无说明'}</p>
-            </div>
-            <div>
-                <label class="text-xs text-gray-500">Prompt 片段</label>
-                <pre class="text-xs bg-gray-900 text-gray-100 px-3 py-3 rounded overflow-x-auto">${rule.prompt || '暂无'}</pre>
-            </div>
-            ${!rule.is_built_in ? `
-            <div class="pt-4 border-t flex gap-2">
-                <button onclick="deleteRule(${rule.id})" class="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm hover:bg-red-100">
-                    <i class="fas fa-trash mr-1"></i>删除规则
-                </button>
-            </div>
-            ` : ''}
+        <!-- 状态标签行 -->
+        <div class="flex items-center gap-2 flex-wrap mb-2">
+            <span class="text-xs font-medium px-2.5 py-1 rounded-full ${severityColors[rule.severity] || 'text-gray-600 bg-gray-50'}">${severityLabels[rule.severity] || rule.severity}</span>
+            <span class="text-xs font-medium px-2.5 py-1 rounded-full ${catStyle.bg} ${catStyle.text}">${cat ? cat.name : rule.category}</span>
+            <span class="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">${languageLabels[rule.language] || rule.language}</span>
+            ${rule.is_built_in ? '<span class="text-xs px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 font-medium">内置规则</span>' : '<span class="text-xs px-2.5 py-1 rounded-full bg-green-50 text-green-600 font-medium">自定义规则</span>'}
         </div>
+
+        <!-- 规则名称 -->
+        <div class="mb-4">
+            <h2 class="text-lg font-bold text-gray-800">${rule.name}</h2>
+            <p class="text-xs text-gray-400 font-mono mt-1">${rule.code}</p>
+        </div>
+
+        <!-- 规则说明 -->
+        <div class="bg-gray-50 rounded-lg p-4 mb-4">
+            <label class="text-xs font-semibold text-gray-500 mb-1.5 block"><i class="fas fa-align-left mr-1"></i>规则说明</label>
+            <p class="text-sm text-gray-700 leading-relaxed">${rule.description || '暂无说明'}</p>
+        </div>
+
+        <!-- Prompt 片段 -->
+        <div class="bg-gray-900 rounded-lg overflow-hidden mb-4">
+            <div class="px-3 py-2 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
+                <span class="text-xs text-gray-400"><i class="fas fa-code mr-1"></i>AI Prompt 片段</span>
+            </div>
+            <div class="p-3">
+                <pre class="text-xs text-gray-300 whitespace-pre-wrap font-mono leading-relaxed">${rule.prompt || '暂无 Prompt 片段'}</pre>
+            </div>
+        </div>
+
+        ${!rule.is_built_in ? `
+        <div class="pt-4 border-t flex gap-2">
+            <button onclick="deleteRule(${rule.id})" class="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm hover:bg-red-100 transition-colors">
+                <i class="fas fa-trash mr-1"></i>删除规则
+            </button>
+        </div>
+        ` : ''}
     `;
 
     document.getElementById('detailDrawer').classList.remove('hidden');
@@ -349,7 +557,7 @@ function closeDetailDrawer() {
 async function deleteRule(ruleId) {
     if (!confirm('确定要删除此自定义规则吗？')) return;
     try {
-        const res = await fetch(API_BASE + '/admin/review-rules/' + ruleId, {
+        const res = await apiFetch(API_BASE + '/review-rules/' + ruleId, {
             method: 'DELETE',
             headers: authHeaders()
         });
@@ -389,11 +597,11 @@ async function submitCreateRule() {
     }
 
     try {
-        const res = await fetch(API_BASE + '/admin/review-rules', {
-            method: 'POST',
-            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+            const res = await apiFetch(API_BASE + '/review-rules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
         if (!res.ok) throw new Error('创建失败');
         closeCreateModal();
         loadRules();
@@ -415,8 +623,130 @@ function showToast(message, type = 'success') {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    renderSidebar('review-rules');
+    loadCategories();
     loadRules();
 });
+
+// ========== 维度管理 ==========
+function openCategoryDrawer() {
+    document.getElementById('categoryDrawer').classList.remove('hidden');
+    setTimeout(() => document.getElementById('categoryDrawerContent').classList.add('active'), 10);
+    renderCategoryManager();
+}
+function closeCategoryDrawer() {
+    document.getElementById('categoryDrawerContent').classList.remove('active');
+    setTimeout(() => document.getElementById('categoryDrawer').classList.add('hidden'), 300);
+}
+function renderCategoryManager() {
+    const body = document.getElementById('categoryDrawerBody');
+    body.innerHTML = categoriesData.map(c => `
+        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+            <div>
+                <span class="font-medium text-gray-800">${c.name}</span>
+                <span class="text-xs text-gray-400 ml-2">${c.code}</span>
+                ${c.is_built_in ? '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded ml-2">内置</span>' : '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded ml-2">自定义</span>'}
+            </div>
+            <div class="flex items-center gap-2">
+                ${!c.is_built_in ? `
+                <button onclick="editCategoryName(${c.id}, '${c.name}')" class="text-gray-400 hover:text-blue-600 text-sm"><i class="fas fa-edit"></i></button>
+                <button onclick="deleteCategory(${c.id}, '${c.name}')" class="text-gray-400 hover:text-red-600 text-sm"><i class="fas fa-trash"></i></button>
+                ` : '<span class="text-xs text-gray-400">不可修改</span>'}
+            </div>
+        </div>
+    `).join('');
+}
+function openCreateCategoryModal() {
+    document.getElementById('catName').value = '';
+    document.getElementById('catCode').value = '';
+    document.getElementById('createCategoryModal').classList.remove('hidden');
+    document.getElementById('createCategoryModal').classList.add('active');
+}
+function closeCreateCategoryModal() {
+    document.getElementById('createCategoryModal').classList.remove('active');
+    setTimeout(() => document.getElementById('createCategoryModal').classList.add('hidden'), 200);
+}
+async function createCategory() {
+    const name = document.getElementById('catName').value.trim();
+    const code = document.getElementById('catCode').value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    if (!name || !code) {
+        showToast('名称和编码不能为空', 'error');
+        return;
+    }
+    try {
+        const res = await apiFetch(API_BASE + '/review-categories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code, name })
+        });
+        if (!res.ok) throw new Error('创建失败');
+        showToast('维度创建成功');
+        closeCreateCategoryModal();
+        await loadCategories();
+        renderCategoryManager();
+    } catch (e) {
+        showToast('创建失败: ' + e.message, 'error');
+    }
+}
+async function editCategoryName(id, currentName) {
+    document.getElementById('editCatId').value = id;
+    document.getElementById('editCatName').value = currentName;
+    document.getElementById('editCategoryModal').classList.remove('hidden');
+    document.getElementById('editCategoryModal').classList.add('active');
+}
+function closeEditCategoryModal() {
+    document.getElementById('editCategoryModal').classList.remove('active');
+    setTimeout(() => document.getElementById('editCategoryModal').classList.add('hidden'), 200);
+}
+async function submitEditCategory() {
+    const id = document.getElementById('editCatId').value;
+    const name = document.getElementById('editCatName').value.trim();
+    if (!name) {
+        showToast('维度名称不能为空', 'error');
+        return;
+    }
+    try {
+        const res = await apiFetch(API_BASE + '/review-categories/' + id, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        if (!res.ok) throw new Error('更新失败');
+        showToast('维度已更新');
+        closeEditCategoryModal();
+        await loadCategories();
+        renderCategoryManager();
+    } catch (e) {
+        showToast('更新失败: ' + e.message, 'error');
+    }
+}
+async function deleteCategory(id, name) {
+    document.getElementById('deleteCatId').value = id;
+    document.getElementById('deleteCatNameDisplay').textContent = name;
+    document.getElementById('deleteCategoryModal').classList.remove('hidden');
+    document.getElementById('deleteCategoryModal').classList.add('active');
+}
+function closeDeleteCategoryModal() {
+    document.getElementById('deleteCategoryModal').classList.remove('active');
+    setTimeout(() => document.getElementById('deleteCategoryModal').classList.add('hidden'), 200);
+}
+async function submitDeleteCategory() {
+    const id = document.getElementById('deleteCatId').value;
+    try {
+        const res = await apiFetch(API_BASE + '/review-categories/' + id, { method: 'DELETE' });
+        if (!res.ok) {
+            const json = await res.json();
+            throw new Error(json.error || '删除失败');
+        }
+        showToast('维度已删除');
+        closeDeleteCategoryModal();
+        await loadCategories();
+        renderCategoryManager();
+    } catch (e) {
+        showToast('删除失败: ' + e.message, 'error');
+    }
+}
 </script>
+<script defer src="/static/js/tailwindcss.min.js"></script>
 </body>
 </html>

@@ -145,6 +145,14 @@ func (s *LLMService) callLLMAPI(llmModel *model.LLMModel, systemPrompt, userProm
 	timeoutSec := llmModel.TimeoutSec
 	if err := model.DB.First(&sysCfg).Error; err == nil && sysCfg.TaskTimeoutMin > 0 {
 		timeoutSec = sysCfg.TaskTimeoutMin * 60
+		zap.L().Info("llm call using system task_timeout_min",
+			zap.Int("timeout_sec", timeoutSec),
+			zap.Int("task_timeout_min", sysCfg.TaskTimeoutMin))
+	} else {
+		zap.L().Warn("llm call using model default timeout",
+			zap.Int("timeout_sec", timeoutSec),
+			zap.Int("llm_model_timeout_sec", llmModel.TimeoutSec),
+			zap.Error(err))
 	}
 
 	client := &http.Client{

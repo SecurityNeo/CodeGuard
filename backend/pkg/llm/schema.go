@@ -3,12 +3,13 @@ package llm
 // AIReviewResult LLM 结构化评审输出（Strict Mode，全字段必填）
 // 注意：strict=true 时所有字段均为 required，不能省略
 type AIReviewResult struct {
-	SchemaVersion   string                  `json:"schema_version"`
-	TotalScore      int                     `json:"total_score"`
-	Dimensions      map[string]Dimension    `json:"dimensions"`
-	Summary         string                  `json:"summary"`
-	Issues          []AIReviewIssue         `json:"issues"`
-	Recommendations []string                `json:"recommendations"`
+	SchemaVersion       string               `json:"schema_version"`
+	TotalScore          int                  `json:"total_score"`
+	OriginalTotalScore  int                  `json:"original_total_score"`    // LLM 原始总分（后置校验前，用于展示对比）
+	Dimensions          map[string]Dimension `json:"dimensions"`
+	Summary             string               `json:"summary"`
+	Issues              []AIReviewIssue      `json:"issues"`
+	Recommendations     []string             `json:"recommendations"`
 }
 
 // Dimension 维度评分
@@ -19,19 +20,37 @@ type Dimension struct {
 
 // AIReviewIssue 评审发现的 Issue
 type AIReviewIssue struct {
-	RuleCode    string `json:"rule_code"`    // 为空字符串表示不属于已知规则
-	Severity    string `json:"severity"`     // critical/high/medium/low/info
-	Category    string `json:"category"`     // 维度分类
-	File        string `json:"file"`         // 文件路径
-	LineStart   int    `json:"line_start"`   // 起始行号，不确定时为 0
-	LineEnd     int    `json:"line_end"`     // 结束行号，单行为 0
-	CodeSnippet string `json:"code_snippet"` // 相关代码片段
-	Message     string `json:"message"`      // 问题描述
-	Suggestion  string `json:"suggestion"`   // 改进建议
+	RuleCode     string `json:"rule_code"`     // 为空字符串表示不属于已知规则
+	Severity     string `json:"severity"`      // critical/high/medium/low/info
+	DeductScore  int    `json:"deduct_score"`  // 该 Issue 扣多少分
+	Category     string `json:"category"`      // 维度分类
+	File         string `json:"file"`          // 文件路径
+	LineStart    int    `json:"line_start"`    // 起始行号，不确定时为 0
+	LineEnd      int    `json:"line_end"`      // 结束行号，单行为 0
+	CodeSnippet  string `json:"code_snippet"`  // 相关代码片段
+	Message      string `json:"message"`       // 问题描述
+	Suggestion   string `json:"suggestion"`    // 改进建议
 }
 
-// GetReviewJSONSchema 返回手写 JSON Schema（替代 invopop/jsonschema，避免外部依赖）
-func GetReviewJSONSchema() interface{} {
+// GetReviewJSONSchema 返回动态 JSON Schema（根据模板实际维度生成）
+func GetReviewJSONSchema(dimensions []string) interface{} {
+	if len(dimensions) == 0 {
+		dimensions = []string{"security", "code_quality", "readability", "maintainability", "test_coverage"}
+	}
+
+	dimProps := make(map[string]interface{})
+	for _, d := range dimensions {
+		dimProps[d] = map[string]interface{}{
+			"type":                 "object",
+			"additionalProperties": false,
+			"required":             []string{"score", "weight"},
+			"properties": map[string]interface{}{
+				"score":  map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 100},
+				"weight": map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 100},
+			},
+		}
+	}
+
 	return map[string]interface{}{
 		"type":                 "object",
 		"additionalProperties": false,
@@ -49,55 +68,9 @@ func GetReviewJSONSchema() interface{} {
 			},
 			"dimensions": map[string]interface{}{
 				"type":                 "object",
-				"additionalProperties": false,
-				"required":             []string{"security", "code_quality", "readability", "maintainability", "test_coverage"},
-				"properties": map[string]interface{}{
-					"security": map[string]interface{}{
-						"type":                 "object",
-						"additionalProperties": false,
-						"required":             []string{"score", "weight"},
-						"properties": map[string]interface{}{
-							"score":  map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 100},
-							"weight": map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 100},
-						},
-					},
-					"code_quality": map[string]interface{}{
-						"type":                 "object",
-						"additionalProperties": false,
-						"required":             []string{"score", "weight"},
-						"properties": map[string]interface{}{
-							"score":  map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 100},
-							"weight": map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 100},
-						},
-					},
-					"readability": map[string]interface{}{
-						"type":                 "object",
-						"additionalProperties": false,
-						"required":             []string{"score", "weight"},
-						"properties": map[string]interface{}{
-							"score":  map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 100},
-							"weight": map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 100},
-						},
-					},
-					"maintainability": map[string]interface{}{
-						"type":                 "object",
-						"additionalProperties": false,
-						"required":             []string{"score", "weight"},
-						"properties": map[string]interface{}{
-							"score":  map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 100},
-							"weight": map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 100},
-						},
-					},
-					"test_coverage": map[string]interface{}{
-						"type":                 "object",
-						"additionalProperties": false,
-						"required":             []string{"score", "weight"},
-						"properties": map[string]interface{}{
-							"score":  map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 100},
-							"weight": map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 100},
-						},
-					},
-				},
+				"additionalProperties": true,
+				"required":             dimensions,
+				"properties":           dimProps,
 			},
 			"summary": map[string]interface{}{
 				"type":        "string",
@@ -109,7 +82,7 @@ func GetReviewJSONSchema() interface{} {
 				"items": map[string]interface{}{
 					"type":                 "object",
 					"additionalProperties": false,
-					"required":             []string{"rule_code", "severity", "category", "file", "line_start", "line_end", "code_snippet", "message", "suggestion"},
+					"required":             []string{"rule_code", "severity", "deduct_score", "category", "file", "line_start", "line_end", "code_snippet", "message", "suggestion"},
 					"properties": map[string]interface{}{
 						"rule_code": map[string]interface{}{
 							"type":        "string",
@@ -120,10 +93,15 @@ func GetReviewJSONSchema() interface{} {
 							"description": "严重级别：critical/high/medium/low/info",
 							"enum":        []string{"critical", "high", "medium", "low", "info"},
 						},
+						"deduct_score": map[string]interface{}{
+							"type":        "integer",
+							"description": "该 Issue 扣多少分",
+							"minimum":     0,
+							"maximum":     100,
+						},
 						"category": map[string]interface{}{
 							"type":        "string",
-							"description": "所属维度",
-							"enum":        []string{"security", "performance", "readability", "maintainability", "test_coverage"},
+							"description": "所属维度 code",
 						},
 						"file": map[string]interface{}{
 							"type":        "string",

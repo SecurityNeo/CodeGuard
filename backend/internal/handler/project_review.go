@@ -73,18 +73,43 @@ func (h *ProjectReviewHandler) UpdateRules(c *gin.Context) {
 		return
 	}
 
+	changed := 0
 	for ruleIDStr, r := range req.Rules {
 		ruleID, _ := strconv.ParseUint(ruleIDStr, 10, 64)
-		updates := map[string]interface{}{
+
+		// 原子 upsert：存在则更新，不存在则创建
+		var cfg model.ProjectReviewConfig
+		err := model.DB.Where("project_id = ? AND rule_id = ?", projectID, uint(ruleID)).
+			Attrs(model.ProjectReviewConfig{
+				ProjectID: uint(projectID),
+				RuleID:    uint(ruleID),
+				IsEnabled: r.IsEnabled,
+				Severity:  r.Severity,
+			}).
+			FirstOrCreate(&cfg).Error
+		if err != nil {
+			zap.L().Warn("upsert project review config failed",
+				zap.Int("project_id", projectID),
+				zap.Uint64("rule_id", ruleID),
+				zap.Error(err))
+			continue
+		}
+
+		// 无条件更新，确保值一定被写入（覆盖 GORM 零值跳过问题）
+		if err := model.DB.Model(&cfg).UpdateColumns(map[string]interface{}{
 			"is_enabled": r.IsEnabled,
 			"severity":   r.Severity,
+		}).Error; err != nil {
+			zap.L().Warn("force update project review config failed",
+				zap.Int("project_id", projectID),
+				zap.Uint64("rule_id", ruleID),
+				zap.Error(err))
+			continue
 		}
-		model.DB.Model(&model.ProjectReviewConfig{}).
-			Where("project_id = ? AND rule_id = ?", projectID, uint(ruleID)).
-			Updates(updates)
+		changed++
 	}
 
-	c.JSON(200, gin.H{"message": "updated"})
+	c.JSON(200, gin.H{"message": "updated", "changed": changed})
 }
 
 // ResetRules 重置为默认规则配置
@@ -142,6 +167,7 @@ func (h *ProjectReviewHandler) QueryStructuredReview(c *gin.Context) {
 		"code": 0,
 		"data": gin.H{
 			"total_score":      task.ScoreValue,
+			"raw_ai_score":     task.RawAIScore,
 			"dimension_scores": task.DimensionScores,
 			"issue_count":      task.IssueCount,
 			"ai_response_json": task.AIResponseJSON,

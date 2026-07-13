@@ -61,6 +61,10 @@ func main() {
 	service.SetReportCron(cronRunner)
 	service.InitReportCron()
 
+	// 5.2. 启动资源池与大模型健康检查守护进程
+	service.NewPoolService().StartHealthCheckDaemon()
+	service.NewModelService().StartHealthCheckDaemon()
+
 	// 6. 初始化 HTTP Router
 	router := setupRouter(cfg)
 
@@ -154,6 +158,9 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 	r.GET("/tasks.html", func(c *gin.Context) {
 		c.File(frontendPath + "/tasks.html")
 	})
+	r.GET("/task-detail.html", func(c *gin.Context) {
+		c.File(frontendPath + "/task-detail.html")
+	})
 	r.GET("/pools.html", func(c *gin.Context) {
 		c.File(frontendPath + "/pools.html")
 	})
@@ -165,9 +172,6 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 	})
 	r.GET("/templates.html", func(c *gin.Context) {
 		c.File(frontendPath + "/templates.html")
-	})
-	r.GET("/project-templates.html", func(c *gin.Context) {
-		c.File(frontendPath + "/project-templates.html")
 	})
 	r.GET("/project-detail.html", func(c *gin.Context) {
 		c.File(frontendPath + "/project-detail.html")
@@ -321,6 +325,16 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			reviewRules.PUT("/batch-enable", h.BatchEnable)
 		}
 
+		// 评审维度管理
+		reviewCats := adminOnly.Group("/review-categories")
+		{
+			h := handler.NewReviewCategoryHandler()
+			reviewCats.GET("", h.List)
+			reviewCats.POST("", h.Create)
+			reviewCats.PUT("/:id", h.Update)
+			reviewCats.DELETE("/:id", h.Delete)
+		}
+
 		// 模版管理
 		template := adminOnly.Group("/templates")
 		{
@@ -331,6 +345,7 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			template.PUT("/:id", h.Update)
 			template.DELETE("/:id", h.Delete)
 			template.POST("/:id/clone", h.Clone)
+			template.POST("/:id/preview-comment", h.PreviewComment)
 		}
 
 		// 资源池管理
@@ -431,6 +446,7 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			report.GET("/preview/:type", h.PreviewReport)
 			report.POST("/send/:type", h.SendReport)
 			report.GET("/logs", h.ListLogs)
+			report.POST("/logs/:id/resend", h.ResendReport)
 			report.DELETE("/logs/:id", h.DeleteLog)
 			report.GET("/logs/:id/html", h.GetReportLogHTML)
 		}

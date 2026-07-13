@@ -100,6 +100,9 @@ func (h *ReviewRuleHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// 为所有已有项目自动插入默认配置（默认禁用），确保项目列表统计和规则配置页能正确显示
+	autoCreateProjectReviewConfigs(rule.ID)
+
 	c.JSON(200, gin.H{"code": 0, "message": "created", "data": rule})
 }
 
@@ -157,4 +160,37 @@ func (h *ReviewRuleHandler) Delete(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{"message": "deleted"})
+}
+
+// autoCreateProjectReviewConfigs 为所有已有项目自动插入新规则的默认配置（默认禁用）
+func autoCreateProjectReviewConfigs(ruleID uint) {
+	var projects []model.Project
+	if err := model.DB.Find(&projects).Error; err != nil {
+		zap.L().Warn("auto create project review configs: find projects failed", zap.Error(err))
+		return
+	}
+
+	for _, p := range projects {
+		// 检查是否已存在
+		var count int64
+		model.DB.Model(&model.ProjectReviewConfig{}).
+			Where("project_id = ? AND rule_id = ?", p.ID, ruleID).
+			Count(&count)
+		if count > 0 {
+			continue
+		}
+
+		cfg := model.ProjectReviewConfig{
+			ProjectID: p.ID,
+			RuleID:    ruleID,
+			IsEnabled: false, // 默认禁用，用户需要手动在项目中启用
+			Severity:  "",
+		}
+		if err := model.DB.Create(&cfg).Error; err != nil {
+			zap.L().Warn("auto create project review config failed",
+				zap.Uint("project_id", p.ID),
+				zap.Uint("rule_id", ruleID),
+				zap.Error(err))
+		}
+	}
 }

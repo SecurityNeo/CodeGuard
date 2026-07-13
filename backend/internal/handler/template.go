@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/ai-optimizer/backend/internal/engine"
 	"github.com/ai-optimizer/backend/internal/model"
 	"github.com/ai-optimizer/backend/internal/service"
+	"github.com/ai-optimizer/backend/pkg/llm"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"strconv"
@@ -83,9 +85,11 @@ func (h *TemplateHandler) Update(c *gin.Context) {
 	var v interface{}
 	var dwOk bool
 	if v, dwOk = req["dimension_weights"]; dwOk {
-		updates["dimension_weights"] = v.(string)
-		// 校验权重 JSON 格式合法且和为 100
 		dwStr := v.(string)
+		if dwStr == "" {
+			dwStr = "{}"
+		}
+		// 校验权重 JSON 格式合法且和为 100
 		if dwStr != "" && dwStr != "{}" {
 			parsed, err := parseDimWeights(dwStr)
 			if err != nil {
@@ -105,6 +109,7 @@ func (h *TemplateHandler) Update(c *gin.Context) {
 				return
 			}
 		}
+		updates["dimension_weights"] = dwStr
 	}
 	if v, ok := req["max_rules_per_review"]; ok {
 		updates["max_rules_per_review"] = int(v.(float64))
@@ -187,4 +192,89 @@ func parseDimWeights(jsonStr string) (map[string]int, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+// PreviewComment 预览评论模板渲染效果
+func (h *TemplateHandler) PreviewComment(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("id"))
+
+	var req struct {
+		TotalScore      int                      `json:"total_score"`
+		Summary         string                   `json:"summary"`
+		Dimensions      map[string]map[string]int `json:"dimensions"`
+		Issues          []struct {
+			RuleCode    string `json:"rule_code"`
+			Severity    string `json:"severity"`
+			Category    string `json:"category"`
+			File        string `json:"file"`
+			LineStart   int    `json:"line_start"`
+			LineEnd     int    `json:"line_end"`
+			CodeSnippet string `json:"code_snippet"`
+			Message     string `json:"message"`
+			Suggestion  string `json:"suggestion"`
+		} `json:"issues"`
+		Recommendations []string `json:"recommendations"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 获取模板
+	t, err := service.NewTemplateService().Get(uint(id))
+	if err != nil {
+		c.JSON(404, gin.H{"error": "template not found"})
+		return
+	}
+
+	// 构建模拟的 AIReviewResult
+	result := &llm.AIReviewResult{
+		SchemaVersion:   "1.0",
+		TotalScore:      req.TotalScore,
+		Summary:         req.Summary,
+		Recommendations: req.Recommendations,
+	}
+
+	// 转换 dimensions
+	if req.Dimensions != nil {
+		result.Dimensions = make(map[string]llm.Dimension)
+		for k, v := range req.Dimensions {
+			result.Dimensions[k] = llm.Dimension{
+				Score:  v["score"],
+				Weight: v["weight"],
+			}
+		}
+	}
+
+	// 转换 issues
+	for _, issue := range req.Issues {
+		result.Issues = append(result.Issues, llm.AIReviewIssue{
+			RuleCode:    issue.RuleCode,
+			Severity:    issue.Severity,
+			Category:    issue.Category,
+			File:        issue.File,
+			LineStart:   issue.LineStart,
+			LineEnd:     issue.LineEnd,
+			CodeSnippet: issue.CodeSnippet,
+			Message:     issue.Message,
+			Suggestion:  issue.Suggestion,
+		})
+	}
+
+	// 组装 Markdown
+	var templateStr string
+	if t.GitLabCommentTemplate != "" {
+		templateStr = t.GitLabCommentTemplate
+	} else {
+		templateStr = engine.DefaultGitLabCommentTemplate
+	}
+
+	markdown, err := engine.AssembleMarkdownComment(result, templateStr)
+	if err != nil {
+		zap.L().Error("preview comment assembly failed", zap.Error(err))
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"data": markdown})
 }

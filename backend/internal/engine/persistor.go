@@ -16,7 +16,8 @@ func PersistStructuredReview(taskID uint, result *llm.AIReviewResult) error {
 		"ai_response_json":   marshalJSON(result),
 		"dimension_scores":   marshalJSON(result.Dimensions),
 		"issue_count":        len(result.Issues),
-		"score_value":        result.TotalScore,
+		"score_value":        result.TotalScore,          // 后置校验后的最终评分
+		"raw_ai_score":       result.OriginalTotalScore,  // LLM 原始评分（用于对比）
 	}
 
 	if err := model.DB.Model(&model.Task{}).Where("id = ?", taskID).Updates(taskUpdates).Error; err != nil {
@@ -30,6 +31,7 @@ func PersistStructuredReview(taskID uint, result *llm.AIReviewResult) error {
 			RuleCode:    issue.RuleCode,
 			Category:    issue.Category,
 			Severity:    issue.Severity,
+			DeductScore: issue.DeductScore,
 			File:        issue.File,
 			LineStart:   issue.LineStart,
 			LineEnd:     issue.LineEnd,

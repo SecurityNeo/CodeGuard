@@ -97,14 +97,14 @@ func sendMailWithLogin(addr, from string, to []string, msg []byte, username, pas
 			return fmt.Errorf("auth login challenge failed: %w", err)
 		}
 		// 用户名
-		if err := text.PrintfLine(base64.StdEncoding.EncodeToString([]byte(username))); err != nil {
+		if err := text.PrintfLine("%s", base64.StdEncoding.EncodeToString([]byte(username))); err != nil {
 			return fmt.Errorf("send username failed: %w", err)
 		}
 		if _, _, err := text.ReadResponse(334); err != nil {
 			return fmt.Errorf("username challenge failed: %w", err)
 		}
 		// 密码
-		if err := text.PrintfLine(base64.StdEncoding.EncodeToString([]byte(password))); err != nil {
+		if err := text.PrintfLine("%s", base64.StdEncoding.EncodeToString([]byte(password))); err != nil {
 			return fmt.Errorf("send password failed: %w", err)
 		}
 		if _, _, err := text.ReadResponse(235); err != nil {

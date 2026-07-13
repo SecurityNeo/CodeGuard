@@ -31,6 +31,27 @@
         .code-block { background-color: #1e293b; color: #e2e8f0; font-family: monospace; font-size: 13px; line-height: 1.6; }
         .toast { position: fixed; top: 20px; right: 20px; z-index: 9999; animation: slideIn 0.3s ease; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* 权重滑块 */
+        .weight-slider { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; background: #e5e7eb; outline: none; cursor: pointer; }
+        .weight-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #3b82f6; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2); cursor: grab; transition: transform 0.15s; }
+        .weight-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+        .weight-slider::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #3b82f6; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2); cursor: grab; }
+        .weight-slider::-moz-range-progress { height: 6px; border-radius: 3px; }
+
+        .dim-row { display: flex; align-items: center; gap: 12px; padding: 4px 8px; border-radius: 8px; transition: background 0.15s; }
+        .dim-row:hover { background: rgba(243,244,246,0.6); }
+
+        .dim-label { width: 64px; text-align: center; flex-shrink: 0; }
+        .dim-label span { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+
+        .dim-input-wrap { width: 44px; flex-shrink: 0; position: relative; }
+        .dim-input-wrap input { width: 100%; padding: 2px 12px 2px 2px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; text-align: center; font-weight: 600; }
+        .dim-input-wrap .dim-unit { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); font-size: 9px; color: #9ca3af; pointer-events: none; }
+
+        .section-divider { display: flex; align-items: center; gap: 8px; padding: 12px 8px 4px; }
+        .section-divider::before, .section-divider::after { content: ""; flex: 1; height: 1px; background: #e5e7eb; }
+        .section-divider span { font-size: 11px; font-weight: 600; color: #9ca3af; white-space: nowrap; }
     </style>
 </head>
 <body class="bg-gray-50 font-sans">
@@ -84,7 +105,7 @@
                         <i class="fas fa-folder-open mr-1"></i>项目列表
                     </div>
 					<div class="tab-btn" onclick="switchTab('templates')">
-						<i class="fas fa-file-code mr-1"></i>AI审核提示词
+						<i class="fas fa-file-code mr-1"></i>AI审核模版
 					</div>
                 </div>
 
@@ -119,9 +140,11 @@
                         <thead class="bg-gray-50 border-b">
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">项目名称</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">语言</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">GitLab项目ID</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">项目地址</th>
-                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">AI审核提示词</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">AI审核模版</th>
+                            <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500">规则数</th>
                             <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500">最近5个任务</th>
                             <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500">启用AI</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500">修改时间</th>
@@ -145,23 +168,25 @@
                 </div>
             </div>
 
-				<!-- AI审核提示词 Tab -->
+				<!-- AI审核模版 Tab -->
 				<div id="tab-templates" class="tab-content">
-					<!-- 新建模版按钮 -->
-					<div class="mb-4 flex justify-end gap-2">
-                        <button data-admin-only onclick="openNewTemplateModal()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
-                            <i class="fas fa-plus mr-1"></i>新建模版
-                        </button>
-                        <button onclick="loadTemplates()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200">
-                            <i class="fas fa-redo mr-1"></i>刷新
-                        </button>
-                    </div>
-
-<!-- 模版卡片列表 -->
-                    <div class="space-y-4" id="templatesContainer">
-                    </div>
-                </div>
+					<!-- 操作栏 -->
+					<div class="flex justify-end gap-2 mb-4">
+						<button onclick="openNewTemplateModal()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+							<i class="fas fa-plus mr-1"></i>新建模版
+						</button>
+						<button onclick="loadTemplates()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200">
+							<i class="fas fa-redo mr-1"></i>刷新
+						</button>
+					</div>
+					<!-- 模板列表 -->
+					<div class="space-y-4" id="templatesContainer">
+						<div class="text-center py-12 text-gray-500">加载中...</div>
+					</div>
+				</div>
             </div>
+    </div>
+    </main>
     </div>
 
     <!-- 新建/编辑项目弹窗 -->
@@ -195,7 +220,7 @@
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">AI审核提示词</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">AI审核模版</label>
                     <select id="projectTemplateId" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
                     </select>
                 </div>
@@ -226,26 +251,110 @@
 
     <!-- 新建/编辑模版弹窗 -->
     <div id="templateModal" class="modal fixed inset-0 bg-black/50 items-center justify-center z-50">
-        <div class="bg-white rounded-xl w-[700px] max-h-[85vh] overflow-y-auto">
+        <div class="bg-white rounded-xl w-[900px] max-h-[90vh] flex flex-col">
             <div class="px-6 py-4 border-b flex items-center justify-between">
-                <h3 class="font-bold text-lg">新建AI审核提示词</h3>
+                <h3 class="font-bold text-lg" id="modalTitle">新建AI审核模版</h3>
                 <button onclick="hideModal('templateModal')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
             </div>
-            <div class="p-6 space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">模版名称</label>
-                    <input type="text" placeholder="如：Go代码优化模版" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            <div class="flex-1 overflow-y-auto p-6 space-y-5">
+                <!-- 基础信息 -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">模版名称 <span class="text-red-500">*</span></label>
+                        <input type="text" id="tmplName" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="如：Go代码优化模版">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                        <input type="text" id="tmplDesc" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="模版用途说明">
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">描述</label>
-                    <input type="text" placeholder="模版用途说明" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+
+                <!-- 评分维度权重配置 -->
+                <div class="rounded-xl border border-blue-100 overflow-hidden">
+                    <div class="px-5 py-3 bg-blue-50/60 border-b border-blue-100 flex items-center justify-between">
+                        <span class="text-sm font-semibold text-gray-800"><i class="fas fa-cubes text-blue-500 mr-1.5"></i>评分维度权重配置</span>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="autoSplitWeights()" class="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 bg-blue-50 border border-blue-200 rounded-md transition">均分100%</button>
+                            <span id="weightTotal" class="text-xs font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">总计 0%</span>
+                        </div>
+                    </div>
+                    <div class="p-4">
+                        <div id="dimensionInputs" class="space-y-1">
+                            <!-- 动态分组渲染：内置维度 -> 自定义维度 -->
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">AI 提示词</label>
-                    <textarea rows="12" class="code-block w-full px-4 py-3 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="输入提示词模板，支持使用 {{变量}} 占位符..."></textarea>
+
+                <!-- 评审约束 -->
+                <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div class="px-5 py-3 bg-gray-50/80 border-b border-gray-100 flex items-center gap-2">
+                        <span class="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center text-xs"><i class="fas fa-sliders-h"></i></span>
+                        <span class="text-sm font-semibold text-gray-800">评审约束</span>
+                    </div>
+                    <div class="p-5">
+                        <div class="flex items-center gap-4">
+                            <div class="flex-1 max-w-[200px]">
+                                <label class="text-xs font-medium text-gray-500 mb-1.5 block">每次评审最大规则数</label>
+                                <div class="flex items-center gap-3">
+                                    <input type="number" id="tmplMaxRules" min="0" max="20" value="5"
+                                        class="w-20 text-center px-2 py-2 border rounded-lg text-sm font-semibold focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                                    <span class="text-xs text-gray-400">条</span>
+                                </div>
+                            </div>
+                            <div class="flex-1 text-xs text-gray-400 leading-relaxed pt-5">
+                                评审规则超出限制时，系统将按严重级别自动截取优先级最高的规则上报。
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 项目自定义指令 -->
+                <div class="rounded-xl border border-gray-200 overflow-hidden">
+                    <div class="px-5 py-3 bg-gray-50 border-b">
+                        <label class="text-sm font-semibold text-gray-700"><i class="fas fa-terminal text-gray-400 mr-1"></i>项目自定义指令 <span class="text-xs font-normal text-gray-400">（可选）</span></label>
+                    </div>
+                    <div class="p-4">
+                        <textarea id="tmplCustomInstruction" rows="2" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="输入项目的特殊审查要求或背景信息..."></textarea>
+                    </div>
+                </div>
+
+                <!-- GitLab 评论模板 -->
+                <div class="rounded-xl border border-blue-200 overflow-hidden">
+                    <div class="px-5 py-3 bg-blue-50 border-b border-blue-200 flex items-center justify-between">
+                        <label class="text-sm font-semibold text-blue-800">
+                            <i class="fab fa-gitlab mr-1"></i>GitLab 评论模板
+                        </label>
+                        <div class="flex gap-2">
+                            <button onclick="resetCommentTemplate()" type="button" class="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 bg-blue-100 rounded-lg transition">恢复默认</button>
+                            <button onclick="previewCommentTemplate()" type="button" class="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 bg-blue-100 rounded-lg transition">预览效果</button>
+                        </div>
+                    </div>
+                    <div class="p-4">
+                        <textarea id="tmplCommentTemplate" rows="8" class="code-block w-full px-4 py-3 rounded-lg border-blue-200 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm" placeholder="输入 Markdown 模板..."></textarea>
+                        <div class="mt-2 flex flex-wrap gap-2">
+                            <span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-200 font-mono">{{.ProjectName}}</span>
+                            <span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-200 font-mono">{{.MRTitle}}</span>
+                            <span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-200 font-mono">{{.TotalScore}}</span>
+                            <span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-200 font-mono">{{.DimensionsTable}}</span>
+                            <span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-200 font-mono">{{.IssuesList}}</span>
+                            <span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-200 font-mono">{{.RecommendationsList}}</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">Go text/template 语法，支持 {{range}} / {{if}} 控制流</p>
+                    </div>
+                </div>
+
+                <!-- 兼容性：旧提示词 -->
+                <div class="rounded-xl border border-gray-200 overflow-hidden opacity-70 hover:opacity-100 transition-opacity">
+                    <div class="px-4 py-2 bg-gray-100 border-b flex items-center gap-2">
+                        <i class="fas fa-history text-gray-400 text-xs"></i>
+                        <span class="text-xs font-medium text-gray-500">旧版 AI 提示词（兼容模式）</span>
+                    </div>
+                    <div class="p-4">
+                        <textarea id="tmplPrompt" rows="3" class="code-block w-full px-3 py-2 rounded-lg bg-gray-50 border-gray-200 text-gray-500 text-sm" placeholder="仅供兼容旧版本..."></textarea>
+                    </div>
                 </div>
             </div>
-            <div class="px-6 py-4 border-t flex justify-end gap-3">
+            <div class="px-6 py-4 border-t flex justify-end gap-3 flex-shrink-0">
                 <button onclick="hideModal('templateModal')" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">取消</button>
                 <button onclick="saveTemplate()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">保存</button>
             </div>
@@ -256,18 +365,82 @@
     <div id="cloneTemplateModal" class="modal fixed inset-0 bg-black/50 items-center justify-center z-50">
         <div class="bg-white rounded-xl w-[400px]">
             <div class="px-6 py-4 border-b flex items-center justify-between">
-                <h3 class="font-bold text-lg">克隆AI审核提示词</h3>
+                <h3 class="font-bold text-lg">克隆AI审核模版</h3>
                 <button onclick="hideModal('cloneTemplateModal')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
             </div>
             <div class="p-6 space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">模版名称</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">新模版名称</label>
                     <input type="text" id="cloneTemplateName" placeholder="请输入新模版名称" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
                 </div>
             </div>
             <div class="px-6 py-4 border-t flex justify-end gap-3">
                 <button onclick="hideModal('cloneTemplateModal')" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">取消</button>
                 <button onclick="confirmCloneTemplate()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模版详情弹窗 -->
+    <div id="templateDetailModal" class="modal fixed inset-0 bg-black/50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl w-[700px] max-h-[90vh] flex flex-col">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="font-bold text-lg" id="detailTitle">模版详情</h3>
+                <button onclick="hideModal('templateDetailModal')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 space-y-5">
+                <!-- 基础信息 -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <label class="text-xs text-gray-400 mb-1 block">模版名称</label>
+                        <div class="text-sm font-semibold text-gray-800" id="detailName">-</div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <label class="text-xs text-gray-400 mb-1 block">描述</label>
+                        <div class="text-sm text-gray-700" id="detailDesc">-</div>
+                    </div>
+                </div>
+
+                <!-- 评审维度权重 -->
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2"><i class="fas fa-cubes text-blue-500"></i>评分维度权重</h4>
+                    <div id="detailDimensionWeights" class="flex flex-wrap gap-2"></div>
+                </div>
+
+                <!-- 评审约束 -->
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2"><i class="fas fa-sliders-h text-purple-500"></i>评审约束</h4>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <span class="text-sm text-gray-700">每次评审最多 <span id="detailMaxRules" class="font-semibold">5</span> 条规则</span>
+                    </div>
+                </div>
+
+                <!-- 项目自定义指令 -->
+                <div id="detailCustomInstructionSection" class="hidden">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2"><i class="fas fa-terminal text-gray-500"></i>项目自定义指令</h4>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <pre class="text-xs text-gray-600 whitespace-pre-wrap font-mono" id="detailCustomInstruction"></pre>
+                    </div>
+                </div>
+
+                <!-- GitLab 评论模板 -->
+                <div id="detailCommentTemplateSection" class="hidden">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2"><i class="fab fa-gitlab text-blue-600"></i>GitLab 评论模板</h4>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <pre class="text-xs text-gray-600 whitespace-pre-wrap font-mono" id="detailCommentTemplate"></pre>
+                    </div>
+                </div>
+
+                <!-- 旧版提示词 -->
+                <div id="detailPromptSection" class="hidden">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2"><i class="fas fa-history text-gray-400"></i>旧版 AI 提示词</h4>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <pre class="text-xs text-gray-600 whitespace-pre-wrap font-mono" id="detailPrompt"></pre>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end gap-3 flex-shrink-0">
+                <button onclick="hideModal('templateDetailModal')" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">关闭</button>
             </div>
         </div>
     </div>
@@ -285,6 +458,16 @@
 
 const API_BASE = '/api/v1';
 
+        function escapeHtml(unsafe) {
+            if (!unsafe) return '';
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
         function toggleTokenVisibility() {
             var input = document.getElementById('projectToken');
             var icon = document.getElementById('tokenEyeIcon');
@@ -299,10 +482,12 @@ const API_BASE = '/api/v1';
 
         let projectsData = [];
         let templatesData = [];
+        let categoriesData = [];
         let poolsData = [];
         let modelsData = [];
         let editingId = null;
         let editingTemplateId = null;
+        let cloningTemplateId = null;
         let currentPage = 1;
         let pageSize = 10;
         let totalPages = 1;
@@ -349,9 +534,17 @@ const API_BASE = '/api/v1';
                             <a href="project-detail.html?id=${p.id}" class="font-medium text-sm text-blue-600 hover:text-blue-700">${p.name || '-'}</a>
                         </div>
                     </td>
+                    <td class="px-6 py-4 text-center">
+                        <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium">${p.language || 'golang'}</span>
+                    </td>
                     <td class="px-6 py-4 text-sm text-gray-600">${p.gitlab_project_id || '-'}</td>
                     <td class="px-6 py-4 text-sm text-gray-600 max-w-xs truncate" title="${p.project_path || ''}">${p.project_path || '-'}</td>
-                    <td class="px-6 py-4 text-sm">${p.template?.Name || '-'}</td>
+                    <td class="px-6 py-4 text-sm">${p.template?.name || '-'}</td>
+                    <td class="px-6 py-4 text-center">
+                        <a href="project-detail.html?id=${p.id}&tab=rules" class="text-sm text-gray-600 hover:text-blue-600" title="查看规则配置">
+                            <span class="font-medium">${p.enabled_rule_count ?? 0}</span><span class="text-gray-400">/${p.total_rule_count ?? 0}</span>
+                        </a>
+                    </td>
                     <td class="px-6 py-4 text-center">
                         ${p.tasks && p.tasks.length > 0 ? p.tasks.map(t => `<span class="inline-block w-3 h-3 mr-1 mb-1 rounded-full ${getTaskStatusDotClass(t.status)}" title="${getTaskStatusText(t.status)}"></span>`).join('') : '-'}
                     </td>
@@ -489,8 +682,8 @@ const API_BASE = '/api/v1';
                     body: JSON.stringify({ ai_enabled: enabled })
                 });
                 if (!res.ok) throw new Error('更新失败');
-} catch (e) {
-                showToast('删除失败: ' + e.message, 'error');
+            } catch (e) {
+                showToast('更新失败: ' + e.message, 'error');
                 loadProjects();
             }
         }
@@ -504,11 +697,14 @@ const API_BASE = '/api/v1';
             document.getElementById('gitlabProjectId').value = p.gitlab_project_id || '';
             document.getElementById('projectPath').value = p.project_path || '';
             document.getElementById('projectToken').value = p.access_token || '';
-            document.getElementById('aiEnabled').checked = p.ai_enabled;
+            document.getElementById('aiEnabled').checked = p.ai_enabled || false;
+            // 先渲染下拉选项，再设置选中值
+            renderTemplateSelect(templatesData);
+            renderPoolSelect(poolsData);
+            renderModelSelect(modelsData);
             document.getElementById('projectTemplateId').value = p.template_id || '';
             document.getElementById('poolId').value = p.pool_id || '';
-            // default_model_id=0 或未设置时，选中"-1"（不指定）
-            document.getElementById('defaultModelId').value = p.default_model_id > 0 ? p.default_model_id : '-1';
+            document.getElementById('defaultModelId').value = p.default_model_id !== null && p.default_model_id !== undefined ? String(p.default_model_id) : '-1';
             document.getElementById('createModal').classList.add('active');
         }
 
@@ -525,9 +721,9 @@ const API_BASE = '/api/v1';
         }
 
         async function saveProject() {
-            const templateId = document.getElementById('projectTemplateId').value;
-            const poolId = document.getElementById('poolId').value;
-            const defaultModelId = document.getElementById('defaultModelId').value;
+            const templateInput = document.getElementById('projectTemplateId').value;
+            const poolInput = document.getElementById('poolId').value;
+            const defaultModelInput = document.getElementById('defaultModelId').value;
             const gitlabProjectId = document.getElementById('gitlabProjectId').value;
             
             const data = {
@@ -536,13 +732,14 @@ const API_BASE = '/api/v1';
                 access_token: document.getElementById('projectToken').value,
                 ai_enabled: document.getElementById('aiEnabled').checked
             };
-            
-            if (templateId) data.template_id = parseInt(templateId);
-            if (poolId) data.pool_id = parseInt(poolId);
-            if (defaultModelId && defaultModelId !== '-1') {
-                data.default_model_id = parseInt(defaultModelId);
-            } else if (defaultModelId === '-1') {
-                data.default_model_id = null;  // 设置为 NULL，清空默认模型
+
+            // 空模板解绑时传 0，确保能正确清空关联
+            data.template_id = parseInt(templateInput, 10) || 0;
+            data.pool_id = parseInt(poolInput, 10) || 0;
+            if (defaultModelInput === '-1' || !defaultModelInput) {
+                data.default_model_id = null;  // 未选择或“走全局主备链路”均清空
+            } else {
+                data.default_model_id = parseInt(defaultModelInput);
             }
             if (gitlabProjectId) data.gitlab_project_id = parseInt(gitlabProjectId);
             if (!data.access_token) delete data.access_token;
@@ -565,7 +762,7 @@ const API_BASE = '/api/v1';
             }
         }
 
-        function showModal(id) { 
+        function showModal(id) {
             if (id === 'createModal') {
                 editingId = null;
                 document.querySelector('#createModal h3').textContent = '新建项目';
@@ -579,8 +776,9 @@ const API_BASE = '/api/v1';
                 document.getElementById('projectTemplateId').value = '';
                 document.getElementById('poolId').value = '';
                 document.getElementById('defaultModelId').value = '';
+                renderTemplateSelect(templatesData);
             }
-            document.getElementById(id).classList.add('active'); 
+            document.getElementById(id).classList.add('active');
         }
         
         function switchTab(tab, evt) {
@@ -597,21 +795,20 @@ const API_BASE = '/api/v1';
         async function loadTemplates() {
             try {
                 const res = await apiFetch(`${API_BASE}/templates`);
-                if (!res.ok) throw new Error('HTTP ' + res.status);
                 const json = await res.json();
                 templatesData = json.data || [];
                 renderTemplates(templatesData);
-                renderTemplateSelect(templatesData);
             } catch (e) {
                 console.error('加载模板失败:', e);
+                document.getElementById('templatesContainer').innerHTML = '<div class="text-center py-12 text-red-500">加载失败: ' + escapeHtml(e.message) + '</div>';
             }
         }
 
         function renderTemplateSelect(templates) {
             const select = document.getElementById('projectTemplateId');
             if (!select) return;
-            select.innerHTML = '<option value="">请选择AI审核提示词</option>' + 
-                templates.map(t => `<option value="${t.ID}">${escapeHtml(t.Name)}</option>`).join('');
+            select.innerHTML = '<option value="">请选择AI审核模版</option>' + 
+                templates.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
         }
 
         async function loadPools() {
@@ -656,75 +853,257 @@ const API_BASE = '/api/v1';
         function renderTemplates(templates) {
             const container = document.getElementById('templatesContainer');
             if (!container) return;
-            
+
             if (templates.length === 0) {
-                container.innerHTML = '<div class="text-center py-8 text-gray-500">暂无模板，请创建</div>';
+                container.innerHTML = '<div class="text-center py-12 text-gray-500">暂无模版</div>';
                 return;
             }
 
-            const colors = ['blue', 'yellow', 'green', 'purple', 'pink', 'indigo'];
-            container.innerHTML = templates.map((t, i) => `
-                <div class="bg-white rounded-xl border overflow-hidden">
-                    <div class="p-6">
-                        <div class="flex items-start justify-between mb-4">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 bg-${colors[i % colors.length]}-50 rounded-lg flex items-center justify-center text-${colors[i % colors.length]}-600">
-                                    <i class="fas fa-file-code"></i>
-                                </div>
-                                <div>
-                                    <h3 class="font-bold text-gray-800">${escapeHtml(t.Name)}</h3>
-                                    <p class="text-sm text-gray-500">${escapeHtml(t.Description || '无描述')}</p>
-                                </div>
+            container.innerHTML = templates.map(t => `
+                <div class="bg-white rounded-xl border p-5 hover:shadow-md transition-shadow cursor-pointer" onclick="openTemplateDetailModal(${t.id})">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-2">
+                                <h3 class="font-bold text-gray-800 truncate">${escapeHtml(t.name)}</h3>
+                                ${t.is_default ? '<span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">默认</span>' : ''}
                             </div>
-                            <div class="text-xs text-gray-400 text-right">
-                                <div>创建: ${formatDate(t.CreatedAt)}</div>
-                                <div>修改: ${formatDate(t.UpdatedAt)}</div>
+                            <p class="text-sm text-gray-500 mb-3">${escapeHtml(t.description || '暂无描述')}</p>
+                            <div class="flex flex-wrap gap-2 mb-3">
+                                ${renderDimensionTags(t.dimension_weights)}
                             </div>
+                            ${t.custom_instruction ? `<p class="text-xs text-gray-400 mb-2"><i class="fas fa-info-circle mr-1"></i>${escapeHtml(t.custom_instruction.substring(0, 80))}${t.custom_instruction.length > 80 ? '...' : ''}</p>` : ''}
                         </div>
-                        <div class="code-block rounded-lg p-4 overflow-x-auto">
-                            <div class="text-gray-400 mb-2">// 提示词内容</div>
-                            <pre class="whitespace-pre-wrap text-sm">${escapeHtml(t.Prompt)}</pre>
+                        <div class="flex gap-1 ml-4 shrink-0" onclick="event.stopPropagation();">
+                            <button onclick="openEditTemplateModal(${t.id})" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="编辑"><i class="fas fa-edit"></i></button>
+                            <button onclick="openCloneModal(${t.id})" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="克隆"><i class="fas fa-copy"></i></button>
+                            ${!t.is_default ? `<button onclick="deleteTemplate(${t.id})" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="删除"><i class="fas fa-trash"></i></button>` : ''}
                         </div>
-                    </div>
-                    <div class="px-6 py-3 border-t bg-gray-50 flex justify-end gap-3">
-                        <button onclick="cloneTemplate(${t.ID})" class="text-indigo-600 hover:text-indigo-700 text-sm"><i class="fas fa-copy mr-1"></i>克隆</button>
-                        <button onclick="editTemplate(${t.ID})" class="text-gray-600 hover:text-gray-800 text-sm"><i class="fas fa-edit mr-1"></i>编辑</button>
-                        <button onclick="deleteTemplate(${t.ID})" class="text-red-600 hover:text-red-700 text-sm"><i class="fas fa-trash mr-1"></i>删除</button>
                     </div>
                 </div>
             `).join('');
         }
 
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+        function parseDimWeights(jsonStr) {
+            const defaults = { security: 30, code_quality: 25, readability: 20, maintainability: 15, test_coverage: 10 };
+            if (!jsonStr || jsonStr === '{}') {
+                const defaultEntries = Object.entries(defaults);
+                const tags = defaultEntries.map(([k, v]) =>
+                    `<span class="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">${getDimName(k)} ${v}%</span>`
+                ).join(' ');
+                return { tags, isDefault: true };
+            }
+            try {
+                const obj = JSON.parse(jsonStr);
+                const entries = Object.entries(obj).filter(([_, v]) => v > 0);
+                const tags = entries.map(([k, v]) =>
+                    `<span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">${getDimName(k)} ${v}%</span>`
+                ).join(' ');
+                // 检查是否是默认权重
+                let isDefault = true;
+                for (const [k, v] of Object.entries(defaults)) {
+                    if ((obj[k] || 0) !== v) { isDefault = false; break; }
+                }
+                return { tags, isDefault };
+            } catch (e) {
+                return { tags: '', isDefault: true };
+            }
         }
 
-        function editTemplate(id) {
-            const t = templatesData.find(x => x.ID === id);
-            if (!t) return;
-            editingTemplateId = id;
-            document.querySelector('#templateModal h3').textContent = '编辑AI审核提示词';
-            document.querySelector('#templateModal input[type="text"]').value = t.Name || '';
-            document.querySelectorAll('#templateModal input[type="text"]')[1].value = t.Description || '';
-            document.querySelector('#templateModal textarea').value = t.Prompt || '';
+        function renderDimensionTags(jsonStr) {
+            return parseDimWeights(jsonStr).tags;
+        }
+
+        function getDimName(key) {
+            const cat = categoriesData.find(c => c.code === key);
+            return cat ? cat.name : key;
+        }
+        async function loadCategories() {
+            try {
+                const res = await apiFetch(API_BASE + '/review-categories');
+                const json = await res.json();
+                categoriesData = json.data || [];
+                renderDimensionInputs();
+            } catch (e) { console.error('加载维度失败:', e); }
+        }
+        function renderDimensionInputs() {
+            const container = document.getElementById('dimensionInputs');
+            if (!container || categoriesData.length === 0) return;
+            // 排序：内置在前
+            const sorted = [...categoriesData].sort((a, b) => {
+                if (a.is_built_in !== b.is_built_in) return a.is_built_in ? -1 : 1;
+                return (a.sort_order || 0) - (b.sort_order || 0);
+            });
+            const builtIn = sorted.filter(c => c.is_built_in);
+            const custom = sorted.filter(c => !c.is_built_in);
+            const colors = ['blue','purple','orange','green','red','indigo','pink','teal'];
+            const icons = ['shield-alt','bolt','eye','wrench','vial','code','database','lock'];
+            const dimItem = (c, i) => {
+                const color = colors[i % colors.length];
+                const icon = icons[i % icons.length];
+                return `
+                <div class="dim-row" data-dim-code="${c.code}">
+                    <div class="dim-label">
+                        <span class="bg-${color}-50 text-${color}-700">
+                            <i class="fas fa-${icon} text-[9px]"></i>${c.name}
+                        </span>
+                    </div>
+                    <input type="range" data-dim-slider="${c.code}" min="0" max="100" value="0"
+                        class="weight-slider flex-1"
+                        oninput="updateWeightSlider(this)"
+                        style="--thumb-color:#${['3b82f6','9333ea','f97316','22c55e','ef4444','6366f1','ec4899','14b8a6'][i % 8]};">
+                    <div class="dim-input-wrap">
+                        <input type="number" data-dim="${c.code}" min="0" max="100" value="0"
+                            class="focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                            oninput="updateWeightInput(this)">
+                        <span class="dim-unit">%</span>
+                    </div>
+                </div>`;
+            };
+            let html = '';
+            if (builtIn.length > 0) {
+                html += `
+                <div class="section-divider"><span>内置维度 · ${builtIn.length}</span></div>
+                <div class="space-y-1">${builtIn.map((c, i) => dimItem(c, i)).join('')}</div>`;
+            }
+            if (custom.length > 0) {
+                html += `
+                <div class="section-divider"><span>自定义维度 · ${custom.length}</span></div>
+                <div class="space-y-1">${custom.map((c, i) => dimItem(c, builtIn.length + i)).join('')}</div>`;
+            }
+            container.innerHTML = html;
+        }
+
+        function updateWeightSlider(slider) {
+            const code = slider.dataset.dimSlider;
+            const val = parseInt(slider.value || 0);
+            const input = document.querySelector('input[data-dim="' + code + '"]');
+            if (input) input.value = val;
+            updateWeightTotal();
+        }
+
+        function updateWeightInput(input) {
+            const code = input.dataset.dim;
+            const val = parseInt(input.value || 0);
+            const slider = document.querySelector('input[data-dim-slider="' + code + '"]');
+            if (slider) slider.value = val;
+            updateWeightTotal();
+        }
+
+        function autoSplitWeights() {
+            const inputs = document.querySelectorAll('#dimensionInputs input[type="number"]');
+            if (inputs.length === 0) return;
+            const avg = Math.floor(100 / inputs.length);
+            const remainder = 100 - avg * inputs.length;
+            inputs.forEach((el, idx) => {
+                el.value = avg + (idx === 0 ? remainder : 0);
+                const code = el.dataset.dim;
+                const slider = document.querySelector('input[data-dim-slider="' + code + '"]');
+                if (slider) slider.value = el.value;
+            });
+            updateWeightTotal();
+            showToast('已自动均分权重至所有维度', 'info');
+        }
+        function bindDimensionInputs() {
+            document.querySelectorAll('#dimensionInputs input').forEach(el => {
+                el.addEventListener('input', updateWeightTotal);
+            });
+        }
+
+        function updateWeightTotal() {
+            let total = 0;
+            document.querySelectorAll('#dimensionInputs input[type="number"]').forEach(el => {
+                total += parseInt(el.value || 0);
+            });
+            const el = document.getElementById('weightTotal');
+            el.textContent = '总计 ' + total + '%';
+            const ok = total === 100;
+            el.className = 'text-xs font-bold px-2.5 py-1 rounded-full ' + (ok ? 'bg-green-100 text-green-700' : 'bg-red-50 text-red-600');
+        }
+
+        const DEFAULT_COMMENT_TEMPLATE = `## 🤖 AI 代码评审报告
+
+{{if gt .CriticalCount 0}}
+⚠️ **发现 {{.CriticalCount}} 个严重问题，请立即处理！**
+{{end}}
+
+**综合评分：{{.TotalScore}}/100**
+
+### 📊 维度评分
+{{.DimensionsTable}}
+
+{{if gt .IssueCount 0}}
+### ⚠️ 发现的问题（共 {{.IssueCount}} 个）
+{{.IssuesList}}
+{{end}}
+
+{{if .Recommendations}}
+### 💡 改进建议
+{{.RecommendationsList}}
+{{end}}`;
+
+        function openNewTemplateModal() {
+            editingTemplateId = null;
+            document.getElementById('modalTitle').textContent = '新建AI审核模版';
+            document.getElementById('tmplName').value = '';
+            document.getElementById('tmplDesc').value = '';
+            document.getElementById('tmplPrompt').value = '';
+            document.getElementById('tmplCustomInstruction').value = '';
+            document.getElementById('tmplCommentTemplate').value = DEFAULT_COMMENT_TEMPLATE;
+            document.getElementById('tmplMaxRules').value = 5;
+            // 重置维度权重为均分
+            const inputs = document.querySelectorAll('#dimensionInputs input[type="number"]');
+            const avg = inputs.length > 0 ? Math.floor(100 / inputs.length) : 0;
+            const remainder = inputs.length > 0 ? 100 - avg * inputs.length : 0;
+            inputs.forEach((el, idx) => {
+                el.value = avg + (idx === 0 ? remainder : 0);
+                const code = el.dataset.dim;
+                const slider = document.querySelector('input[data-dim-slider="' + code + '"]');
+                if (slider) slider.value = el.value;
+            });
+            updateWeightTotal();
             showModal('templateModal');
         }
 
-        let cloningTemplateId = null;
+        function openEditTemplateModal(id) {
+            const t = templatesData.find(x => x.id === id);
+            if (!t) return;
+            editingTemplateId = id;
+            document.getElementById('modalTitle').textContent = '编辑AI审核模版';
+            document.getElementById('tmplName').value = t.name || '';
+            document.getElementById('tmplDesc').value = t.description || '';
+            document.getElementById('tmplPrompt').value = t.prompt || '';
+            document.getElementById('tmplCustomInstruction').value = t.custom_instruction || '';
+            document.getElementById('tmplCommentTemplate').value = t.gitlab_comment_template || '';
+            document.getElementById('tmplMaxRules').value = t.max_rules_per_review || 5;
 
-        async function cloneTemplate(id) {
+            // 加载维度权重
+            let weights = {};
+            if (t.dimension_weights) {
+                try { weights = JSON.parse(t.dimension_weights); } catch(e){}
+            }
+            document.querySelectorAll('#dimensionInputs input[type="number"]').forEach(el => {
+                const val = weights[el.dataset.dim] || 0;
+                el.value = val;
+                const code = el.dataset.dim;
+                const slider = document.querySelector('input[data-dim-slider="' + code + '"]');
+                if (slider) slider.value = val;
+            });
+            updateWeightTotal();
+            showModal('templateModal');
+        }
+
+        function openCloneModal(id) {
             cloningTemplateId = id;
-            document.getElementById('cloneTemplateName').value = '';
+            const t = templatesData.find(x => x.id === id);
+            document.getElementById('cloneTemplateName').value = t ? (t.name + ' - 副本') : '';
             showModal('cloneTemplateModal');
         }
 
         async function confirmCloneTemplate() {
+            if (!cloningTemplateId) return;
             const name = document.getElementById('cloneTemplateName').value.trim();
             if (!name) {
-                showToast('请输入模版名称', 'info');
+                showToast('请输入模版名称', 'error');
                 return;
             }
             try {
@@ -733,8 +1112,8 @@ const API_BASE = '/api/v1';
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name })
                 });
-                if (!res.ok) throw new Error('克隆失败');
-                showToast('模板克隆成功');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                showToast('克隆成功');
                 hideModal('cloneTemplateModal');
                 loadTemplates();
             } catch (e) {
@@ -742,15 +1121,118 @@ const API_BASE = '/api/v1';
             }
         }
 
+        function resetCommentTemplate() {
+            document.getElementById('tmplCommentTemplate').value = DEFAULT_COMMENT_TEMPLATE;
+            showToast('已恢复默认评论模板', 'info');
+        }
+
+        async function previewCommentTemplate() {
+            const templateId = editingTemplateId || (templatesData.length > 0 ? templatesData[0].id : null);
+            if (!templateId) {
+                showToast('请先保存模版再预览', 'info');
+                return;
+            }
+            const template = document.getElementById('tmplCommentTemplate').value;
+            try {
+                const res = await apiFetch(`${API_BASE}/templates/${templateId}/preview-comment`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        total_score: 85,
+                        summary: '代码整体质量良好，发现 3 个中等问题',
+                        dimensions: {
+                            security: { score: 90, weight: 30 },
+                            code_quality: { score: 82, weight: 25 },
+                            readability: { score: 88, weight: 20 }
+                        },
+                        issues: [
+                            { rule_code: 'common-magic-number', severity: 'low', category: 'readability', file: 'main.go', line_start: 45, line_end: 45, code_snippet: 'const timeout = 30000', message: '魔法数字', suggestion: '使用具名常量' }
+                        ],
+                        recommendations: ['建议增加单元测试覆盖', '部分函数过长，建议拆分']
+                    })
+                });
+                if (!res.ok) throw new Error('预览请求失败');
+                const json = await res.json();
+                const markdown = json.data || '无内容';
+                // 创建预览弹窗
+                const modal = document.createElement('div');
+                modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+                modal.innerHTML = `
+                    <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col">
+                        <div class="px-6 py-4 border-b flex items-center justify-between">
+                            <h3 class="font-bold text-lg">评论模板预览</h3>
+                            <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+                        </div>
+                        <div class="p-6 overflow-auto">
+                            <pre class="whitespace-pre-wrap text-sm font-mono bg-gray-50 p-4 rounded-lg border">${escapeHtml(markdown)}</pre>
+                        </div>
+                        <div class="px-6 py-4 border-t flex justify-end">
+                            <button onclick="this.closest('.fixed').remove()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">关闭</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            } catch (e) {
+                showToast('预览失败: ' + e.message, 'error');
+            }
+        }
+
+        function openTemplateDetailModal(id) {
+            const t = templatesData.find(x => x.id === id);
+            if (!t) return;
+            document.getElementById('detailTitle').textContent = t.name + ' - 模版详情';
+            document.getElementById('detailName').textContent = t.name || '-';
+            document.getElementById('detailDesc').textContent = t.description || '暂无描述';
+
+            // 维度权重
+            const dimContainer = document.getElementById('detailDimensionWeights');
+            const dimResult = parseDimWeights(t.dimension_weights);
+            if (dimResult.tags) {
+                dimContainer.innerHTML = dimResult.tags;
+            } else {
+                dimContainer.innerHTML = '<span class="text-xs text-gray-400">未配置</span>';
+            }
+
+            // 约束
+            document.getElementById('detailMaxRules').textContent = t.max_rules_per_review || 5;
+
+            // 自定义指令
+            const customSection = document.getElementById('detailCustomInstructionSection');
+            if (t.custom_instruction) {
+                customSection.classList.remove('hidden');
+                document.getElementById('detailCustomInstruction').textContent = t.custom_instruction;
+            } else {
+                customSection.classList.add('hidden');
+            }
+
+            // GitLab 评论模板
+            const commentSection = document.getElementById('detailCommentTemplateSection');
+            if (t.gitlab_comment_template) {
+                commentSection.classList.remove('hidden');
+                document.getElementById('detailCommentTemplate').textContent = t.gitlab_comment_template;
+            } else {
+                commentSection.classList.add('hidden');
+            }
+
+            // 旧版提示词
+            const promptSection = document.getElementById('detailPromptSection');
+            if (t.prompt) {
+                promptSection.classList.remove('hidden');
+                document.getElementById('detailPrompt').textContent = t.prompt;
+            } else {
+                promptSection.classList.add('hidden');
+            }
+
+            showModal('templateDetailModal');
+        }
+
         async function deleteTemplate(id) {
-            if (!confirm('确定删除该模版？如有关联项目将禁止删除。')) return;
+            const t = templatesData.find(x => x.id === id);
+            if (!confirm(`确定删除模版 "${t.name}" 吗？`)) return;
             try {
                 const res = await apiFetch(`${API_BASE}/templates/${id}`, { method: 'DELETE' });
-                if (!res.ok) {
-                    const json = await res.json();
-                    throw new Error(json.error || '删除失败');
-                }
-                showToast('模版已删除');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                showToast('删除成功');
                 loadTemplates();
             } catch (e) {
                 showToast('删除失败: ' + e.message, 'error');
@@ -758,40 +1240,51 @@ const API_BASE = '/api/v1';
         }
 
         async function saveTemplate() {
-            const data = {
-                name: document.querySelector('#templateModal input[type="text"]').value,
-                description: document.querySelectorAll('#templateModal input[type="text"]')[1].value,
-                prompt: document.querySelector('#templateModal textarea').value
-            };
-            if (!data.name || !data.prompt) {
-                showToast('请填写名称和提示词', 'info');
+            const name = document.getElementById('tmplName').value.trim();
+            if (!name) {
+                showToast('请输入模版名称', 'error');
                 return;
             }
+
+            // 检查权重之和
+            let totalWeight = 0;
+            const dimensionWeights = {};
+            document.querySelectorAll('#dimensionInputs input[type="number"]').forEach(el => {
+                const val = parseInt(el.value || 0);
+                dimensionWeights[el.dataset.dim] = val;
+                totalWeight += val;
+            });
+            if (totalWeight !== 100) {
+                showToast(`维度权重总和必须是 100%，当前为 ${totalWeight}%`, 'error');
+                return;
+            }
+
+            const data = {
+                name,
+                description: document.getElementById('tmplDesc').value,
+                prompt: document.getElementById('tmplPrompt').value,
+                custom_instruction: document.getElementById('tmplCustomInstruction').value,
+                dimension_weights: JSON.stringify(dimensionWeights),
+                max_rules_per_review: parseInt(document.getElementById('tmplMaxRules').value) || 5,
+                gitlab_comment_template: document.getElementById('tmplCommentTemplate').value,
+            };
+
             try {
-                const url = editingTemplateId ? `${API_BASE}/templates/${editingTemplateId}` : `${API_BASE}/templates`;
-                const method = editingTemplateId ? 'PUT' : 'POST';
+                const url = editingTemplateId
+                    ? `${API_BASE}/templates/${editingTemplateId}`
+                    : `${API_BASE}/templates`;
                 const res = await apiFetch(url, {
-                    method: method,
+                    method: editingTemplateId ? 'PUT' : 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
-                if (!res.ok) throw new Error('保存失败');
-                showToast(editingTemplateId ? '模板更新成功' : '模板创建成功');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                showToast(editingTemplateId ? '更新成功' : '创建成功');
                 hideModal('templateModal');
-                editingTemplateId = null;
                 loadTemplates();
             } catch (e) {
                 showToast('保存失败: ' + e.message, 'error');
             }
-        }
-
-        function openNewTemplateModal() {
-            editingTemplateId = null;
-            document.querySelector('#templateModal h3').textContent = '新建AI审核提示词';
-            document.querySelector('#templateModal input[type="text"]').value = '';
-            document.querySelectorAll('#templateModal input[type="text"]')[1].value = '';
-            document.querySelector('#templateModal textarea').value = '';
-            showModal('templateModal');
         }
 
         function hideModal(id) { 
@@ -809,11 +1302,13 @@ const API_BASE = '/api/v1';
         }
         
         document.addEventListener('DOMContentLoaded', () => {
+            loadCategories();
             loadProjects();
             loadTemplates();
             loadPools();
             loadModels();
             renderSidebar('projects');
+            bindDimensionInputs();
         });
     </script>
     <script defer src="/static/js/tailwindcss.min.js"></script>

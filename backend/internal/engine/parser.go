@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ai-optimizer/backend/internal/model"
 	"github.com/ai-optimizer/backend/pkg/llm"
 	"go.uber.org/zap"
 )
@@ -107,10 +108,28 @@ func tryParseJSON(content string) (*llm.AIReviewResult, error) {
 	if result.Recommendations == nil {
 		result.Recommendations = []string{}
 	}
+	// 补充 deduct_score，未返回时按 severity 默认计算
+	for i := range result.Issues {
+		if result.Issues[i].DeductScore <= 0 {
+			result.Issues[i].DeductScore = defaultDeductScore(result.Issues[i].Severity)
+		}
+	}
 	// 非阻塞校验：权重之和
 	if err := ValidateResult(&result); err != nil {
 		zap.L().Warn("review result validation warning", zap.Error(err))
 	}
+
+	// 后置校验：从 Issue 扣分重新计算总分
+	result.OriginalTotalScore = result.TotalScore
+	calculated := RecalculateTotalScore(&result)
+	if abs(result.TotalScore-calculated) > 5 {
+		zap.L().Warn("LLM总分与计算值差异超过阈值，启用后置校验修正",
+			zap.Int("llm_score", result.TotalScore),
+			zap.Int("calculated_score", calculated),
+			zap.Int("diff", abs(result.TotalScore-calculated)))
+		result.TotalScore = calculated
+	}
+
 	return &result, nil
 }
 
@@ -123,7 +142,8 @@ func ValidateResult(result *llm.AIReviewResult) error {
 	for _, d := range result.Dimensions {
 		totalWeight += d.Weight
 	}
-	if totalWeight != 100 {
+	// 仅当存在 5 个标准维度时强制权重和为 100，自定义维度允许局部和
+	if len(result.Dimensions) >= 5 && totalWeight != 100 {
 		return fmt.Errorf("dimension weights sum not 100: got %d", totalWeight)
 	}
 	return nil
@@ -198,15 +218,83 @@ func extractScoreFromText(text string) int {
 	return 0
 }
 
+// NormalizeDimensionWeights 根据已启用的规则补齐缺失的维度权重
+// 如果规则分类对应的维度在 weights 中不存在，自动以 weight=0 补齐，并记录日志
+func NormalizeDimensionWeights(weights map[string]DimensionWeight, rules []model.ReviewRule) map[string]DimensionWeight {
+	if len(weights) == 0 {
+		weights = DefaultDimensionWeights()
+	}
+
+	result := make(map[string]DimensionWeight, len(weights))
+	for k, v := range weights {
+		result[k] = v
+	}
+
+	// 从规则中收集所有分类维度
+	dimSet := make(map[string]bool)
+	for _, r := range rules {
+		cat := r.Category
+		if cat == "" || cat == "common" {
+			continue
+		}
+		dimSet[cat] = true
+	}
+
+	// 补齐缺失维度
+	warnings := []string{}
+	for dim := range dimSet {
+		if _, ok := result[dim]; !ok {
+			result[dim] = DimensionWeight{Weight: 0, Label: categoryDisplay(dim)}
+			warnings = append(warnings, dim)
+		}
+	}
+
+	if len(warnings) > 0 {
+		zap.L().Warn("模板维度权重缺少已启用规则的分类维度，已自动补齐 weight=0",
+			zap.Strings("missing_dimensions", warnings))
+	}
+
+	return result
+}
+
+// BuildDimensionWeights 从规则列表和给定权重构建最终的维度权重 map
+// 用于 runStructuredAIReview 中自动补齐
+func BuildDimensionWeights(jsonStr string, rules []model.ReviewRule) map[string]DimensionWeight {
+	weights, _ := ParseDimensionWeights(jsonStr)
+	return NormalizeDimensionWeights(weights, rules)
+}
+
 // ParseDimensionWeights 解析模板维度权重 JSON
+// 兼容两种格式：
+//   1. 简单格式（前端当前使用）：{"security":30, "code_quality":25}
+//   2. 对象格式（历史/内部）：{"security":{"weight":30,"label":"安全性"}}
 func ParseDimensionWeights(jsonStr string) (map[string]DimensionWeight, error) {
-	if jsonStr == "" {
-		// 返回默认权重
+	if jsonStr == "" || jsonStr == "{}" {
 		return DefaultDimensionWeights(), nil
 	}
-	var weights map[string]DimensionWeight
-	if err := json.Unmarshal([]byte(jsonStr), &weights); err != nil {
+
+	// 先尝试解析对象格式 {"key":{"weight":30,"label":"安全性"}}
+	var objWeights map[string]DimensionWeight
+	if err := json.Unmarshal([]byte(jsonStr), &objWeights); err == nil {
+		for _, v := range objWeights {
+			if v.Weight > 0 || v.Label != "" {
+				return objWeights, nil
+			}
+		}
+	}
+
+	// 降级解析简单格式 {"key":30}
+	var simpleWeights map[string]int
+	if err := json.Unmarshal([]byte(jsonStr), &simpleWeights); err != nil {
 		return DefaultDimensionWeights(), err
+	}
+
+	weights := make(map[string]DimensionWeight, len(simpleWeights))
+	for k, v := range simpleWeights {
+		weights[k] = DimensionWeight{
+			Weight: v,
+			Label:  categoryDisplay(k),
+		}
 	}
 	return weights, nil
 }
@@ -220,4 +308,51 @@ func DefaultDimensionWeights() map[string]DimensionWeight {
 		"maintainability": {Weight: 15, Label: "可维护性"},
 		"test_coverage":   {Weight: 10, Label: "测试覆盖"},
 	}
+}
+
+// defaultDeductScore 按 severity 返回默认扣分
+func defaultDeductScore(severity string) int {
+	// 等级越严重扣分越多，建议保持与 prompt instruction 一致
+	switch severity {
+	case "critical":
+		return 10
+	case "high":
+		return 5
+	case "medium":
+		return 3
+	case "low":
+		return 1
+	default:
+		return 0
+	}
+}
+
+// RecalculateTotalScore 从 Issue 扣分重新计算总分
+// 公式: total_score = Σ(max(0, 100 - 维度扣分总和) × 维度权重) / 100
+func RecalculateTotalScore(result *llm.AIReviewResult) int {
+	// 按维度汇总扣分
+	dimDeductions := make(map[string]int)
+	for _, issue := range result.Issues {
+		dimDeductions[issue.Category] += issue.DeductScore
+	}
+
+	// 加权计算
+	total := 0
+	for code, dim := range result.Dimensions {
+		if dim.Weight <= 0 {
+			continue
+		}
+		deducted := dimDeductions[code]
+		score := max(0, 100-deducted)
+		total += score * dim.Weight
+	}
+
+	return total / 100
+}
+
+func abs(a int) int {
+	if a < 0 {
+		return -a
+	}
+	return a
 }

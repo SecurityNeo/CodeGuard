@@ -27,6 +27,9 @@ func (s *TemplateService) Get(id uint) (*model.ProjectTemplate, error) {
 }
 
 func (s *TemplateService) Create(t *model.ProjectTemplate) error {
+	if t.DimensionWeights == "" {
+		t.DimensionWeights = "{}"
+	}
 	return model.DB.Create(t).Error
 }
 

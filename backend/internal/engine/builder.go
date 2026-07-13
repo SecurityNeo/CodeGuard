@@ -1,12 +1,15 @@
 package engine
 
 import (
+	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/ai-optimizer/backend/internal/model"
 	"github.com/ai-optimizer/backend/pkg/gitlab"
+	"github.com/ai-optimizer/backend/pkg/llm"
 )
 
 // PromptContext Prompt 组装所需的上下文
@@ -32,10 +35,29 @@ func BuildReviewPrompt(ctx *PromptContext) string {
 
 	// 1. System 角色及输出约束
 	sb.WriteString("你是一名资深代码审查专家。请对以下代码变更进行严格审查。\n\n")
-	sb.WriteString("【重要】你的响应必须严格符合以下 JSON Schema，不要包含任何 Markdown 代码块标记（如 ```json）或额外解释文字。")
-	sb.WriteString("所有字段必须填写，issues 数组为空时填写 []，recommendations 为空时填写 []：\n")
-	sb.WriteString(SchemaExample)
+	sb.WriteString("##【重要】你的响应必须严格符合以下 JSON Schema，不要包含任何 Markdown 代码块标记（如 ```json）或额外解释文字。如果不涉及的评分维度，可以不包含在 dimensions 内。所有字段必须填写，issues 数组为空时填写 []，recommendations 为空时填写 []：\n")
+
+	// 动态生成 SchemaExample，确保示例和实际维度完全一致
+	schemaExample := buildSchemaExample(ctx.DimensionWeights)
+	sb.WriteString(schemaExample)
 	sb.WriteString("\n\n")
+
+	sb.WriteString("##【总分计算规则 - 必须严格遵守】\n")
+	sb.WriteString("1. 每个 Issue 按严重程度固定扣分（deduct_score）：\n")
+	sb.WriteString("   - critical（严重）: 扣 10 分\n")
+	sb.WriteString("   - high（高危）: 扣 5 分\n")
+	sb.WriteString("   - medium（中危）: 扣 3 分\n")
+	sb.WriteString("   - low（低危）: 扣 1 分\n")
+	sb.WriteString("   - info（提示）: 扣 0 分\n\n")
+	sb.WriteString("2. 按维度汇总扣分：\n")
+	sb.WriteString("   将 issues 按 category 分组，每组内所有 deduct_score 相加。\n\n")
+	sb.WriteString("3. 计算各维度得分：\n")
+	sb.WriteString("   维度得分 = max(0, 100 - 该维度扣分总和)\n\n")
+	sb.WriteString("4. 计算总分（加权平均）：\n")
+	sb.WriteString("   total_score = \u03A3(维度得分 \u00D7 维度权重) / 100\n")
+	sb.WriteString("   结果四舍五入到整数（0-100）。\n\n")
+	sb.WriteString("5. 权重为 0 的维度不参与总分计算，但仍返回 score 供参考。\n\n")
+	sb.WriteString("【重要】total_score 必须与上述公式计算结果一致，不能随意填写。\n\n")
 
 	// 2. 项目自定义说明
 	if ctx.CustomInstruction != "" {
@@ -44,28 +66,46 @@ func BuildReviewPrompt(ctx *PromptContext) string {
 		sb.WriteString("\n\n")
 	}
 
-	// 3. 维度评分权重说明
-	var order = []string{"security", "code_quality", "readability", "maintainability", "test_coverage"}
-	sb.WriteString("【评分维度及权重】\n")
-	sb.WriteString("请严格按照以下维度和权重进行评分，所有维度得分必须在 0-100 之间，权重之和为 100：\n")
-	for _, name := range order {
-		if dim, ok := ctx.DimensionWeights[name]; ok {
-			sb.WriteString(fmt.Sprintf("- %s（权重 %d%%）：%s\n", dim.Label, dim.Weight, name))
+	// 3. 维度 + 权重 + 规则 柔和在一起
+	sb.WriteString("##【评分维度、权重及评审规则】\n\n")
+	sb.WriteString("请严格按照以下维度和权重进行评分，所有维度得分必须在 0-100 之间，涉及的维度权重之和应为 100：\n\n")
+
+	rules := selectTopRules(ctx.Rules, ctx.MaxRules)
+	grouped := groupRulesByCategory(rules)
+
+	// 维度排序按权重降序，权重相同按名称
+	order := sortDimensions(ctx.DimensionWeights)
+	for _, cat := range order {
+		group, ok := grouped[cat]
+		if !ok || len(group) == 0 {
+			continue
+		}
+		weightVal := 0
+		if dim, ok2 := ctx.DimensionWeights[cat]; ok2 {
+			weightVal = dim.Weight
+		}
+		sb.WriteString(fmt.Sprintf("### %s（权重 %d%%）：%s\n\n", categoryDisplay(cat), weightVal, cat))
+		for _, rule := range group {
+			severityLabel := severityDisplay(rule.Severity)
+			sb.WriteString(fmt.Sprintf("#### `%s` | %s | **%s**\n\n", rule.Code, rule.Name, severityLabel))
+
+			promptText := strings.TrimSpace(rule.Prompt)
+			if promptText != "" {
+				hasStructure := strings.HasPrefix(promptText, "#") ||
+					strings.HasPrefix(promptText, "-") ||
+					strings.HasPrefix(promptText, "*") ||
+					listItemRe.MatchString(promptText)
+				if !hasStructure {
+					sb.WriteString("**检查要点：**\n")
+				}
+				sb.WriteString(promptText)
+				sb.WriteString("\n\n")
+			}
 		}
 	}
-	sb.WriteString("\n")
+	sb.WriteString("对于未在规则列表中的其他问题，也可以一并指出，此时 `rule_code` 填空字符串。\n\n")
 
-	// 4. 评审规则列表（截断到最多 N 条）
-	rules := selectTopRules(ctx.Rules, ctx.MaxRules)
-	sb.WriteString(fmt.Sprintf("【重点关注以下 %d 条评审规则】\n", len(rules)))
-	for i, rule := range rules {
-		severityLabel := severityDisplay(rule.Severity)
-		sb.WriteString(fmt.Sprintf("%d. [%s] %s（%s %s）：%s\n",
-			i+1, rule.Category, rule.Name, severityLabel, rule.Severity, rule.Prompt))
-	}
-	sb.WriteString("\n对于未在规则列表中的其他问题，也可以一并指出，此时 rule_code 填空字符串。\n\n")
-
-	// 5. 待评审代码
+	// 4. 待评审代码
 	sb.WriteString("【待评审的代码变更】\n")
 	for i, file := range ctx.Files {
 		if file.Diff == "" {
@@ -77,16 +117,105 @@ func BuildReviewPrompt(ctx *PromptContext) string {
 		sb.WriteString("\n```\n\n")
 	}
 
-	// 6. Commit 信息
+	// 5. Commit 信息
 	if ctx.CommitsText != "" {
 		sb.WriteString(fmt.Sprintf("【Commit 历史】\n%s\n\n", ctx.CommitsText))
 	}
 
-	// 7. MR 标题
+	// 6. MR 标题
 	sb.WriteString(fmt.Sprintf("【MR 标题】%s\n", ctx.MRTitle))
 
 	return sb.String()
 }
+
+// buildSchemaExample 根据实际维度权重动态生成 JSON Schema 示例
+func buildSchemaExample(dimWeights map[string]DimensionWeight) string {
+	// 从 dimWeights 提取 dimensions 对象
+	dims := make(map[string]llm.Dimension)
+	for code, dim := range dimWeights {
+		dims[code] = llm.Dimension{Score: 85, Weight: dim.Weight}
+	}
+
+	ex := struct {
+		SchemaVersion   string                   `json:"schema_version"`
+		TotalScore      int                      `json:"total_score"`
+		Dimensions      map[string]llm.Dimension `json:"dimensions"`
+		Summary         string                   `json:"summary"`
+		Issues          []struct {
+			RuleCode    string `json:"rule_code"`
+			Severity    string `json:"severity"`
+			Category    string `json:"category"`
+			File        string `json:"file"`
+			LineStart   int    `json:"line_start"`
+			LineEnd     int    `json:"line_end"`
+			CodeSnippet string `json:"code_snippet"`
+			Message     string `json:"message"`
+			Suggestion  string `json:"suggestion"`
+		} `json:"issues"`
+		Recommendations []string `json:"recommendations"`
+	}{
+		SchemaVersion: "1.0",
+		TotalScore:    85,
+		Dimensions:    dims,
+		Summary:       "本次MR整体质量良好，但存在若干需要关注的问题。",
+		Issues: []struct {
+			RuleCode    string `json:"rule_code"`
+			Severity    string `json:"severity"`
+			Category    string `json:"category"`
+			File        string `json:"file"`
+			LineStart   int    `json:"line_start"`
+			LineEnd     int    `json:"line_end"`
+			CodeSnippet string `json:"code_snippet"`
+			Message     string `json:"message"`
+			Suggestion  string `json:"suggestion"`
+		}{
+			{
+				RuleCode:    "security-hardcoded-secret",
+				Severity:    "high",
+				Category:    "security",
+				File:        "pkg/service/auth.go",
+				LineStart:   45,
+				LineEnd:     52,
+				CodeSnippet: "const API_KEY = \"sk-1234567890abcdef\"",
+				Message:     "此处使用了硬编码密钥",
+				Suggestion:  "建议改从环境变量读取，如 os.Getenv(\"API_KEY\")",
+			},
+		},
+		Recommendations: []string{"建议增加单元测试覆盖", "考虑将密码学操作抽取为独立包"},
+	}
+
+	b, err := json.MarshalIndent(ex, "", "  ")
+	if err != nil {
+		return SchemaExampleFallback
+	}
+	return string(b)
+}
+
+// sortDimensions 按权重降序排序维度 code，权重相同按名称字母序
+func sortDimensions(dimWeights map[string]DimensionWeight) []string {
+	type pair struct {
+		code   string
+		weight int
+	}
+	pairs := make([]pair, 0, len(dimWeights))
+	for code, dim := range dimWeights {
+		pairs = append(pairs, pair{code: code, weight: dim.Weight})
+	}
+	sort.Slice(pairs, func(i, j int) bool {
+		if pairs[i].weight != pairs[j].weight {
+			return pairs[i].weight > pairs[j].weight
+		}
+		return pairs[i].code < pairs[j].code
+	})
+	result := make([]string, len(pairs))
+	for i, p := range pairs {
+		result[i] = p.code
+	}
+	return result
+}
+
+// listItemRe 匹配有序列表项开头（如 1. 2.）
+var listItemRe = regexp.MustCompile(`^\d+\.\s`)
 
 // selectTopRules 按严重级别排序并截断规则列表
 // 严重级别枚举: critical > high > medium > low > info
@@ -106,6 +235,39 @@ func selectTopRules(rules []model.ReviewRule, max int) []model.ReviewRule {
 	return sorted
 }
 
+// groupRulesByCategory 按维度类别分组规则
+func groupRulesByCategory(rules []model.ReviewRule) map[string][]model.ReviewRule {
+	grouped := make(map[string][]model.ReviewRule)
+	for _, rule := range rules {
+		cat := rule.Category
+		if cat == "" {
+			cat = "common"
+		}
+		grouped[cat] = append(grouped[cat], rule)
+	}
+	return grouped
+}
+
+// categoryDisplay 维度名称中文映射（查看 ReviewCategory 表获取最终源）
+func categoryDisplay(category string) string {
+	// 数据库持久化为权威来源；硬编码用于 builder 内部降级显示
+	m := map[string]string{
+		"security":        "安全性",
+		"performance":     "性能",
+		"code_quality":    "代码质量",
+		"readability":     "可读性",
+		"maintainability": "可维护性",
+		"test_coverage":   "测试覆盖",
+		"dockerfile":      "DockerFile",
+		"common":          "通用",
+	}
+	if v, ok := m[category]; ok {
+		return v
+	}
+	// 自定义维度：首字母大写，下划线转空格
+	return strings.Title(strings.ReplaceAll(category, "_", " "))
+}
+
 // severityDisplay 严重级别中文显示
 func severityDisplay(severity string) string {
 	m := map[string]string{
@@ -121,19 +283,14 @@ func severityDisplay(severity string) string {
 	return severity
 }
 
-// SchemaExample 给模型看的 JSON 输出示例
-const SchemaExample = `
-{
+// SchemaExampleFallback 兜底示例（无法 marshal 时使用）
+const SchemaExampleFallback = `{
   "schema_version": "1.0",
   "total_score": 85,
   "dimensions": {
-    "security": {"score": 95, "weight": 30},
-    "code_quality": {"score": 80, "weight": 25},
-    "readability": {"score": 75, "weight": 20},
-    "maintainability": {"score": 85, "weight": 15},
-    "test_coverage": {"score": 90, "weight": 10}
+    "security": {"score": 95, "weight": 30}
   },
-  "summary": "本次MR整体质量良好，但存在2个安全问题需要关注。",
+  "summary": "本次MR整体质量良好。",
   "issues": [
     {
       "rule_code": "security-hardcoded-secret",
@@ -144,9 +301,8 @@ const SchemaExample = `
       "line_end": 52,
       "code_snippet": "const API_KEY = \"sk-1234567890abcdef\"",
       "message": "此处使用了硬编码密钥",
-      "suggestion": "建议改从环境变量读取，如 os.Getenv(\"API_KEY\")"
+      "suggestion": "建议改从环境变量读取"
     }
   ],
-  "recommendations": ["建议增加单元测试覆盖", "考虑将密码学操作抽取为独立包"]
-}
-`
+  "recommendations": ["建议增加单元测试覆盖"]
+}`

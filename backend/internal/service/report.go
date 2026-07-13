@@ -2,9 +2,10 @@ package service
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
-	"text/template"
+	"html/template"
 	"time"
 
 	"github.com/ai-optimizer/backend/internal/model"
@@ -643,6 +644,46 @@ func (s *ReportService) SendEmail(reportType string, html string, groupNames []s
 	return nil
 }
 
+// ResendEmail 根据历史日志重新发送邮件
+func (s *ReportService) ResendEmail(log *model.ReportLog) error {
+	var cfg model.SMTPConfig
+	if err := model.DB.First(&cfg).Error; err != nil {
+		return fmt.Errorf("smtp not configured")
+	}
+
+	// 从历史记录的 recipients 获取邮箱列表
+	var recipients []model.ReportRecipient
+	if err := json.Unmarshal([]byte(log.Recipients), &recipients); err != nil {
+		return fmt.Errorf("invalid recipients data")
+	}
+
+	toEmails := make([]string, 0, len(recipients))
+	for _, r := range recipients {
+		email := strings.TrimSpace(r.Email)
+		if email != "" {
+			toEmails = append(toEmails, email)
+		}
+	}
+	if len(toEmails) == 0 {
+		return fmt.Errorf("no valid recipients")
+	}
+
+	p := buildPeriod(log.ReportType)
+	subject := fmt.Sprintf("【AI CodeGuard】%s 重发 — %s", p.Title, time.Now().Format("2006-01-02"))
+
+	mime := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";\n\n"
+	msg := fmt.Sprintf("Subject: %s\nFrom: %s <%s>\nTo: %s\n%s\n%s",
+		subject, cfg.FromName, cfg.FromEmail, strings.Join(toEmails, ","), mime, log.HtmlContent)
+
+	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+	if err := sendMailWithLogin(addr, cfg.FromEmail, toEmails, []byte(msg), cfg.Username, cfg.Password, cfg.UseTLS); err != nil {
+		return fmt.Errorf("send email failed: %w", err)
+	}
+
+	zap.L().Info("report mail resent", zap.Uint("log_id", log.ID), zap.String("type", log.ReportType), zap.Strings("to", toEmails))
+	return nil
+}
+
 // TestSMTP 测试 SMTP 连接
 func (s *ReportService) TestSMTP(cfg *model.SMTPConfig) error {
 	mime := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";\n\n"
@@ -952,13 +993,13 @@ const reportTemplate = `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitiona
 <table cellpadding="0" cellspacing="0" border="0" width="852"><tr><td style="padding:20px 0px;">
 <font face="Arial,Helvetica,sans-serif" size="3" color="#1a1a2e"><b>&#128680; 低质量 MR 列表（评分 &lt; 60）</b></font>
 <br><br>
-<table cellpadding="0" cellspacing="0" border="0" width="796">
+<table cellpadding="0" cellspacing="0" border="0" width="852">
   <tr>
-    <td style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="110"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>项目</b></font></td>
-    <td style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="310"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>MR 标题</b></font></td>
-    <td align="center" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="180"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>作者</b></font></td>
-    <td align="center" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="55"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>评分</b></font></td>
-    <td align="right" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;" width="105"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>变更量</b></font></td>
+    <td style="padding:6px 8px;border-bottom:1px solid #e0e0e0;"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>项目</b></font></td>
+    <td style="padding:6px 8px;border-bottom:1px solid #e0e0e0;"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>MR 标题</b></font></td>
+    <td align="center" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>作者</b></font></td>
+    <td align="center" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>评分</b></font></td>
+    <td align="right" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>变更量</b></font></td>
   </tr>
 {{range .LowQualityList}}
   <tr>

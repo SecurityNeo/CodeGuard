@@ -158,6 +158,8 @@ func (s *TaskService) Create(data map[string]interface{}) (*model.Task, error) {
 		TargetBranch:        targetBranch,
 		NoteID:              noteID,
 		AIPrompt:            aiprompt,
+		AIResponseJSON:      "{}",  // MySQL JSON 列不接受空字符串
+		DimensionScores:     "{}",  // MySQL JSON 列不接受空字符串
 		TaskType:            "chat",
 		Status:              model.TaskPending,
 		TriggerType:         data["trigger_type"].(string),
@@ -525,23 +527,26 @@ func (s *TaskService) Retry(taskID uint, userReviewComment string, selectedComme
 }
 
 func (s *TaskService) TimeoutCheck() {
-	// 从数据库获取超时配置，HTTP 超时已改为 120 分钟，Task 超时应 >= 120 分钟
+	// 从数据库获取超时配置
 	var sysConfig model.SystemConfig
-	timeoutMin := 120 // 默认2小时，匹配HTTP Client超时
+	timeoutMin := 120
 	if err := model.SilentFirst(model.DB, &sysConfig); err == nil && sysConfig.TaskTimeoutMin > 0 {
 		timeoutMin = sysConfig.TaskTimeoutMin
+	} else if err != nil {
+		zap.L().Debug("timeout check using default timeout", zap.Int("timeout_min", timeoutMin), zap.Error(err))
 	}
 
 	var tasks []model.Task
+	thresholdTime := time.Now().Add(-time.Duration(timeoutMin) * time.Minute)
 	if err := model.DB.Where("status = ? AND started_at < ?",
 		model.TaskRunning,
-		time.Now().Add(-time.Duration(timeoutMin)*time.Minute)).Find(&tasks).Error; err != nil {
+		thresholdTime).Find(&tasks).Error; err != nil {
 		zap.L().Error("timeout check query failed", zap.Error(err))
 		return
 	}
 
 	for _, task := range tasks {
-		zap.L().Info("task timeout, aborting", zap.Uint("task_id", task.ID))
+		zap.L().Info("task timeout, aborting", zap.Uint("task_id", task.ID), zap.Duration("elapsed", time.Since(*task.StartedAt)))
 
 		// 终止 OpenCode session（如存在）
 		if task.OpencodeSessionID != "" {
@@ -924,13 +929,13 @@ func (s *TaskService) failReviewTask(task model.Task, errMsg string) error {
 	})
 	if res.RowsAffected == 0 {
 		zap.L().Info("review task no longer running, skip writing failed status", zap.Uint("task_id", task.ID))
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%s", errMsg)
 	}
 	zap.L().Error("review task failed", zap.Uint("task_id", task.ID), zap.String("error", errMsg))
 	go s.postReviewComment(task, "❌ AI 评审失败："+errMsg)
 	// AI 评审失败后也需要唤醒同项目 pending 队列，避免后续任务饿死
 	s.startNextPendingTask(task.ProjectID)
-	return fmt.Errorf(errMsg)
+	return fmt.Errorf("%s", errMsg)
 }
 
 func (s *TaskService) fetchMRDiffFiles(task model.Task) ([]gitlab.DiffFile, int, int, error) {
@@ -1389,12 +1394,12 @@ func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.
 		rules = append(rules, rule)
 	}
 
-	// 3. 解析维度权重（使用项目模板配置）
-	dimWeights := engine.DefaultDimensionWeights()
-	if template.ID > 0 && template.DimensionWeights != "" {
-		if parsed, err := engine.ParseDimensionWeights(template.DimensionWeights); err == nil {
-			dimWeights = parsed
-		}
+	// 3. 解析维度权重（使用项目模板配置），自动补齐已启用规则的分类维度
+	var dimWeights map[string]engine.DimensionWeight
+	if template.ID > 0 {
+		dimWeights = engine.BuildDimensionWeights(template.DimensionWeights, rules)
+	} else {
+		dimWeights = engine.BuildDimensionWeights("", rules)
 	}
 
 	// 4. 获取 max_rules_per_review（默认 5）
@@ -1420,8 +1425,12 @@ func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.
 	}
 	userPrompt := engine.BuildReviewPrompt(promptCtx)
 
-	// 6. 构建 JSON Schema Request
-	schema := llm.GetReviewJSONSchema()
+	// 6. 构建 JSON Schema Request，使用模板实际维度
+	dimNames := make([]string, 0, len(dimWeights))
+	for code := range dimWeights {
+		dimNames = append(dimNames, code)
+	}
+	schema := llm.GetReviewJSONSchema(dimNames)
 	responseFormat := &llm.ResponseFormat{
 		Type: "json_schema",
 		JSONSchema: &llm.JSONSchema{

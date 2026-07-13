@@ -535,19 +535,19 @@ function renderTasks(tasks) {
             tbody.innerHTML = tasks.map(t => {
                 const isReview = t.task_type === 'review';
                 return `<tr class="hover:bg-gray-50">
-                    <td class="px-4 py-3 text-sm font-mono text-gray-600 cursor-pointer" onclick="showTaskDetail(${t.id})">#${t.id}</td>
-                    <td class="px-4 py-3 text-center cursor-pointer" onclick="showTaskDetail(${t.id})"><span class="task-type-badge ${isReview ? 'review' : 'chat'}">${getTaskTypeText(t.task_type)}</span></td>
-                    <td class="px-4 py-3 text-center cursor-pointer" onclick="showTaskDetail(${t.id})">${getTriggerSourceBadge(t.trigger_source, t.score_value)}</td>
-                    <td class="px-4 py-3 text-sm cursor-pointer" onclick="showTaskDetail(${t.id})">${t.project?.name || '-'}</td>
-                    <td class="px-4 py-3 text-sm cursor-pointer" onclick="showTaskDetail(${t.id})">${t.mr_iid ? '<a href="' + (t.mr_url || '#') + '" target="_blank" class="text-blue-600 hover:underline">' + t.mr_iid + '</a>' : '-'}</td>
-                    <td class="px-4 py-3 text-sm cursor-pointer" onclick="showTaskDetail(${t.id})">${t.author || '-'}</td>
-                    <td class="px-4 py-3 text-sm font-mono text-xs text-blue-600 cursor-pointer" onclick="showTaskDetail(${t.id})">${t.source_branch || '-'}->${t.target_branch || '-'}</td>
-                    <td class="px-4 py-3 text-sm cursor-pointer" onclick="showTaskDetail(${t.id})">${isReview
+                    <td class="px-4 py-3 text-sm font-mono text-gray-600 cursor-pointer" onclick="openTaskDetail(${t.id})">#${t.id}</td>
+                    <td class="px-4 py-3 text-center cursor-pointer" onclick="openTaskDetail(${t.id})"><span class="task-type-badge ${isReview ? 'review' : 'chat'}">${getTaskTypeText(t.task_type)}</span></td>
+                    <td class="px-4 py-3 text-center cursor-pointer" onclick="openTaskDetail(${t.id})">${getTriggerSourceBadge(t.trigger_source, t.score_value)}</td>
+                    <td class="px-4 py-3 text-sm cursor-pointer" onclick="openTaskDetail(${t.id})">${t.project?.name || '-'}</td>
+                    <td class="px-4 py-3 text-sm cursor-pointer" onclick="openTaskDetail(${t.id})">${t.mr_iid ? '<a href="' + (t.mr_url || '#') + '" target="_blank" class="text-blue-600 hover:underline">' + t.mr_iid + '</a>' : '-'}</td>
+                    <td class="px-4 py-3 text-sm cursor-pointer" onclick="openTaskDetail(${t.id})">${t.author || '-'}</td>
+                    <td class="px-4 py-3 text-sm font-mono text-xs text-blue-600 cursor-pointer" onclick="openTaskDetail(${t.id})">${t.source_branch || '-'}->${t.target_branch || '-'}</td>
+                    <td class="px-4 py-3 text-sm cursor-pointer" onclick="openTaskDetail(${t.id})">${isReview
                         ? getModelTag(t.used_model) || (t.model_id > 0 ? '模型#' + t.model_id : '<span class="text-gray-400">--</span>')
                         : (t.pool?.name || '-')}</td>
-                    <td class="px-4 py-3 text-sm cursor-pointer" onclick="showTaskDetail(${t.id})">${formatDuration(t.duration_sec)}</td>
-                    <td class="px-4 py-3 text-sm text-gray-500 cursor-pointer" onclick="showTaskDetail(${t.id})">${formatDate(t.created_at)}</td>
-                    <td class="px-4 py-3 text-center cursor-pointer" onclick="showTaskDetail(${t.id})"><span class="status-badge status-${t.status}">${getStatusText(t.status)}</span></td>
+                    <td class="px-4 py-3 text-sm cursor-pointer" onclick="openTaskDetail(${t.id})">${formatDuration(t.duration_sec)}</td>
+                    <td class="px-4 py-3 text-sm text-gray-500 cursor-pointer" onclick="openTaskDetail(${t.id})">${formatDate(t.created_at)}</td>
+                    <td class="px-4 py-3 text-center cursor-pointer" onclick="openTaskDetail(${t.id})"><span class="status-badge status-${t.status}">${getStatusText(t.status)}</span></td>
                     <td class="px-4 py-3 text-center space-x-1">
                         <button onclick="viewLogs(${t.id}); event.stopPropagation();" class="text-blue-600 hover:text-blue-700 text-sm">评审详情</button>
                         ${!isReview && t.opencode_session_id ? `<button onclick="viewMessages(${t.id}); event.stopPropagation();" class="text-purple-600 hover:text-purple-700 text-sm">智能体</button>` : ''}
@@ -612,55 +612,8 @@ function renderTasks(tasks) {
         function showModal(id) { document.getElementById(id).classList.add('active'); }
         function hideModal(id) { document.getElementById(id).classList.remove('active'); }
 
-        async function showTaskDetail(id) {
-            try {
-                const res = await apiFetch(`${API_BASE}/tasks/${id}`);
-                const data = await res.json();
-                const t = data.data;
-                
-                const isReviewDetail = t.task_type === 'review';
-                document.getElementById('detailTaskId').textContent = '#' + t.id;
-                document.getElementById('detailProject').textContent = t.project?.name || '-';
-                document.getElementById('detailTaskType').innerHTML = `<span class="task-type-badge ${isReviewDetail ? 'review' : 'chat'}">${getTaskTypeText(t.task_type)}</span>`;
-                document.getElementById('detailMR').innerHTML = t.mr_iid ? `<a href="${t.mr_url}" target="_blank" class="text-blue-600 hover:underline">${t.mr_iid}</a>` : '-';
-                document.getElementById('detailAuthor').textContent = t.author || '-';
-                document.getElementById('detailStatus').innerHTML = `<span class="status-badge status-${t.status}">${getStatusText(t.status)}</span>`;
-                document.getElementById('detailScore').textContent = t.score_value > 0 ? t.score_value + '分' : '-';
-                document.getElementById('detailTrigger').innerHTML = getTriggerSourceBadge(t.trigger_source, t.score_value);
-                document.getElementById('detailSourceBranch').textContent = t.source_branch || '-';
-                document.getElementById('detailTargetBranch').textContent = t.target_branch || '-';
-                document.getElementById('detailPool').innerHTML = isReviewDetail
-                    ? getModelTag(t.used_model) || (t.model_id > 0 ? '模型#' + t.model_id : '--')
-                    : (t.pool?.name || '-');
-                document.getElementById('detailDuration').textContent = formatDuration(t.duration_sec);
-                document.getElementById('detailCreated').textContent = formatDate(t.created_at);
-                
-                // 显示错误信息
-                const errorContainer = document.getElementById('errorMsgContainer');
-                const errorMsgEl = document.getElementById('detailErrorMsg');
-                if (t.error_msg) {
-                    errorContainer.classList.remove('hidden');
-                    errorMsgEl.textContent = t.error_msg;
-                } else {
-                    errorContainer.classList.add('hidden');
-                }
-                
-                // 任务详情弹窗展示评审内容
-                const contentContainer = document.getElementById('detailContentContainer');
-                if (isReviewDetail && t.status === 'success') {
-                    contentContainer.classList.remove('hidden');
-                    // 加载结构化评审
-                    loadStructuredReview(t.id);
-                    // 也填充原始内容作为 fallback
-                    document.getElementById('detailContentBody').innerHTML = t.ai_response ? marked.parse(maskSensitive(t.ai_response)) : '-';
-                } else {
-                    contentContainer.classList.add('hidden');
-                }
-
-                showModal('taskDetailModal');
-            } catch (e) {
-                alert('加载失败: ' + e.message);
-            }
+        function openTaskDetail(id) {
+            window.location.href = `task-detail.html?id=${id}`;
         }
 
         async function viewLogs(id) {
@@ -1806,14 +1759,15 @@ function renderTasks(tasks) {
                     dimContainer.innerHTML = Object.entries(dims).map(([key, val]) => {
                         const score = typeof val === 'object' ? val.score : val;
                         const label = dimLabels[key] || key;
-                        const color = score >= 80 ? 'bg-green-500' : score >= 60 ? 'bg-yellow-500' : 'bg-red-500';
+                        const colorClass = score >= 80 ? 'bg-gradient-to-t from-green-500 to-green-400' : score >= 60 ? 'bg-gradient-to-t from-yellow-500 to-yellow-400' : 'bg-gradient-to-t from-red-500 to-red-400';
+                        const scoreColor = score >= 60 ? 'text-gray-800' : 'text-red-600';
                         return `
-                            <div class="text-center">
-                                <div class="text-xs font-bold ${score >= 60 ? 'text-gray-700' : 'text-red-600'}">${score}</div>
-                                <div class="h-8 bg-gray-200 rounded-full overflow-hidden relative mt-1">
-                                    <div class="${color} absolute bottom-0 left-0 right-0 rounded-full" style="height:${score}%"></div>
+                            <div class="flex flex-col items-center gap-1">
+                                <span class="text-sm font-bold ${scoreColor}">${score}</span>
+                                <div class="w-10 h-24 bg-gray-100 rounded-lg relative overflow-hidden">
+                                    <div class="${colorClass} absolute bottom-0 left-0 right-0 rounded-b-lg transition-all duration-700 ease-out" style="height:${score}%"></div>
                                 </div>
-                                <div class="text-[10px] text-gray-500 mt-0.5">${label}</div>
+                                <span class="text-xs text-gray-500 font-medium mt-0.5">${label}</span>
                             </div>
                         `;
                     }).join('');
@@ -1854,6 +1808,10 @@ function renderTasks(tasks) {
                 issues = issues.filter(i => i.file === fileFilter);
             }
 
+            // 按严重级别降序排列（high/serious 优先）
+            const severityOrder = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
+            issues = issues.sort((a, b) => (severityOrder[b.severity] || 0) - (severityOrder[a.severity] || 0));
+
             if (issues.length === 0) {
                 document.getElementById('issuesListArea').innerHTML = '<div class="text-center text-gray-400 py-8">没有符合条件的问题</div>';
                 return;
@@ -1863,6 +1821,8 @@ function renderTasks(tasks) {
             const severityLabels = { critical: '严重', high: '高危', medium: '中危', low: '低危', info: '提示' };
             const statusLabels = { pending: '待处理', accepted: '已采纳', rejected: '已拒绝' };
             const statusColors = { pending: 'text-gray-500', accepted: 'text-green-600', rejected: 'text-red-600' };
+            const categoryColors = { security: 'bg-red-50 text-red-700', performance: 'bg-orange-50 text-orange-700', code_quality: 'bg-purple-50 text-purple-700', readability: 'bg-blue-50 text-blue-700', maintainability: 'bg-green-50 text-green-700', test_coverage: 'bg-pink-50 text-pink-700', common: 'bg-gray-50 text-gray-600' };
+            const categoryLabels = { security: '安全', performance: '性能', code_quality: '代码质量', readability: '可读性', maintainability: '可维护性', test_coverage: '测试覆盖', common: '通用' };
 
             document.getElementById('issuesListArea').innerHTML = issues.map(issue => `
                 <div class="border-l-4 rounded-lg p-3 ${severityColors[issue.severity] || 'border-gray-300 bg-gray-50'}">
@@ -1871,6 +1831,7 @@ function renderTasks(tasks) {
                             <div class="flex items-center gap-2 mb-1">
                                 <input type="checkbox" class="issue-checkbox rounded" value="${issue.id}" onchange="updateBatchActionBar()">
                                 <span class="text-xs font-medium px-1.5 py-0.5 rounded ${issue.severity === 'critical' ? 'bg-red-100 text-red-700' : issue.severity === 'high' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}">${severityLabels[issue.severity] || issue.severity}</span>
+                                <span class="text-xs ${categoryColors[issue.category] || 'bg-gray-100 text-gray-600'} px-1.5 py-0.5 rounded">${categoryLabels[issue.category] || issue.category}</span>
                                 <span class="text-xs text-gray-500">${issue.rule_code || '自定义'}</span>
                                 <span class="text-xs ${statusColors[issue.status] || 'text-gray-500'}">[${statusLabels[issue.status] || issue.status}]</span>
                             </div>

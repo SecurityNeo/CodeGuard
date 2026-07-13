@@ -168,6 +168,45 @@
                         </div>
                     </div>
 
+                    <!-- JSON 重试配置卡片 -->
+                    <div class="bg-gray-50 rounded-lg p-5 border mt-5">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                            <i class="fas fa-redo-alt text-green-500"></i>JSON 解析重试策略
+                        </h4>
+                        <p class="text-xs text-gray-500 mb-3">AI 返回非结构化 JSON 时的自动重试与降级配置</p>
+                        <div class="grid grid-cols-2 gap-5">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">最大重试次数</label>
+                                <input type="number" id="jsonRetryMaxAttempts" value="3" min="0" max="10" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <p class="text-xs text-gray-400 mt-1">JSON 解析失败后最多尝试重新调用 LLM 的次数</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">初始延迟（秒）</label>
+                                <input type="number" id="jsonRetryInitialDelaySec" value="2" min="0" max="60" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <p class="text-xs text-gray-400 mt-1">第一次重试前的等待时间</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">退避乘数</label>
+                                <input type="number" id="jsonRetryBackoffMultiplier" value="2.0" min="1.0" max="10.0" step="0.1" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <p class="text-xs text-gray-400 mt-1">每次重试延迟按此倍数增长（如 2s → 4s → 8s）</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">最大延迟（秒）</label>
+                                <input type="number" id="jsonRetryMaxDelaySec" value="30" min="1" max="300" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <p class="text-xs text-gray-400 mt-1">重试延迟的上限，防止间隔过长</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">降级策略</label>
+                                <select id="jsonRetryFallbackStrategy" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                    <option value="regex">正则提取分数（兼容模式）</option>
+                                    <option value="markdown">保留原始文本</option>
+                                    <option value="fail">标记任务失败</option>
+                                </select>
+                                <p class="text-xs text-gray-400 mt-1">所有重试均失败时的处理策略</p>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- GitLab SSO 配置卡片 -->
                     <div class="bg-gray-50 rounded-lg p-5 border mt-5">
                         <h4 class="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
@@ -298,16 +337,8 @@
                                 <span class="text-gray-500 ml-2">带认证的克隆地址</span>
                             </div>
                             <div class="bg-white px-3 py-2 rounded border text-sm">
-                                <code class="text-teal-600 font-mono">&#123;&#123;MR_DIFF&#125;&#125;</code>
-                                <span class="text-gray-500 ml-2">MR变更信息</span>
-                            </div>
-                            <div class="bg-white px-3 py-2 rounded border text-sm">
                                 <code class="text-teal-600 font-mono">&#123;&#123;MR_AUTHOR&#125;&#125;</code>
                                 <span class="text-gray-500 ml-2">代码提交人</span>
-                            </div>
-                            <div class="bg-white px-3 py-2 rounded border text-sm">
-                                <code class="text-teal-600 font-mono">&#123;&#123;USER_INPUT&#125;&#125;</code>
-                                <span class="text-gray-500 ml-2">用户输入</span>
                             </div>
                             <div class="bg-white px-3 py-2 rounded border text-sm">
                                 <code class="text-teal-600 font-mono">&#123;&#123;SRC_BRANCH&#125;&#125;</code>
@@ -316,6 +347,10 @@
                             <div class="bg-white px-3 py-2 rounded border text-sm">
                                 <code class="text-teal-600 font-mono">&#123;&#123;DEST_BRANCH&#125;&#125;</code>
                                 <span class="text-gray-500 ml-2">目标分支</span>
+                            </div>
+                            <div class="bg-white px-3 py-2 rounded border text-sm">
+                                <code class="text-teal-600 font-mono">&#123;&#123;USER_INPUT&#125;&#125;</code>
+                                <span class="text-gray-500 ml-2">用户输入</span>
                             </div>
                         </div>
                     </div>
@@ -658,6 +693,13 @@
                     await loadAlertNotifierOptions(data.data.alert_notifier_id);
                     await loadAlertMentionUsers(data.data.alert_mention_user_ids || '');
 
+                    // JSON 重试配置
+                    setVal('jsonRetryMaxAttempts', data.data.json_retry_max_attempts, 3);
+                    setVal('jsonRetryInitialDelaySec', data.data.json_retry_initial_delay_sec, 2);
+                    setVal('jsonRetryBackoffMultiplier', data.data.json_retry_backoff_multiplier, 2.0);
+                    setVal('jsonRetryMaxDelaySec', data.data.json_retry_max_delay_sec, 30);
+                    setVal('jsonRetryFallbackStrategy', data.data.json_retry_fallback_strategy, 'regex');
+
                     // GitLab SSO 配置
                     const enabled = !!data.data.gitlab_oauth_enabled;
                     document.getElementById('gitlabOAuthEnabled').checked = enabled;
@@ -797,6 +839,12 @@ function previewTemplate() {
                 alert_cooldown_sec: parseInt(document.getElementById('alertCooldownSec').value) || 3600,
                 alert_notifier_id: parseInt(document.getElementById('alertNotifierID').value) || 0,
                 alert_mention_user_ids: Array.from(document.querySelectorAll('#alertMentionUsers input:checked')).map(cb => cb.value).join(','),
+                // JSON 重试配置
+                json_retry_max_attempts: parseInt(document.getElementById('jsonRetryMaxAttempts').value) || 3,
+                json_retry_initial_delay_sec: parseInt(document.getElementById('jsonRetryInitialDelaySec').value) || 2,
+                json_retry_backoff_multiplier: parseFloat(document.getElementById('jsonRetryBackoffMultiplier').value) || 2.0,
+                json_retry_max_delay_sec: parseInt(document.getElementById('jsonRetryMaxDelaySec').value) || 30,
+                json_retry_fallback_strategy: document.getElementById('jsonRetryFallbackStrategy').value || 'regex',
                 // GitLab SSO
                 gitlab_oauth_enabled: document.getElementById('gitlabOAuthEnabled').checked,
                 gitlab_base_url: document.getElementById('gitlabBaseURL').value.trim(),
@@ -849,7 +897,6 @@ function previewTemplate() {
             const template = document.getElementById('reviewTemplate').value;
             const preview = template
                 .replace(/\{\{CLONE_URL\}\}/g, 'http://gitlab.example.com/user/repo.git')
-                .replace(/\{\{MR_DIFF\}\}/g, '+10 -5\n+++ src/main.go\n--- src/utils.go')
                 .replace(/\{\{MR_AUTHOR\}\}/g, 'zhangsan')
                 .replace(/\{\{USER_INPUT\}\}/g, '请对以下代码进行深度审查')
                 .replace(/\{\{SRC_BRANCH\}\}/g, 'feature/add-login')
@@ -874,7 +921,22 @@ function previewTemplate() {
         }
 
         function resetReviewTemplate() {
-            const defaultTemplate = '请先执行以下命令拉取代码：\ngit clone {{CLONE_URL}}\n\n变更摘要：\n{{MR_DIFF}}\n\n{{USER_INPUT}}\n\n请对以上代码变更进行深度审查和分析，找出潜在的问题和风险。';
+            const defaultTemplate = `你是一位资深的软件开发工程师，专注于代码的功能正确性、安全性、稳定性以及工程最佳实践。已知如下信息：
+- 代码提交人： {{MR_AUTHOR}} 
+- 代码源分支：{{SRC_BRANCH}}
+- 合并目标分支：{{DEST_BRANCH}} 
+
+根据以上信息使用技能\`code-review\`对当前提交的代码进行深度review。
+
+## **重要原则**
+- 如果当前工作目录下不存在项目代码，先拉取项目代码，命令：\`git clone {{CLONE_URL}}\`，如果存在项目代码，必须使用\`git pull\`命令将远端最新代码同步至本地，包括代码源分支（{{SRC_BRANCH}}）与合并目标分支（{{DEST_BRANCH}} ）
+- 可通过\`git diff\`查看代码变更内容，如果变更内容过大，可分批审核，每批次大约输入 100000 token
+- 不允许修改任何代码文件
+- 代码review完成后以Markdown格式输出完整的中文Code Review报告，同时使用标准的工程术语，保持专业严谨
+- 如果代码源分支{{SRC_BRANCH}}不存在，评审任务立即结束
+
+## 附加信息 ##
+- 你的角色：AI Agent For CodeReview`;
             document.getElementById('reviewTemplate').value = defaultTemplate;
             updateLineNumbers(document.getElementById('reviewTemplate'), 'reviewLineNumbers');
         }

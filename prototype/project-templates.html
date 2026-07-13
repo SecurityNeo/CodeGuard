@@ -4,7 +4,7 @@
     <style>html{background-color:#1e293b;}</style>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI审核提示词管理 - CodeGuard</title>
+    <title>AI审核模版管理 - CodeGuard</title>
     <script src="js/auth.js?v=5"></script>
     <script src="js/menu-config.js?v=2"></script>
     <script src="js/sidebar.js?v=2"></script>
@@ -61,7 +61,7 @@
     <main class="flex-1 overflow-y-auto">
         <header class="bg-white border-b px-8 py-4 flex items-center justify-between sticky top-0 z-10">
             <div>
-                <h2 class="text-xl font-bold text-gray-800">AI审核提示词管理</h2>
+                <h2 class="text-xl font-bold text-gray-800">AI审核模版管理</h2>
                 <p class="text-sm text-gray-500 mt-1">管理 AI 审核使用的提示词模板，配置评审维度权重与评论模板</p>
             </div>
         </header>
@@ -89,7 +89,7 @@
 <div id="templateModal" class="modal fixed inset-0 bg-black/50 items-center justify-center z-50">
     <div class="bg-white rounded-xl w-[900px] max-h-[90vh] overflow-y-auto">
         <div class="px-6 py-4 border-b flex items-center justify-between">
-            <h3 class="font-bold text-lg" id="modalTitle">新建AI审核提示词</h3>
+            <h3 class="font-bold text-lg" id="modalTitle">新建AI审核模版</h3>
             <button onclick="hideModal('templateModal')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
         </div>
         <div class="p-6 space-y-5">
@@ -110,27 +110,8 @@
                     <i class="fas fa-balance-scale text-blue-500"></i>评分维度权重配置
                 </h4>
                 <p class="text-xs text-gray-500 mb-3">各维度权重总和必须为 100%</p>
-                <div class="grid grid-cols-5 gap-3" id="dimensionInputs">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">安全性</label>
-                        <input type="number" data-dim="security" min="0" max="100" value="30" class="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">代码质量</label>
-                        <input type="number" data-dim="code_quality" min="0" max="100" value="25" class="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">可读性</label>
-                        <input type="number" data-dim="readability" min="0" max="100" value="20" class="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">可维护性</label>
-                        <input type="number" data-dim="maintainability" min="0" max="100" value="15" class="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">测试覆盖</label>
-                        <input type="number" data-dim="test_coverage" min="0" max="100" value="10" class="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                    </div>
+                <div class="grid gap-3" id="dimensionInputs">
+                    <!-- 动态渲染，加载 ReviewCategory 后填充 -->
                 </div>
                 <div class="mt-2 text-right">
                     <span id="weightTotal" class="text-sm font-medium">总计: 100%</span>
@@ -174,7 +155,7 @@
 <div id="cloneTemplateModal" class="modal fixed inset-0 bg-black/50 items-center justify-center z-50">
     <div class="bg-white rounded-xl w-[400px]">
         <div class="px-6 py-4 border-b flex items-center justify-between">
-            <h3 class="font-bold text-lg">克隆AI审核提示词</h3>
+            <h3 class="font-bold text-lg">克隆AI审核模版</h3>
             <button onclick="hideModal('cloneTemplateModal')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
         </div>
         <div class="p-6 space-y-4">
@@ -214,7 +195,45 @@ function escapeHtml(str) {
 function showModal(id) { document.getElementById(id).classList.add('active'); }
 function hideModal(id) { document.getElementById(id).classList.remove('active'); }
 
-// 监听维度权重输入
+    // ========== 维度权重动态管理 ==========
+    let reviewCategories = [];
+
+    async function loadReviewCategories() {
+        try {
+            const res = await apiFetch(`${API_BASE}/review-categories`);
+            const json = await res.json();
+            reviewCategories = json.data || [];
+            renderDimensionInputs();
+        } catch (e) {
+            console.error('加载分类失败:', e);
+        }
+    }
+
+    function renderDimensionInputs(selectedWeights) {
+        const container = document.getElementById('dimensionInputs');
+        if (!container) return;
+        const defaults = selectedWeights || { security: 30, code_quality: 25, readability: 20, maintainability: 15, test_coverage: 10 };
+        if (reviewCategories.length === 0) {
+            // 降级：回退到硬编码 5 维度
+            reviewCategories = [
+                { code: 'security', name: '安全性' },
+                { code: 'code_quality', name: '代码质量' },
+                { code: 'readability', name: '可读性' },
+                { code: 'maintainability', name: '可维护性' },
+                { code: 'test_coverage', name: '测试覆盖' }
+            ];
+        }
+        const cols = Math.min(reviewCategories.length, 6);
+        container.className = `grid grid-cols-${cols} gap-3`;
+        container.innerHTML = reviewCategories.map(cat => `
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">${escapeHtml(cat.name)}</label>
+                <input type="number" data-dim="${escapeHtml(cat.code)}" min="0" max="100" value="${defaults[cat.code] || 0}" class="w-full px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            </div>
+        `).join('');
+        bindDimensionInputs();
+        updateWeightTotal();
+    }
 function bindDimensionInputs() {
     document.querySelectorAll('#dimensionInputs input').forEach(el => {
         el.addEventListener('input', updateWeightTotal);
@@ -321,19 +340,16 @@ function getDimName(key) {
 
 function openNewTemplateModal() {
     editingTemplateId = null;
-    document.getElementById('modalTitle').textContent = '新建AI审核提示词';
+    document.getElementById('modalTitle').textContent = '新建AI审核模版';
     document.getElementById('tmplName').value = '';
     document.getElementById('tmplDesc').value = '';
     document.getElementById('tmplPrompt').value = '';
     document.getElementById('tmplCustomInstruction').value = '';
     document.getElementById('tmplCommentTemplate').value = '';
     document.getElementById('tmplMaxRules').value = 5;
-    // 重置维度权重
+    // 重置维度权重（使用动态渲染）
     const defaultWeights = { security: 30, code_quality: 25, readability: 20, maintainability: 15, test_coverage: 10 };
-    document.querySelectorAll('#dimensionInputs input').forEach(el => {
-        el.value = defaultWeights[el.dataset.dim] || 0;
-    });
-    updateWeightTotal();
+    renderDimensionInputs(defaultWeights);
     showModal('templateModal');
 }
 
@@ -341,7 +357,7 @@ function openEditTemplateModal(id) {
     const t = templatesData.find(x => x.ID === id);
     if (!t) return;
     editingTemplateId = id;
-    document.getElementById('modalTitle').textContent = '编辑AI审核提示词';
+    document.getElementById('modalTitle').textContent = '编辑AI审核模版';
     document.getElementById('tmplName').value = t.Name || '';
     document.getElementById('tmplDesc').value = t.Description || '';
     document.getElementById('tmplPrompt').value = t.Prompt || '';
@@ -350,15 +366,11 @@ function openEditTemplateModal(id) {
     document.getElementById('tmplMaxRules').value = t.MaxRulesPerReview || 5;
 
     // 加载维度权重
-    const defaults = { security: 30, code_quality: 25, readability: 20, maintainability: 15, test_coverage: 10 };
-    let weights = defaults;
+    let weights = {};
     if (t.DimensionWeights) {
-        try { weights = { ...defaults, ...JSON.parse(t.DimensionWeights) }; } catch(e){}
+        try { weights = JSON.parse(t.DimensionWeights); } catch(e){}
     }
-    document.querySelectorAll('#dimensionInputs input').forEach(el => {
-        el.value = weights[el.dataset.dim] || 0;
-    });
-    updateWeightTotal();
+    renderDimensionInputs(weights);
     showModal('templateModal');
 }
 
@@ -414,7 +426,7 @@ async function saveTemplate() {
     // 检查权重之和
     let totalWeight = 0;
     const dimensionWeights = {};
-    document.querySelectorAll('#dimensionInputs input').forEach(el => {
+    document.querySelectorAll('#dimensionInputs input[type="number"]').forEach(el => {
         const val = parseInt(el.value || 0);
         dimensionWeights[el.dataset.dim] = val;
         totalWeight += val;
@@ -455,8 +467,9 @@ async function saveTemplate() {
 document.addEventListener('DOMContentLoaded', () => {
     loadTemplates();
     renderSidebar('project-templates');
-    bindDimensionInputs();
+    loadReviewCategories();
 });
 </script>
+<script defer src="/static/js/tailwindcss.min.js"></script>
 </body>
 </html>

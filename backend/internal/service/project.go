@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ai-optimizer/backend/internal/model"
+	"go.uber.org/zap"
 )
 
 type ProjectService struct{}
@@ -49,6 +50,21 @@ func (s *ProjectService) List(page, pageSize int, keyword, status, source string
 			Limit(5).
 			Find(&tasks)
 		projects[i].Tasks = tasks
+
+		// 统计该项目实际启用的规则数
+		var enabledCount int64
+		model.DB.Model(&model.ProjectReviewConfig{}).
+			Where("project_id = ? AND is_enabled = ?", projects[i].ID, true).
+			Count(&enabledCount)
+
+		// 规则库可用规则总数（包含自定义规则）
+		var totalCount int64
+		model.DB.Model(&model.ReviewRule{}).
+			Where("is_enabled = ?", true).
+			Count(&totalCount)
+
+		projects[i].EnabledRuleCount = int(enabledCount)
+		projects[i].TotalRuleCount = int(totalCount)
 	}
 
 	return projects, total, nil
@@ -63,20 +79,70 @@ func (s *ProjectService) Get(id uint) (*model.Project, error) {
 }
 
 func (s *ProjectService) Update(id uint, fields map[string]interface{}) error {
+	zap.L().Info("project update begin", zap.Uint("id", id), zap.Any("fields", fields))
+
+	// 如有 default_model_id=null，先单独清空该列（GORM Updates 无法直接写入 nil）
 	if v, ok := fields["default_model_id"]; ok && v == nil {
-		// 设为 NULL 表示清空默认模型
 		delete(fields, "default_model_id")
-		return model.DB.Model(&model.Project{}).Where("id = ?", id).
-			UpdateColumn("default_model_id", nil).Error
+		if err := model.DB.Model(&model.Project{}).Where("id = ?", id).
+			UpdateColumn("default_model_id", nil).Error; err != nil {
+			zap.L().Error("project update: clear default_model_id failed", zap.Uint("id", id), zap.Error(err))
+			return err
+		}
+		zap.L().Info("project update: default_model_id cleared", zap.Uint("id", id))
 	}
-	return model.DB.Model(&model.Project{}).Where("id = ?", id).Updates(fields).Error
+
+	// template_id=0 时也要显式清空，否则 GORM Updates 会跳过零值
+	if v, ok := fields["template_id"]; ok {
+		if iv, ok2 := v.(int); ok2 && iv == 0 {
+			delete(fields, "template_id")
+			if err := model.DB.Model(&model.Project{}).Where("id = ?", id).
+				UpdateColumn("template_id", 0).Error; err != nil {
+				zap.L().Error("project update: clear template_id failed", zap.Uint("id", id), zap.Error(err))
+				return err
+			}
+			zap.L().Info("project update: template_id cleared", zap.Uint("id", id))
+		}
+	}
+
+	// 剩余字段一次性更新
+	if len(fields) > 0 {
+		if err := model.DB.Model(&model.Project{}).Where("id = ?", id).Updates(fields).Error; err != nil {
+			zap.L().Error("project update: remaining fields failed", zap.Uint("id", id), zap.Any("remaining_fields", fields), zap.Error(err))
+			return err
+		}
+		zap.L().Info("project update: remaining fields success", zap.Uint("id", id), zap.Any("remaining_fields", fields))
+	}
+
+	return nil
 }
 
 func (s *ProjectService) Create(data *model.Project) error {
 	// Disable foreign key checks for template_id
 	model.DB.Exec("SET FOREIGN_KEY_CHECKS=0")
 	defer model.DB.Exec("SET FOREIGN_KEY_CHECKS=1")
-	return model.DB.Create(data).Error
+	if err := model.DB.Create(data).Error; err != nil {
+		return err
+	}
+
+	// 为新建项目生成默认规则配置（否则项目列表规则数始终为 0/0）
+	var rules []model.ReviewRule
+	model.DB.Where("is_enabled = ? AND (language = 'common' OR language = ?)", true, data.Language).Find(&rules)
+	for _, rule := range rules {
+		cfg := model.ProjectReviewConfig{
+			ProjectID: data.ID,
+			RuleID:    rule.ID,
+			IsEnabled: true,
+			Severity:  "", // 使用规则默认级别
+		}
+		if err := model.DB.Create(&cfg).Error; err != nil {
+			zap.L().Warn("init project review config after create failed",
+				zap.Uint("project_id", data.ID), zap.Uint("rule_id", rule.ID), zap.Error(err))
+		}
+	}
+	zap.L().Info("project review configs initialized after creation",
+		zap.Uint("project_id", data.ID), zap.Int("rules", len(rules)))
+	return nil
 }
 
 func (s *ProjectService) Delete(id uint) error {
