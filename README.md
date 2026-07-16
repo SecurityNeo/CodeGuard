@@ -158,8 +158,8 @@ GitLab MR Webhook
 ### 1. Clone 项目
 
 ```bash
-git clone <your-repo-url> codeguard
-cd codeguard
+git clone <your-repo-url> AI-Code-Review
+cd AI-Code-Review
 ```
 
 ### 2. 配置环境变量
@@ -180,10 +180,10 @@ EOF
 ```bash
 docker run -d -p 8080:8080 \
   --env-file .env \
-  codeguard:latest
+  docker.m.daocloud.io/securityneo/ai-code-review:latest
 ```
 
-- 构建并启动 CodeGuard 服务（请先构建好容器镜像）
+- 构建并启动 AI-Code-Review 服务（请先构建好容器镜像）
 
 ### 4. 访问系统
 
