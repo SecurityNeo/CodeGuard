@@ -1,7 +1,7 @@
 # CodeGuard - 功能清单
 
-> 版本: v4.3
-> 更新日期: 2026-07-07
+> 版本: v4.4
+> 更新日期: 2026-07-16
 > 适用范围: Go 后端 + Web 前端全栈开发
 
 ---
@@ -61,6 +61,11 @@ CodeGuard（代码智能门禁）是一个通过 GitLab Webhook 触发 AI 代码
 - **人工复核与重试**: 支持对 AI 评审结果添加复核意见，重试时可选历史意见注入（倒序排列、默认全选、可折叠）
 - **任务并发调度**: 同一项目深度评审（OpenCode）串行执行，AI 评审（LLM）可并发执行，互不阻塞
 - **队列饥饿防护**: AI 评审失败或停止后自动唤起同项目 pending 深度评审任务，避免永久饿死
+- **结构化 Issue 评审**: AI 评审结果按规则拆分为结构化 Issue 列表，支持单条/批量采纳、拒绝、状态筛选
+- **评审规则库**: 内置通用/Go/Python/前端/Java 多语言规则库，支持项目级启用/禁用配置与严重程度覆盖
+- **规则批量操作**: 项目详情页支持按分类/严重程度/语言筛选、批量启用/禁用、自定义每页条数
+- **GitLab 评论模板**: AI 审核模版支持自定义 `text/template` 格式，实时预览渲染效果
+- **SMTP 协议兼容**: 自定义 SMTP 客户端支持 AUTH LOGIN + STARTTLS，DATA 后完整读取响应码
 
 ---
 
@@ -293,8 +298,53 @@ CodeGuard（代码智能门禁）是一个通过 GitLab Webhook 触发 AI 代码
 | 基本信息 | 项目名称、仓库地址、来源 | ✅ |
 | 配置信息 | 关联模板、关联资源池、默认模型、启用 AI 状态 | ✅ |
 | 关联任务列表 | 展示项目关联的任务信息（**不含 AI 分支列与操作列**） | ✅ |
+| **评审规则配置** | 项目级规则启用/禁用、严重程度覆盖 | ✅ |
 
-### 6.3 成员映射管理
+### 6.3 评审规则配置
+
+项目详情页「评审规则配置」标签页，管理该项目针对规则库的个性化配置。
+
+#### 规则列表展示
+
+| 字段 | 说明 | 实现状态 |
+|------|------|----------|
+| 规则名称 | 规则显示名称 + 代码 | ✅ |
+| 描述 | 规则详细说明 | ✅ |
+| 分类 | security / performance / readability 等 | ✅ |
+| 开发语言 | 通用 / Go / Python / 前端 / Java | ✅ |
+| 严重程度 | 规则默认级别（严重/高危/中危/低危/提示） | ✅ |
+| 严重程度(覆盖) | 下拉选择项目自定义级别，空=使用默认 | ✅ |
+| 状态 | 开关切换启用/禁用 | ✅ |
+
+#### 筛选与搜索
+
+| 条件 | 说明 | 实现状态 |
+|------|------|----------|
+| 分类筛选 | 按规则分类快速过滤 | ✅ |
+| 严重程度筛选 | 严重/高危/中危/低危/提示 | ✅ |
+| 开发语言筛选 | 全部 / 通用 / Go / Python / 前端 / Java | ✅ |
+| 关键词搜索 | 规则名称、代码、描述模糊搜索 | ✅ |
+
+#### 批量操作
+
+| 操作 | 说明 | 实现状态 |
+|------|------|----------|
+| 复选框选择 | 每行左侧 checkbox，支持跨页保留选中 | ✅ |
+| 全选本页 | 表头 checkbox，一键选中当前页全部规则 | ✅ |
+| 全选全部 | toolbar 中「全选全部」，选中筛选后全部规则（跨页） | ✅ |
+| 批量启用 | 蓝色确认弹框，显示选中规则名称预览（前3条） | ✅ |
+| 批量禁用 | 红色确认弹框，二次确认后执行 | ✅ |
+| 取消选择 | 清空所有选中状态 | ✅ |
+
+#### 分页与展示
+
+| 功能 | 说明 | 实现状态 |
+|------|------|----------|
+| 每页条数 | 10 / 15 / 25 / 50 / 100 条可选 | ✅ |
+| 分页导航 | 上一页/下一页 + 页码快捷跳转 | ✅ |
+| 重置默认 | 一键清除项目自定义配置，回退到全局规则默认状态 | ✅ |
+
+### 6.4 成员映射管理
 
 成员映射管理页面。
 
@@ -364,6 +414,41 @@ CodeGuard（代码智能门禁）是一个通过 GitLab Webhook 触发 AI 代码
 | **队列唤醒机制** | AI 评审成功/失败/停止/超时后自动唤起同项目 pending 深度评审，避免饿死 | ✅ |
 | **模型使用记录** | review 任务完成后记录实际使用的 LLM 模型 ID（含主备切换场景） | ✅ |
 | **主备链路追踪** | 任务列表/详情展示模型角色徽章（`[主]` 紫色 / `[备用N]` 橙色） | ✅ |
+
+### 7.3 结构化评审结果（任务详情）
+
+review 类型任务执行完成后，AI 评审结果按规则拆分为结构化 Issue 列表，支持逐条处理。
+
+#### Issue 列表展示
+
+| 字段 | 说明 | 实现状态 |
+|------|------|----------|
+| 规则代码 | 命中规则的 code（如 SQL-001） | ✅ |
+| 严重程度 | 严重/高危/中危/低危/提示 彩色徽章 | ✅ |
+| 问题描述 | AI 生成的具体问题说明 | ✅ |
+| 建议修改 | AI 给出的修复建议 | ✅ |
+| 涉及文件 | 文件路径 + 行号范围 | ✅ |
+| 代码片段 | 可折叠的上下文代码块 | ✅ |
+
+#### Issue 操作
+
+| 操作 | 说明 | 实现状态 |
+|------|------|----------|
+| 展开/折叠详情 | 点击 Issue 卡片展开完整信息（代码片段、建议修改） | ✅ |
+| 单条采纳 | 标记为已采纳，状态变为绿色 | ✅ |
+| 单条拒绝 | 点击拒绝后弹出原因输入框，填写后标记为已拒绝 | ✅ |
+| 批量采纳 | 勾选多个 Issue 后一键采纳 | ✅ |
+| 批量拒绝 | 勾选多个 Issue 后一键拒绝（统一原因） | ✅ |
+| 状态筛选 | 全部 / 待处理 / 已采纳 / 已拒绝 标签过滤 | ✅ |
+| 批量操作栏 | 选中 Issue 后底部悬浮操作栏，显示已选数量 | ✅ |
+
+#### 拒绝原因处理
+
+| 功能 | 说明 | 实现状态 |
+|------|------|----------|
+| 原因必填 | 拒绝时必须填写原因 | ✅ |
+| 展开详情自动显示 | 点击拒绝按钮时自动展开详情区域，避免输入框被遮挡 | ✅ |
+| 后端日志记录 | Issue 状态变更写入操作日志，格式：`任务ID：N，Issue ID：M 状态变更为 rejected` | ✅ |
 
 ---
 
@@ -1107,7 +1192,7 @@ type ReportConfig struct {
 }
 ```
 
-### 16.14 Report Recipient (ReportRecipient)
+### 16.15 Report Recipient (ReportRecipient)
 
 ```go
 type ReportRecipient struct {
@@ -1118,6 +1203,77 @@ type ReportRecipient struct {
     Enabled   bool   `gorm:"default:true"`
     CreatedAt time.Time
     UpdatedAt time.Time
+}
+```
+
+### 16.16 Review Rule (ReviewRule)
+
+全局评审规则库，多语言内置规则。
+
+```go
+type ReviewRule struct {
+    ID          uint      `gorm:"primaryKey" json:"id"`
+    Code        string    `gorm:"uniqueIndex;size:64" json:"code"`              // 规则唯一代码
+    Name        string    `gorm:"size:100" json:"name"`                        // 显示名称
+    Category    string    `gorm:"size:32" json:"category"`                     // security/performance/readability/...
+    Severity    string    `gorm:"size:16" json:"severity"`                     // critical/high/medium/low/info
+    Language    string    `gorm:"size:32;default:'common'" json:"language"`     // golang/python/frontend/java/common
+    Description string    `gorm:"type:text" json:"description"`                // 规则描述
+    Prompt      string    `gorm:"type:text" json:"prompt"`                     // 评审提示词（可选）
+    SortOrder   int       `gorm:"default:0" json:"sort_order"`                 // 排序号
+    IsBuiltIn   bool      `gorm:"default:true" json:"is_built_in"`             // 是否内置
+    IsEnabled   bool      `gorm:"default:true" json:"is_enabled"`              // 全局启用状态
+    CreatedAt   time.Time `json:"created_at"`
+    UpdatedAt   time.Time `json:"updated_at"`
+}
+```
+
+### 16.17 Project Review Config (ProjectReviewConfig)
+
+项目级规则配置，覆盖全局规则状态与严重程度。
+
+```go
+type ProjectReviewConfig struct {
+    ID        uint      `gorm:"primaryKey" json:"id"`
+    ProjectID uint      `gorm:"index" json:"project_id"`
+    RuleID    uint      `gorm:"index" json:"rule_id"`
+    IsEnabled bool      `gorm:"default:true" json:"is_enabled"`              // 项目自定义启用状态
+    Severity  string    `gorm:"size:16" json:"severity"`                     // 项目自定义严重程度（空=用默认）
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
+}
+```
+
+### 16.18 Task Review Rule (TaskReviewRule)
+
+任务执行时实际使用的评审规则快照（包含截断记录）。
+
+```go
+type TaskReviewRule struct {
+    ID          uint      `gorm:"primaryKey" json:"id"`
+    TaskID      uint      `gorm:"index;not null" json:"task_id"`
+    RuleID      *uint     `gorm:"index" json:"rule_id"`                        // NULL=规则已删除
+    RuleCode    string    `gorm:"size:64;not null" json:"rule_code"`
+    Name        string    `gorm:"size:100" json:"name"`
+    Category    string    `gorm:"size:32" json:"category"`
+    Severity    string    `gorm:"size:16" json:"severity"`
+    SortOrder   int       `json:"sort_order"`
+    WasSelected bool      `json:"was_selected"`                                // true=传入Prompt，false=被截断
+    IssueCount  int       `gorm:"default:0" json:"issue_count"`                // 本次命中Issue数
+    CreatedAt   time.Time `json:"created_at"`
+}
+```
+
+### 16.19 Structured Review Result (Task 扩展字段)
+
+任务表扩展字段，存储结构化评审结果。
+
+```go
+// Task 表新增字段
+type Task struct {
+    // ... 原有字段 ...
+    StructuredReviewJSON string `gorm:"type:longtext" json:"structured_review_json"` // 结构化评审结果JSON
+    ReviewMarkdown       string `gorm:"type:longtext" json:"review_markdown"`        // 渲染后的Markdown
 }
 ```
 
