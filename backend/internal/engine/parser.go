@@ -26,9 +26,10 @@ func ParseReviewResult(
 	content string,
 	callLLM func() (string, error),
 	cfg *RetryConfig,
+	deductCfg DeductScoreConfig,
 ) (*llm.AIReviewResult, error) {
 	// Step 1: 尝试直接解析
-	result, err := tryParseJSON(content)
+	result, err := tryParseJSON(content, deductCfg)
 	if err == nil {
 		return result, nil
 	}
@@ -36,7 +37,7 @@ func ParseReviewResult(
 
 	// Step 2: Sanitize 后重试解析
 	cleaned := sanitizeJSON(content)
-	result, err = tryParseJSON(cleaned)
+	result, err = tryParseJSON(cleaned, deductCfg)
 	if err == nil {
 		return result, nil
 	}
@@ -56,13 +57,13 @@ func ParseReviewResult(
 				continue
 			}
 
-			result, err = tryParseJSON(newContent)
+			result, err = tryParseJSON(newContent, deductCfg)
 			if err == nil {
 				return result, nil
 			}
 
 			// sanitize 后再试
-			result, err = tryParseJSON(sanitizeJSON(newContent))
+			result, err = tryParseJSON(sanitizeJSON(newContent), deductCfg)
 			if err == nil {
 				return result, nil
 			}
@@ -92,7 +93,7 @@ func ParseReviewResult(
 }
 
 // tryParseJSON 尝试解析 JSON
-func tryParseJSON(content string) (*llm.AIReviewResult, error) {
+func tryParseJSON(content string, deductCfg DeductScoreConfig) (*llm.AIReviewResult, error) {
 	var result llm.AIReviewResult
 	if err := json.Unmarshal([]byte(content), &result); err != nil {
 		return nil, err
@@ -108,10 +109,10 @@ func tryParseJSON(content string) (*llm.AIReviewResult, error) {
 	if result.Recommendations == nil {
 		result.Recommendations = []string{}
 	}
-	// 补充 deduct_score，未返回时按 severity 默认计算
+	// 补充 deduct_score，未返回时按模版配置计算
 	for i := range result.Issues {
 		if result.Issues[i].DeductScore <= 0 {
-			result.Issues[i].DeductScore = defaultDeductScore(result.Issues[i].Severity)
+			result.Issues[i].DeductScore = deductCfg.DeductScoreFor(result.Issues[i].Severity)
 		}
 	}
 	// 非阻塞校验：权重之和

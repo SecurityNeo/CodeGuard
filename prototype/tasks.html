@@ -549,8 +549,6 @@ function renderTasks(tasks) {
                     <td class="px-4 py-3 text-sm text-gray-500 cursor-pointer" onclick="openTaskDetail(${t.id})">${formatDate(t.created_at)}</td>
                     <td class="px-4 py-3 text-center cursor-pointer" onclick="openTaskDetail(${t.id})"><span class="status-badge status-${t.status}">${getStatusText(t.status)}</span></td>
                     <td class="px-4 py-3 text-center space-x-1">
-                        <button onclick="viewLogs(${t.id}); event.stopPropagation();" class="text-blue-600 hover:text-blue-700 text-sm">评审详情</button>
-                        ${!isReview && t.opencode_session_id ? `<button onclick="viewMessages(${t.id}); event.stopPropagation();" class="text-purple-600 hover:text-purple-700 text-sm">智能体</button>` : ''}
                         ${!isReview && t.opencode_session_id ? `<button onclick="deleteTaskSession(${t.id}); event.stopPropagation();" class="text-red-500 hover:text-red-600 text-sm">删除会话</button>` : ''}
                         ${t.status === 'running' ? `<button onclick="stopTask(${t.id}); event.stopPropagation();" class="text-red-600 hover:text-red-700 text-sm">停止</button>` : ''}
                         ${(t.status === 'failed' || t.status === 'stopped' || t.status === 'timeout' || t.status === 'success') ? `
@@ -625,16 +623,6 @@ function renderTasks(tasks) {
                 document.getElementById('logTaskId').textContent = id;
                 
                 let content = '';
-                
-                // 处理用户输入，过滤掉 @AI 前缀
-                let promptContent = task.ai_prompt || '';
-                if (promptContent) {
-                    promptContent = promptContent.replace(/^@AI\s*/i, '').trim();
-                }
-                
-                if (promptContent) {
-                    content += '<div class="mb-4"><div class="text-yellow-400 font-bold mb-2">【用户输入】</div><div class="text-white bg-gray-800 p-3 rounded">' + marked.parse(maskSensitive(promptContent)) + '</div></div>';
-                }
                 
                 // 显示 AI 回复
                 if (task.ai_response) {
@@ -1689,8 +1677,36 @@ function renderTasks(tasks) {
             }
         }
 
-        async function deleteTaskSession(id) {
-            if (!confirm('确定删除此任务的 OpenCode session 吗？对话记录将不可恢复。')) return;
+        function showDeleteSessionModal(id) {
+            const modal = document.createElement('div');
+            modal.id = 'deleteSessionModal';
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 flex flex-col">
+                    <div class="px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
+                        <h3 class="font-bold text-lg text-gray-800"><i class="fas fa-exclamation-triangle text-red-500 mr-2"></i>删除会话</h3>
+                        <button onclick="document.getElementById('deleteSessionModal').remove()" class="text-gray-400 hover:text-gray-600 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="p-6 text-sm text-gray-600 leading-relaxed">
+                        <p class="mb-2">确定删除此任务的 OpenCode session 吗？</p>
+                        <ul class="list-disc pl-5 space-y-1 text-gray-500">
+                            <li>该任务的所有对话记录将不可恢复</li>
+                            <li>删除后无法在 AI 对话页面继续发送消息</li>
+                            <li>删除操作不可撤销</li>
+                        </ul>
+                    </div>
+                    <div class="px-6 py-4 border-t flex justify-end gap-3 flex-shrink-0">
+                        <button onclick="document.getElementById('deleteSessionModal').remove()" class="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors">取消</button>
+                        <button onclick="submitDeleteSession(${id})" class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"><i class="fas fa-trash-alt mr-1"></i>确认删除</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+        }
+
+        async function submitDeleteSession(id) {
+            // 关闭弹窗
+            const modal = document.getElementById('deleteSessionModal');
+            if (modal) modal.remove();
 
             try {
                 const res = await apiFetch(`${API_BASE}/tasks/${id}/session`, { method: 'DELETE' });
@@ -1703,6 +1719,10 @@ function renderTasks(tasks) {
             } catch (e) {
                 showToast('删除失败: ' + e.message, 'error');
             }
+        }
+
+        function deleteTaskSession(id) {
+            showDeleteSessionModal(id);
         }
 
         // ================== 结构化评审相关函数 ==================

@@ -16,42 +16,47 @@ func NewProjectReviewHandler() *ProjectReviewHandler {
 	return &ProjectReviewHandler{}
 }
 
-// ListRules 获取项目已配置规则
+// ListRules 获取项目评审规则列表（包含所有规则，新增规则自动 fallback 到全局状态）
 func (h *ProjectReviewHandler) ListRules(c *gin.Context) {
 	projectID, _ := strconv.Atoi(c.Param("id"))
 
-	var configs []model.ProjectReviewConfig
-	if err := model.DB.Where("project_id = ?", projectID).Find(&configs).Error; err != nil {
+	// 1. 加载所有规则（全局规则库）
+	var allRules []model.ReviewRule
+	if err := model.DB.Order("sort_order ASC, id ASC").Find(&allRules).Error; err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
-	// 预加载所有规则，避免 N+1 查询
-	var ruleIDs []uint
+	// 2. 加载该项目的配置（可能部分规则没有配置记录）
+	var configs []model.ProjectReviewConfig
+	model.DB.Where("project_id = ?", projectID).Find(&configs)
+	configMap := make(map[uint]model.ProjectReviewConfig)
 	for _, cfg := range configs {
-		ruleIDs = append(ruleIDs, cfg.RuleID)
+		configMap[cfg.RuleID] = cfg
 	}
 
-	var rules []model.ReviewRule
-	ruleMap := make(map[uint]model.ReviewRule)
-	if len(ruleIDs) > 0 {
-		model.DB.Where("id IN ?", ruleIDs).Find(&rules)
-		for _, r := range rules {
-			ruleMap[r.ID] = r
-		}
-	}
-
+	// 3. 组装结果：每条规则都返回，无项目配置时 fallback 到全局状态
 	var result []gin.H
-	for _, cfg := range configs {
-		rule := ruleMap[cfg.RuleID]
+	for _, rule := range allRules {
+		cfg, hasConfig := configMap[rule.ID]
+		isEnabled := rule.IsEnabled   // fallback：全局启用状态
+		projSeverity := ""            // fallback：使用规则默认级别
+		if hasConfig {
+			isEnabled = cfg.IsEnabled // 项目有配置，以项目配置为准
+			projSeverity = cfg.Severity
+		}
 		result = append(result, gin.H{
-			"rule_id":          cfg.RuleID,
+			"rule_id":          rule.ID,
 			"code":             rule.Code,
 			"name":             rule.Name,
 			"category":         rule.Category,
-			"is_enabled":       cfg.IsEnabled,
+			"severity":         rule.Severity,
+			"language":         rule.Language,
+			"description":      rule.Description,
+			"is_enabled":       isEnabled,
 			"default_severity": rule.Severity,
-			"project_severity": cfg.Severity,
+			"project_severity": projSeverity,
+			"has_config":       hasConfig,
 		})
 	}
 
@@ -199,10 +204,21 @@ func (h *ProjectReviewHandler) BatchResolveIssues(c *gin.Context) {
 	operatorID := userID.(uint)
 	now := time.Now()
 
+	statusLabels := map[string]string{"accepted": "接纳", "rejected": "拒绝", "pending": "恢复待处理", "dismissed": "忽略"}
+
 	for _, item := range req.Issues {
 		if item.Status != "accepted" && item.Status != "rejected" && item.Status != "pending" && item.Status != "dismissed" {
 			c.JSON(400, gin.H{"error": fmt.Sprintf("invalid status for issue %d", item.ID)})
 			return
+		}
+
+		// 查询 Issue 所属任务ID
+		var issue model.ReviewIssue
+		var taskID uint
+		if err := model.DB.Select("task_id").First(&issue, item.ID).Error; err != nil {
+			taskID = 0
+		} else {
+			taskID = issue.TaskID
 		}
 
 		updates := map[string]interface{}{
@@ -220,7 +236,13 @@ func (h *ProjectReviewHandler) BatchResolveIssues(c *gin.Context) {
 			zap.L().Warn("update review issue status failed",
 				zap.Uint("issue_id", item.ID),
 				zap.Error(err))
+			model.RecordOpLog("Issue处理", fmt.Sprintf("任务ID：%d，Issue ID：%d 状态变更为 %s", taskID, item.ID, statusLabels[item.Status]), item.ID, operatorID, "failed", err.Error(), c.ClientIP())
+			continue
 		}
+
+		// 记录操作日志
+		opDetail := fmt.Sprintf("任务ID：%d，Issue ID：%d 状态变更为 %s", taskID, item.ID, statusLabels[item.Status])
+		model.RecordOpLog("Issue处理", opDetail, item.ID, operatorID, "success", "", c.ClientIP())
 	}
 
 	c.JSON(200, gin.H{"message": "updated", "count": len(req.Issues)})

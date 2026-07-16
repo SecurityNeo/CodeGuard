@@ -211,6 +211,16 @@
                     <input type="text" id="projectPath" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="https://gitlab.com/team/project">
                 </div>
                 <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">开发语言</label>
+                    <select id="projectLanguage" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <option value="golang">Go</option>
+                        <option value="python">Python</option>
+                        <option value="java">Java</option>
+                        <option value="frontend">前端</option>
+                        <option value="common">通用</option>
+                    </select>
+                </div>
+                <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">项目令牌</label>
                     <div class="relative">
                         <input type="password" id="projectToken" class="w-full px-3 py-2 pr-10 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="GitLab Access Token">
@@ -308,6 +318,44 @@
                     </div>
                 </div>
 
+                <!-- 扣分规则配置 -->
+                <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div class="px-5 py-3 bg-gray-50/80 border-b border-gray-100 flex items-center gap-2">
+                        <span class="w-7 h-7 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xs"><i class="fas fa-minus-circle"></i></span>
+                        <span class="text-sm font-semibold text-gray-800">Issue 扣分规则</span>
+                    </div>
+                    <div class="p-5">
+                        <p class="text-xs text-gray-400 mb-3">按严重级别配置每个 Issue 的固定扣分值（deduct_score），用于总分计算</p>
+                        <div class="grid grid-cols-5 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-500 mb-1.5">critical 严重</label>
+                                <input type="number" id="tmplDeductCritical" min="0" max="100" value="10"
+                                    class="w-full text-center px-2 py-2 border rounded-lg text-sm font-semibold focus:ring-2 focus:ring-red-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-500 mb-1.5">high 高危</label>
+                                <input type="number" id="tmplDeductHigh" min="0" max="100" value="5"
+                                    class="w-full text-center px-2 py-2 border rounded-lg text-sm font-semibold focus:ring-2 focus:ring-orange-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-500 mb-1.5">medium 中危</label>
+                                <input type="number" id="tmplDeductMedium" min="0" max="100" value="3"
+                                    class="w-full text-center px-2 py-2 border rounded-lg text-sm font-semibold focus:ring-2 focus:ring-yellow-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-500 mb-1.5">low 低危</label>
+                                <input type="number" id="tmplDeductLow" min="0" max="100" value="1"
+                                    class="w-full text-center px-2 py-2 border rounded-lg text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-500 mb-1.5">info 提示</label>
+                                <input type="number" id="tmplDeductInfo" min="0" max="100" value="0"
+                                    class="w-full text-center px-2 py-2 border rounded-lg text-sm font-semibold focus:ring-2 focus:ring-gray-400 focus:outline-none">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 项目自定义指令 -->
                 <div class="rounded-xl border border-gray-200 overflow-hidden">
                     <div class="px-5 py-3 bg-gray-50 border-b">
@@ -335,6 +383,7 @@
                             <span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-200 font-mono">{{.ProjectName}}</span>
                             <span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-200 font-mono">{{.MRTitle}}</span>
                             <span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-200 font-mono">{{.TotalScore}}</span>
+                            <span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-200 font-mono">{{.Summary}}</span>
                             <span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-200 font-mono">{{.DimensionsTable}}</span>
                             <span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-200 font-mono">{{.IssuesList}}</span>
                             <span class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded border border-blue-200 font-mono">{{.RecommendationsList}}</span>
@@ -415,6 +464,12 @@
                     </div>
                 </div>
 
+                <!-- 扣分规则配置 -->
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2"><i class="fas fa-minus-circle text-red-500"></i>Issue 扣分规则</h4>
+                    <div id="detailDeductScoreConfig" class="flex flex-wrap gap-2"></div>
+                </div>
+
                 <!-- 项目自定义指令 -->
                 <div id="detailCustomInstructionSection" class="hidden">
                     <h4 class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2"><i class="fas fa-terminal text-gray-500"></i>项目自定义指令</h4>
@@ -457,6 +512,8 @@
         }
 
 const API_BASE = '/api/v1';
+
+const languageLabels = { common: '通用', golang: 'Go', python: 'Python', frontend: '前端', java: 'Java' };
 
         function escapeHtml(unsafe) {
             if (!unsafe) return '';
@@ -535,7 +592,7 @@ const API_BASE = '/api/v1';
                         </div>
                     </td>
                     <td class="px-6 py-4 text-center">
-                        <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium">${p.language || 'golang'}</span>
+                        <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-medium">${(languageLabels[p.language] || p.language) || 'Go'}</span>
                     </td>
                     <td class="px-6 py-4 text-sm text-gray-600">${p.gitlab_project_id || '-'}</td>
                     <td class="px-6 py-4 text-sm text-gray-600 max-w-xs truncate" title="${p.project_path || ''}">${p.project_path || '-'}</td>
@@ -696,6 +753,7 @@ const API_BASE = '/api/v1';
             document.getElementById('projectName').value = p.name || '';
             document.getElementById('gitlabProjectId').value = p.gitlab_project_id || '';
             document.getElementById('projectPath').value = p.project_path || '';
+            document.getElementById('projectLanguage').value = p.language || 'golang';
             document.getElementById('projectToken').value = p.access_token || '';
             document.getElementById('aiEnabled').checked = p.ai_enabled || false;
             // 先渲染下拉选项，再设置选中值
@@ -729,6 +787,7 @@ const API_BASE = '/api/v1';
             const data = {
                 name: document.getElementById('projectName').value,
                 project_path: document.getElementById('projectPath').value,
+                language: document.getElementById('projectLanguage').value,
                 access_token: document.getElementById('projectToken').value,
                 ai_enabled: document.getElementById('aiEnabled').checked
             };
@@ -769,6 +828,7 @@ const API_BASE = '/api/v1';
                 document.getElementById('projectName').value = '';
                 document.getElementById('gitlabProjectId').value = '';
                 document.getElementById('projectPath').value = '';
+                document.getElementById('projectLanguage').value = 'golang';
                 document.getElementById('projectToken').value = '';
                 document.getElementById('projectToken').type = 'password';
                 document.getElementById('tokenEyeIcon').className = 'fas fa-eye';
@@ -850,37 +910,108 @@ const API_BASE = '/api/v1';
                 models.map(m => `<option value="${m.id}">${escapeHtml(m.provider + '-' + m.model_id)}</option>`).join('');
         }
 
+        function renderMiniDimBars(jsonStr) {
+            const defaults = { security: 30, code_quality: 25, readability: 20, maintainability: 15, test_coverage: 10 };
+            let weights;
+            try { weights = JSON.parse(jsonStr || '{}'); } catch(e) { weights = {}; }
+            const cats = categoriesData.length ? categoriesData : [
+                { code: 'security', name: '安全性' },
+                { code: 'code_quality', name: '代码质量' },
+                { code: 'readability', name: '可读性' },
+                { code: 'maintainability', name: '可维护性' },
+                { code: 'test_coverage', name: '测试覆盖' }
+            ];
+            return cats.map((cat, idx) => {
+                const val = (weights[cat.code] !== undefined) ? weights[cat.code] : (defaults[cat.code] || 0);
+                const colors = ['bg-indigo-500','bg-blue-500','bg-sky-500','bg-teal-500','bg-emerald-500','bg-violet-500'];
+                const color = colors[idx % colors.length];
+                return `
+                <div class="flex items-center gap-2" title="${escapeHtml(cat.name)}: ${val}%">
+                    <span class="text-[11px] text-gray-500 w-12 text-right flex-shrink-0 truncate">${escapeHtml(cat.name)}</span>
+                    <div class="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden min-w-[40px]">
+                        <div class="h-full ${color} rounded-full" style="width:${val}%"></div>
+                    </div>
+                    <span class="text-[11px] text-gray-400 w-6 text-right flex-shrink-0">${val}%</span>
+                </div>
+                `;
+            }).join('');
+        }
+
         function renderTemplates(templates) {
             const container = document.getElementById('templatesContainer');
             if (!container) return;
 
             if (templates.length === 0) {
-                container.innerHTML = '<div class="text-center py-12 text-gray-500">暂无模版</div>';
+                container.innerHTML = `
+                    <div class="text-center py-16">
+                        <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-file-alt text-gray-300 text-2xl"></i>
+                        </div>
+                        <p class="text-gray-500 text-sm">暂无模版</p>
+                        <p class="text-gray-400 text-xs mt-1">点击右上角「新建模版」创建第一个审核模版</p>
+                    </div>
+                `;
                 return;
             }
 
-            container.innerHTML = templates.map(t => `
-                <div class="bg-white rounded-xl border p-5 hover:shadow-md transition-shadow cursor-pointer" onclick="openTemplateDetailModal(${t.id})">
-                    <div class="flex items-start justify-between">
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 mb-2">
-                                <h3 class="font-bold text-gray-800 truncate">${escapeHtml(t.name)}</h3>
-                                ${t.is_default ? '<span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">默认</span>' : ''}
+            container.innerHTML = templates.map(t => {
+                const dimResult = parseDimWeights(t.dimension_weights);
+                const hasCustom = !!t.custom_instruction;
+                const hasComment = !!t.gitlab_comment_template;
+                
+                return `
+                <div class="bg-white rounded-xl border hover:shadow-lg hover:border-blue-200 transition-all duration-200 cursor-pointer group" onclick="openTemplateDetailModal(${t.id})">
+                    <div class="p-5">
+                        <div class="flex items-start gap-4">
+                            <!-- 左侧图标区 -->
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 flex items-center justify-center flex-shrink-0 group-hover:from-blue-100 group-hover:to-indigo-100 transition-all">
+                                <i class="fas fa-robot text-blue-500 text-lg"></i>
                             </div>
-                            <p class="text-sm text-gray-500 mb-3">${escapeHtml(t.description || '暂无描述')}</p>
-                            <div class="flex flex-wrap gap-2 mb-3">
-                                ${renderDimensionTags(t.dimension_weights)}
+                            
+                            <!-- 中间内容区 -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 mb-1.5">
+                                    <h3 class="font-bold text-gray-800 text-base truncate">${escapeHtml(t.name)}</h3>
+                                    ${t.is_default ? '<span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded-full font-semibold flex-shrink-0">默认</span>' : ''}
+                                    ${!dimResult.isDefault ? '<span class="px-2 py-0.5 bg-amber-50 text-amber-600 text-[10px] rounded-full font-semibold flex-shrink-0">自定义权重</span>' : ''}
+                                    ${t.deduct_score_config && t.deduct_score_config !== '{}' ? '<span class="px-2 py-0.5 bg-red-50 text-red-600 text-[10px] rounded-full font-semibold flex-shrink-0">自定义扣分</span>' : ''}
+                                </div>
+                                <p class="text-sm text-gray-500 mb-3 line-clamp-1">${escapeHtml(t.description || '暂无描述')}</p>
+                                
+                                <!-- 维度迷你进度条 -->
+                                <div class="space-y-1 mb-3">
+                                    ${renderMiniDimBars(t.dimension_weights)}
+                                </div>
+                                
+                                <!-- 底部元信息 -->
+                                <div class="flex items-center gap-3 text-xs text-gray-400">
+                                    <span class="flex items-center gap-1" title="每次评审最多规则数">
+                                        <i class="fas fa-list-ol text-gray-300"></i>
+                                        最多 ${t.max_rules_per_review || 5} 条规则
+                                    </span>
+                                    ${hasCustom ? '<span class="flex items-center gap-1 text-teal-500" title="包含项目自定义指令"><i class="fas fa-terminal text-teal-400"></i>自定义指令</span>' : ''}
+                                    ${hasComment ? '<span class="flex items-center gap-1 text-blue-500" title="包含 GitLab 评论模板"><i class="fab fa-gitlab text-blue-400"></i>评论模板</span>' : ''}
+                                </div>
                             </div>
-                            ${t.custom_instruction ? `<p class="text-xs text-gray-400 mb-2"><i class="fas fa-info-circle mr-1"></i>${escapeHtml(t.custom_instruction.substring(0, 80))}${t.custom_instruction.length > 80 ? '...' : ''}</p>` : ''}
                         </div>
-                        <div class="flex gap-1 ml-4 shrink-0" onclick="event.stopPropagation();">
-                            <button onclick="openEditTemplateModal(${t.id})" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="编辑"><i class="fas fa-edit"></i></button>
-                            <button onclick="openCloneModal(${t.id})" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="克隆"><i class="fas fa-copy"></i></button>
-                            ${!t.is_default ? `<button onclick="deleteTemplate(${t.id})" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="删除"><i class="fas fa-trash"></i></button>` : ''}
+                        
+                        <!-- 底部操作栏 -->
+                        <div class="mt-4 pt-3 border-t flex items-center justify-end gap-2" onclick="event.stopPropagation();">
+                            <button onclick="openEditTemplateModal(${t.id})" class="px-3 py-1.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1.5">
+                                <i class="fas fa-edit"></i>编辑
+                            </button>
+                            <button onclick="openCloneModal(${t.id})" class="px-3 py-1.5 text-xs text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors flex items-center gap-1.5">
+                                <i class="fas fa-copy"></i>克隆
+                            </button>
+                            ${!t.is_default ? `
+                            <button onclick="deleteTemplate(${t.id})" class="px-3 py-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1.5">
+                                <i class="fas fa-trash"></i>删除
+                            </button>` : ''}
                         </div>
                     </div>
                 </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         function parseDimWeights(jsonStr) {
@@ -1028,6 +1159,10 @@ const API_BASE = '/api/v1';
 
 **综合评分：{{.TotalScore}}/100**
 
+{{if .Summary}}
+> 📋 **评审摘要：** {{.Summary}}
+{{end}}
+
 ### 📊 维度评分
 {{.DimensionsTable}}
 
@@ -1050,6 +1185,12 @@ const API_BASE = '/api/v1';
             document.getElementById('tmplCustomInstruction').value = '';
             document.getElementById('tmplCommentTemplate').value = DEFAULT_COMMENT_TEMPLATE;
             document.getElementById('tmplMaxRules').value = 5;
+            // 重置扣分规则为默认值
+            document.getElementById('tmplDeductCritical').value = 10;
+            document.getElementById('tmplDeductHigh').value = 5;
+            document.getElementById('tmplDeductMedium').value = 3;
+            document.getElementById('tmplDeductLow').value = 1;
+            document.getElementById('tmplDeductInfo').value = 0;
             // 重置维度权重为均分
             const inputs = document.querySelectorAll('#dimensionInputs input[type="number"]');
             const avg = inputs.length > 0 ? Math.floor(100 / inputs.length) : 0;
@@ -1075,6 +1216,17 @@ const API_BASE = '/api/v1';
             document.getElementById('tmplCustomInstruction').value = t.custom_instruction || '';
             document.getElementById('tmplCommentTemplate').value = t.gitlab_comment_template || '';
             document.getElementById('tmplMaxRules').value = t.max_rules_per_review || 5;
+
+            // 加载扣分规则配置
+            let deductCfg = { critical: 10, high: 5, medium: 3, low: 1, info: 0 };
+            if (t.deduct_score_config) {
+                try { deductCfg = JSON.parse(t.deduct_score_config); } catch(e){}
+            }
+            document.getElementById('tmplDeductCritical').value = deductCfg.critical !== undefined ? deductCfg.critical : 10;
+            document.getElementById('tmplDeductHigh').value = deductCfg.high !== undefined ? deductCfg.high : 5;
+            document.getElementById('tmplDeductMedium').value = deductCfg.medium !== undefined ? deductCfg.medium : 3;
+            document.getElementById('tmplDeductLow').value = deductCfg.low !== undefined ? deductCfg.low : 1;
+            document.getElementById('tmplDeductInfo').value = deductCfg.info !== undefined ? deductCfg.info : 0;
 
             // 加载维度权重
             let weights = {};
@@ -1196,6 +1348,22 @@ const API_BASE = '/api/v1';
             // 约束
             document.getElementById('detailMaxRules').textContent = t.max_rules_per_review || 5;
 
+            // 扣分规则配置
+            const deductCfg = t.deduct_score_config ? JSON.parse(t.deduct_score_config) : { critical: 10, high: 5, medium: 3, low: 1, info: 0 };
+            const deductLabels = [
+                { key: 'critical', label: '严重', cls: 'bg-red-50 text-red-600 border-red-100' },
+                { key: 'high',     label: '高危', cls: 'bg-orange-50 text-orange-600 border-orange-100' },
+                { key: 'medium',   label: '中危', cls: 'bg-yellow-50 text-yellow-700 border-yellow-100' },
+                { key: 'low',      label: '低危', cls: 'bg-blue-50 text-blue-600 border-blue-100' },
+                { key: 'info',     label: '提示', cls: 'bg-gray-50 text-gray-500 border-gray-100' },
+            ];
+            const isCustomDeduct = t.deduct_score_config && t.deduct_score_config !== '{}';
+            document.getElementById('detailDeductScoreConfig').innerHTML = deductLabels.map(d => {
+                const val = deductCfg[d.key] !== undefined ? deductCfg[d.key] : ({critical:10, high:5, medium:3, low:1, info:0}[d.key]);
+                const customMark = isCustomDeduct && val !== ({critical:10, high:5, medium:3, low:1, info:0}[d.key]) ? '<span class="ml-1 text-[10px] text-amber-500" title="已自定义">★</span>' : '';
+                return `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border ${d.cls}">${d.label}: -${val}分${customMark}</span>`;
+            }).join('');
+
             // 自定义指令
             const customSection = document.getElementById('detailCustomInstructionSection');
             if (t.custom_instruction) {
@@ -1267,6 +1435,13 @@ const API_BASE = '/api/v1';
                 dimension_weights: JSON.stringify(dimensionWeights),
                 max_rules_per_review: parseInt(document.getElementById('tmplMaxRules').value) || 5,
                 gitlab_comment_template: document.getElementById('tmplCommentTemplate').value,
+                deduct_score_config: JSON.stringify({
+                    critical: parseInt(document.getElementById('tmplDeductCritical').value) || 0,
+                    high:     parseInt(document.getElementById('tmplDeductHigh').value) || 0,
+                    medium:   parseInt(document.getElementById('tmplDeductMedium').value) || 0,
+                    low:      parseInt(document.getElementById('tmplDeductLow').value) || 0,
+                    info:     parseInt(document.getElementById('tmplDeductInfo').value) || 0,
+                }),
             };
 
             try {

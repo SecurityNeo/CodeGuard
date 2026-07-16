@@ -12,21 +12,60 @@ import (
 	"github.com/ai-optimizer/backend/pkg/llm"
 )
 
+// DimensionWeight 维度权重配置（JSON 解析用）
+type DimensionWeight struct {
+	Weight int    `json:"weight"`
+	Label  string `json:"label"`
+}
+
+// DeductScoreConfig 扣分规则配置
+type DeductScoreConfig struct {
+	Critical int `json:"critical"`
+	High     int `json:"high"`
+	Medium   int `json:"medium"`
+	Low      int `json:"low"`
+	Info     int `json:"info"`
+}
+
+// DefaultDeductScoreConfig 返回默认扣分配置
+func DefaultDeductScoreConfig() DeductScoreConfig {
+	return DeductScoreConfig{
+		Critical: 10,
+		High:     5,
+		Medium:   3,
+		Low:      1,
+		Info:     0,
+	}
+}
+
+// DeductScoreFor 按 severity 返回对应扣分值
+func (cfg DeductScoreConfig) DeductScoreFor(severity string) int {
+	switch strings.ToLower(severity) {
+	case "critical":
+		return cfg.Critical
+	case "high":
+		return cfg.High
+	case "medium":
+		return cfg.Medium
+	case "low":
+		return cfg.Low
+	case "info":
+		return cfg.Info
+	default:
+		return 0
+	}
+}
+
 // PromptContext Prompt 组装所需的上下文
 type PromptContext struct {
 	Files             []gitlab.DiffFile // diff 文件列表
 	CommitsText       string
 	MRTitle           string
-	CustomInstruction string                    // 项目自定义说明
+	CustomInstruction string                     // 项目自定义说明
 	DimensionWeights  map[string]DimensionWeight // 维度权重
+	DeductScoreConfig DeductScoreConfig          // 扣分规则配置
 	Rules             []model.ReviewRule         // 启用的规则列表
 	MaxRules          int                        // 最多输出规则数
-}
-
-// DimensionWeight 维度权重配置（JSON 解析用）
-type DimensionWeight struct {
-	Weight int    `json:"weight"`
-	Label  string `json:"label"`
 }
 
 // BuildReviewPrompt 组装 AI 评审 Prompt
@@ -35,20 +74,22 @@ func BuildReviewPrompt(ctx *PromptContext) string {
 
 	// 1. System 角色及输出约束
 	sb.WriteString("你是一名资深代码审查专家。请对以下代码变更进行严格审查。\n\n")
-	sb.WriteString("##【重要】你的响应必须严格符合以下 JSON Schema，不要包含任何 Markdown 代码块标记（如 ```json）或额外解释文字。如果不涉及的评分维度，可以不包含在 dimensions 内。所有字段必须填写，issues 数组为空时填写 []，recommendations 为空时填写 []：\n")
+	sb.WriteString("## 【重要】返回格式要求\n")
+	sb.WriteString("你的响应必须严格符合以下 JSON Schema，不要包含任何 Markdown 代码块标记（如 ```json）或额外解释文字。如果不涉及的评分维度，可以不包含在 dimensions 内。所有字段必须填写，issues 数组为空时填写 []，recommendations 为空时填写 []：\n")
 
 	// 动态生成 SchemaExample，确保示例和实际维度完全一致
 	schemaExample := buildSchemaExample(ctx.DimensionWeights)
 	sb.WriteString(schemaExample)
 	sb.WriteString("\n\n")
 
-	sb.WriteString("##【总分计算规则 - 必须严格遵守】\n")
+	sb.WriteString("## 【总分计算规则 - 必须严格遵守】\n")
 	sb.WriteString("1. 每个 Issue 按严重程度固定扣分（deduct_score）：\n")
-	sb.WriteString("   - critical（严重）: 扣 10 分\n")
-	sb.WriteString("   - high（高危）: 扣 5 分\n")
-	sb.WriteString("   - medium（中危）: 扣 3 分\n")
-	sb.WriteString("   - low（低危）: 扣 1 分\n")
-	sb.WriteString("   - info（提示）: 扣 0 分\n\n")
+	dsc := ctx.DeductScoreConfig
+	sb.WriteString(fmt.Sprintf("   - critical（严重）: 扣 %d 分\n", dsc.Critical))
+	sb.WriteString(fmt.Sprintf("   - high（高危）: 扣 %d 分\n", dsc.High))
+	sb.WriteString(fmt.Sprintf("   - medium（中危）: 扣 %d 分\n", dsc.Medium))
+	sb.WriteString(fmt.Sprintf("   - low（低危）: 扣 %d 分\n", dsc.Low))
+	sb.WriteString(fmt.Sprintf("   - info（提示）: 扣 %d 分\n\n", dsc.Info))
 	sb.WriteString("2. 按维度汇总扣分：\n")
 	sb.WriteString("   将 issues 按 category 分组，每组内所有 deduct_score 相加。\n\n")
 	sb.WriteString("3. 计算各维度得分：\n")
@@ -61,17 +102,17 @@ func BuildReviewPrompt(ctx *PromptContext) string {
 
 	// 2. 项目自定义说明
 	if ctx.CustomInstruction != "" {
-		sb.WriteString("【项目特殊要求】\n")
+		sb.WriteString("## 【项目特殊要求】\n")
 		sb.WriteString(ctx.CustomInstruction)
 		sb.WriteString("\n\n")
 	}
 
 	// 3. 维度 + 权重 + 规则 柔和在一起
-	sb.WriteString("##【评分维度、权重及评审规则】\n\n")
+	sb.WriteString("## 【评分维度、权重及评审规则】\n\n")
 	sb.WriteString("请严格按照以下维度和权重进行评分，所有维度得分必须在 0-100 之间，涉及的维度权重之和应为 100：\n\n")
 
-	rules := selectTopRules(ctx.Rules, ctx.MaxRules)
-	grouped := groupRulesByCategory(rules)
+	selected, _ := SelectTopRules(ctx.Rules, ctx.MaxRules)
+	grouped := groupRulesByCategory(selected)
 
 	// 维度排序按权重降序，权重相同按名称
 	order := sortDimensions(ctx.DimensionWeights)
@@ -217,9 +258,16 @@ func sortDimensions(dimWeights map[string]DimensionWeight) []string {
 // listItemRe 匹配有序列表项开头（如 1. 2.）
 var listItemRe = regexp.MustCompile(`^\d+\.\s`)
 
-// selectTopRules 按严重级别排序并截断规则列表
+// SelectRulesResult 规则截断结果
+type SelectRulesResult struct {
+	Selected   []model.ReviewRule // 实际传入Prompt的规则
+	Truncated  []model.ReviewRule // 被截断未传入的规则
+	TotalCount int                // 总计规则数
+}
+
+// SelectTopRules 按严重级别排序并截断规则列表
 // 严重级别枚举: critical > high > medium > low > info
-func selectTopRules(rules []model.ReviewRule, max int) []model.ReviewRule {
+func SelectTopRules(rules []model.ReviewRule, max int) (selected []model.ReviewRule, truncated []model.ReviewRule) {
 	severityOrder := map[string]int{"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1}
 
 	sorted := make([]model.ReviewRule, len(rules))
@@ -230,9 +278,9 @@ func selectTopRules(rules []model.ReviewRule, max int) []model.ReviewRule {
 	})
 
 	if len(sorted) > max {
-		return sorted[:max]
+		return sorted[:max], sorted[max:]
 	}
-	return sorted
+	return sorted, nil
 }
 
 // groupRulesByCategory 按维度类别分组规则
@@ -306,3 +354,15 @@ const SchemaExampleFallback = `{
   ],
   "recommendations": ["建议增加单元测试覆盖"]
 }`
+
+// ParseDeductScoreConfig 从 JSON 字符串解析扣分规则配置
+func ParseDeductScoreConfig(jsonStr string) (DeductScoreConfig, error) {
+	cfg := DefaultDeductScoreConfig()
+	if jsonStr == "" || jsonStr == "{}" {
+		return cfg, nil
+	}
+	if err := json.Unmarshal([]byte(jsonStr), &cfg); err != nil {
+		return cfg, err
+	}
+	return cfg, nil
+}

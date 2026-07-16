@@ -43,6 +43,10 @@ func (s *ProjectService) List(page, pageSize int, keyword, status, source string
 		return nil, 0, err
 	}
 
+	// 规则库规则总数（所有项目共享同一套规则，查询一次即可）
+	var allRules []model.ReviewRule
+	model.DB.Find(&allRules)
+
 	for i := range projects {
 		var tasks []model.Task
 		model.DB.Where("project_id = ?", projects[i].ID).
@@ -52,19 +56,34 @@ func (s *ProjectService) List(page, pageSize int, keyword, status, source string
 		projects[i].Tasks = tasks
 
 		// 统计该项目实际启用的规则数
-		var enabledCount int64
-		model.DB.Model(&model.ProjectReviewConfig{}).
-			Where("project_id = ? AND is_enabled = ?", projects[i].ID, true).
-			Count(&enabledCount)
+		// 业务逻辑：项目未配置某规则时使用全局状态，配置了则以项目配置为准
+		var configs []model.ProjectReviewConfig
+		model.DB.Where("project_id = ?", projects[i].ID).Find(&configs)
+		configMap := make(map[uint]bool)
+		for _, c := range configs {
+			configMap[c.RuleID] = c.IsEnabled
+		}
 
-		// 规则库可用规则总数（包含自定义规则）
-		var totalCount int64
-		model.DB.Model(&model.ReviewRule{}).
-			Where("is_enabled = ?", true).
-			Count(&totalCount)
+		enabledCount := 0
+		for _, rule := range allRules {
+			if projectEnabled, hasConfig := configMap[rule.ID]; hasConfig {
+				// 项目有配置，以项目配置为准
+				if projectEnabled {
+					enabledCount++
+				}
+			} else {
+				// 项目无配置，以全局规则状态为准
+				if rule.IsEnabled {
+					enabledCount++
+				}
+			}
+		}
 
-		projects[i].EnabledRuleCount = int(enabledCount)
-		projects[i].TotalRuleCount = int(totalCount)
+		// 规则库规则总数
+		totalCount := len(allRules)
+
+		projects[i].EnabledRuleCount = enabledCount
+		projects[i].TotalRuleCount = totalCount
 	}
 
 	return projects, total, nil

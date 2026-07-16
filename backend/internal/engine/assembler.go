@@ -67,6 +67,10 @@ const DefaultGitLabCommentTemplate = `## 🤖 AI 代码评审报告
 
 **综合评分：{{.TotalScore}}/100**
 
+{{if .Summary}}
+> 📋 **评审摘要：** {{.Summary}}
+{{end}}
+
 ### 📊 维度评分
 {{.DimensionsTable}}
 
@@ -192,9 +196,13 @@ func buildIssuesList(issues []IssueContext) string {
 	grouped := groupIssuesBySeverity(issues)
 	var b strings.Builder
 
-	for _, sev := range []string{"critical", "high", "medium", "low", "info"} {
+	severityOrder := []string{"critical", "high", "medium", "low", "info"}
+	chineseNum := []string{"一", "二", "三", "四", "五"}
+
+	for i, sev := range severityOrder {
 		if group, ok := grouped[sev]; ok && len(group) > 0 {
-			b.WriteString(fmt.Sprintf("#### %s (%d)\n\n", severitySectionLabel(sev), len(group)))
+			label := severitySectionLabel(sev)
+			b.WriteString(fmt.Sprintf("#### %s、%s (%d)\n\n", chineseNum[i], emojiStrip(label), len(group)))
 			for _, issue := range group {
 				scoreLabel := ""
 				if issue.DeductScore > 0 {
@@ -305,4 +313,23 @@ func severitySectionLabel(severity string) string {
 		return v
 	}
 	return severity
+}
+
+// emojiStrip 移除字符串中的 emoji（保留空格）
+func emojiStrip(s string) string {
+	var result []rune
+	for _, r := range s {
+		// 跳过常见 emoji rune 范围
+		if (r >= 0x1F300 && r <= 0x1F9FF) || // 杂项符号和象形文字
+			(r >= 0x2600 && r <= 0x26FF) || // 杂项符号
+			(r >= 0x2700 && r <= 0x27BF) || // 装饰符号
+			(r >= 0xFE00 && r <= 0xFE0F) || // 变体选择器
+			(r >= 0x1F600 && r <= 0x1F64F) || // 表情符号
+			(r >= 0x1F680 && r <= 0x1F6FF) || // 交通和地图符号
+			(r >= 0x1F1E0 && r <= 0x1F1FF) { // 国旗
+			continue
+		}
+		result = append(result, r)
+	}
+	return strings.TrimSpace(string(result))
 }

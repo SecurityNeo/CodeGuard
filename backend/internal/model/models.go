@@ -75,6 +75,7 @@ type Task struct {
 	AIResponse          string              `gorm:"type:longtext" json:"ai_response"`
 	AIResponseJSON      string              `gorm:"type:json;column:ai_response_json" json:"ai_response_json"`       // 结构化评审原始 JSON
 	DimensionScores     string              `gorm:"type:json;column:dimension_scores" json:"dimension_scores"`     // 各维度评分
+	DiffFilesJSON       string              `gorm:"type:json;column:diff_files_json" json:"diff_files_json"`       // diff 文件列表 JSON（用于任务详情展示）
 	IssueCount          int                 `gorm:"default:0;column:issue_count" json:"issue_count"`               // issue 总数
 	RetryCount          int                 `gorm:"default:0" json:"retry_count"`
 	ScoreValue          int                 `gorm:"default:0" json:"score_value"` // 评分值（后置校验后，可参考分）
@@ -85,6 +86,34 @@ type Task struct {
 	Project             Project             `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
 	Pool                ResourcePool        `gorm:"foreignKey:PoolID" json:"pool,omitempty"`
 	UsedModel           LLMModel            `gorm:"foreignKey:UsedModelID;references:ID" json:"used_model,omitempty"`
+}
+
+// BeforeCreate GORM hook: 确保 JSON 字段有合法默认值
+func (t *Task) BeforeCreate(tx *gorm.DB) error {
+	if t.DiffFilesJSON == "" {
+		t.DiffFilesJSON = "[]"
+	}
+	if t.DimensionScores == "" {
+		t.DimensionScores = "{}"
+	}
+	if t.AIResponseJSON == "" {
+		t.AIResponseJSON = "{}"
+	}
+	return nil
+}
+
+// BeforeUpdate GORM hook: 防止空字符串写入 JSON 列导致 MySQL 报错
+func (t *Task) BeforeUpdate(tx *gorm.DB) error {
+	if t.DiffFilesJSON == "" {
+		t.DiffFilesJSON = "[]"
+	}
+	if t.DimensionScores == "" {
+		t.DimensionScores = "{}"
+	}
+	if t.AIResponseJSON == "" {
+		t.AIResponseJSON = "{}"
+	}
+	return nil
 }
 
 type ReviewCategory struct {
@@ -125,6 +154,22 @@ type ProjectReviewConfig struct {
 	Severity  string    `gorm:"size:16" json:"severity"` // NULL=使用规则默认
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// --- TaskReviewRule --- 任务实际使用的评审规则（含截断记录）
+
+type TaskReviewRule struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	TaskID      uint      `gorm:"index;not null" json:"task_id"`
+	RuleID      *uint     `gorm:"index" json:"rule_id"`                                  // 指向 review_rules.id，NULL=规则已删除
+	RuleCode    string    `gorm:"size:64;not null" json:"rule_code"`
+	Name        string    `gorm:"size:100" json:"name"`
+	Category    string    `gorm:"size:32" json:"category"`
+	Severity    string    `gorm:"size:16" json:"severity"`
+	SortOrder   int       `json:"sort_order"`                                            // 排序后位置
+	WasSelected bool      `json:"was_selected"`                      // true=传入Prompt，false=被截断
+	IssueCount  int       `gorm:"default:0;column:issue_count" json:"issue_count"`       // 本次命中Issue数
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // --- ReviewIssue --- 结构化评审结果明细
@@ -189,6 +234,7 @@ type ProjectTemplate struct {
 	Prompt                 string    `gorm:"type:text;not null" json:"prompt"` // 旧版自定义 prompt（废弃兼容）
 	CustomInstruction      string    `gorm:"type:text;column:custom_instruction" json:"custom_instruction"` // 项目特殊说明
 	DimensionWeights       string    `gorm:"type:json;column:dimension_weights" json:"dimension_weights"`   // 维度权重 JSON
+	DeductScoreConfig      string    `gorm:"type:json;column:deduct_score_config" json:"deduct_score_config"` // 扣分规则配置 JSON
 	MaxRulesPerReview      int       `gorm:"default:5;column:max_rules_per_review" json:"max_rules_per_review"` // 每次评审最多规则数
 	IsDefault              bool      `gorm:"default:false" json:"is_default"`
 	GitLabCommentTemplate  string    `gorm:"type:text;column:gitlab_comment_template" json:"gitlab_comment_template"` // GitLab 评论模板

@@ -265,10 +265,32 @@
                         </div>
                     </div>
 
+                    <!-- 批量操作工具栏 -->
+                    <div id="ruleBatchToolbar" class="hidden mb-3 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg flex items-center gap-3">
+                        <div class="text-sm text-blue-800 font-medium">
+                            <span id="batchSelectCount">0</span> 条已选
+                            <button onclick="toggleSelectAllFiltered()" class="ml-2 text-xs text-blue-600 hover:underline" id="batchSelectAllBtn">全选全部</button>
+                        </div>
+                        <div class="ml-auto flex gap-2">
+                            <button onclick="batchEnableRules(true)" class="px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed" id="batchEnableBtn">
+                                <i class="fas fa-check mr-1"></i>批量启用
+                            </button>
+                            <button onclick="batchEnableRules(false)" class="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed" id="batchDisableBtn">
+                                <i class="fas fa-ban mr-1"></i>批量禁用
+                            </button>
+                            <button onclick="clearRuleSelection()" class="px-3 py-1.5 text-gray-500 text-xs hover:text-gray-700">
+                                <i class="fas fa-times mr-1"></i>取消选择
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="overflow-x-auto max-h-[600px] overflow-y-auto border rounded-lg">
                         <table class="w-full text-sm">
                             <thead class="bg-gray-50 border-b sticky top-0">
                                 <tr>
+                                    <th class="px-3 py-3 text-center w-10">
+                                        <input type="checkbox" id="ruleSelectAll" onclick="toggleSelectAllPage(this.checked)" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer">
+                                    </th>
                                     <th class="px-4 py-3 text-left font-semibold text-gray-500">规则名称</th>
                                     <th class="px-4 py-3 text-left font-semibold text-gray-500">描述</th>
                                     <th class="px-4 py-3 text-center font-semibold text-gray-500">分类</th>
@@ -283,13 +305,48 @@
                         </table>
                     </div>
                     <div class="px-4 py-3 border-t flex items-center justify-between">
-                        <span id="rulePageInfo" class="text-sm text-gray-500"></span>
+                        <div class="flex items-center gap-3">
+                            <span id="rulePageInfo" class="text-sm text-gray-500"></span>
+                            <select id="rulePageSizeSelect" class="px-2 py-1 border rounded text-sm" onchange="changeRulePageSize()">
+                                <option value="10">10 条/页</option>
+                                <option value="15" selected>15 条/页</option>
+                                <option value="25">25 条/页</option>
+                                <option value="50">50 条/页</option>
+                                <option value="100">100 条/页</option>
+                            </select>
+                        </div>
                         <div class="flex gap-2" id="rulePagination"></div>
                     </div>
                 </div>
             </div>
         </div>
     </main>
+</div>
+
+<!-- 批量操作确认弹框 -->
+<div id="batchConfirmDialog" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden">
+    <div class="bg-white rounded-xl shadow-xl p-6 w-[440px] max-w-[90%] animate-[slideIn_0.2s_ease]">
+        <div class="flex items-center gap-3 mb-1">
+            <div id="batchConfirmIcon" class="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
+                <i class="fas fa-question text-blue-600 text-lg"></i>
+            </div>
+            <div>
+                <h4 id="batchConfirmTitle" class="font-bold text-gray-900 text-lg">确认批量启用</h4>
+                <p class="text-sm text-gray-500 mt-0.5">此操作将同时修改多条规则的启用状态</p>
+            </div>
+        </div>
+        <div class="my-5 px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
+            <p class="text-sm text-gray-700">
+                即将<span id="batchConfirmAction" class="font-bold">启用</span>选中的 
+                <span id="batchConfirmCount" class="font-bold text-blue-600">0</span> 条评审规则
+            </p>
+            <p id="batchConfirmPreview" class="text-xs text-gray-400 mt-2 truncate">-</p>
+        </div>
+        <div class="flex justify-end gap-2">
+            <button onclick="hideBatchConfirmDialog()" class="px-4 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">取消</button>
+            <button onclick="executeBatchAction()" id="batchConfirmBtn" class="px-4 py-2 rounded-lg text-sm text-white bg-blue-600 hover:bg-blue-700">确认启用</button>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -342,7 +399,7 @@
         document.getElementById('projectPath').textContent = p.project_path || '-';
         document.getElementById('createdAt').textContent = formatDate(p.created_at);
         document.getElementById('updatedAt').textContent = formatDate(p.updated_at);
-        document.getElementById('templateName').textContent = p.template?.Name || '未设置';
+        document.getElementById('templateName').textContent = p.template?.name || '未设置';
         document.getElementById('poolName').textContent = p.pool?.name || '未设置';
         document.getElementById('modelName').textContent = p.model ? (p.model.provider + '-' + p.model.model_id) : '未设置';
         const aiSwitch = document.getElementById('aiEnabled');
@@ -462,7 +519,8 @@
     let currentRuleLanguage = 'all';
     let ruleCurrentPage = 1;
     let rulePageSize = 15;
-    let ruleTotalPages = 1;
+    let selectedRuleIds = new Set(); // 跨页保留选中的规则ID
+let ruleTotalPages = 1;
 
     async function loadReviewCategories() {
         try {
@@ -556,23 +614,18 @@
         });
 
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">暂无匹配规则</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">暂无匹配规则</td></tr>';
             document.getElementById('rulePagination').innerHTML = '';
             document.getElementById('rulePageInfo').textContent = '';
             document.getElementById('ruleFilterCount').textContent = '';
+            document.getElementById('ruleBatchToolbar').classList.add('hidden');
             return;
         }
 
         document.getElementById('ruleFilterCount').textContent = `共 ${filtered.length} 条规则`;
+        updateBatchToolbar(filtered.length);
 
-        // 排序：已启用的排前面
-        filtered.sort((a, b) => {
-            const aEnabled = projectRulesMap[a.id]?.is_enabled ?? a.is_built_in;
-            const bEnabled = projectRulesMap[b.id]?.is_enabled ?? b.is_built_in;
-            return bEnabled - aEnabled;
-        });
-
-        // 分页
+        // 分页（保持按 sort_order ASC 的原始顺序，不根据启用状态重新排序）
         ruleTotalPages = Math.ceil(filtered.length / rulePageSize) || 1;
         if (ruleCurrentPage > ruleTotalPages) ruleCurrentPage = ruleTotalPages;
         if (ruleCurrentPage < 1) ruleCurrentPage = 1;
@@ -581,11 +634,16 @@
 
         tbody.innerHTML = pageItems.map(r => {
             const cfg = projectRulesMap[r.id] || {};
-            const isEnabled = typeof cfg.is_enabled === 'boolean' ? cfg.is_enabled : (r.is_built_in ? true : false);
+            // cfg.is_enabled 未定义时，以全局规则 is_enabled 为准
+            const isEnabled = typeof cfg.is_enabled === 'boolean' ? cfg.is_enabled : (r.is_enabled ? true : false);
             const severity = cfg.severity || r.severity || 'medium';
-            return `
-                <tr class="hover:bg-gray-50 ${isEnabled ? '' : 'status-disabled'}">
-                    <td class="px-4 py-3">
+        const isSelected = selectedRuleIds.has(r.id);
+        return `
+            <tr class="hover:bg-gray-50 ${isEnabled ? '' : 'status-disabled'}">
+                <td class="px-3 py-3 text-center">
+                    <input type="checkbox" class="rule-row-checkbox w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer" data-rule-id="${r.id}" ${isSelected ? 'checked' : ''} onclick="onRuleRowCheckboxChange(${r.id}, this.checked)">
+                </td>
+                <td class="px-4 py-3">
                         <div class="font-medium ${isEnabled ? 'text-gray-800' : ''}">${escapeHtml(r.name)}</div>
                         <div class="text-xs ${isEnabled ? 'text-gray-400' : ''}">${escapeHtml(r.code)}</div>
                     </td>
@@ -619,6 +677,15 @@
 
         // 渲染分页
         renderRulePagination(filtered.length);
+
+        // 同步表头全选 checkbox 状态
+        const allVisibleIds = pageItems.map(r => r.id);
+        const allSelected = allVisibleIds.length > 0 && allVisibleIds.every(id => selectedRuleIds.has(id));
+        const selectAllCheckbox = document.getElementById('ruleSelectAll');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.checked = allSelected;
+            selectAllCheckbox.indeterminate = !allSelected && allVisibleIds.some(id => selectedRuleIds.has(id));
+        }
     }
 
     function renderRulePagination(totalCount) {
@@ -758,6 +825,171 @@
         } catch (e) {
             showToast('保存失败: ' + e.message, 'error');
         }
+    }
+
+    // ========== 批量操作相关函数 ==========
+    function updateBatchToolbar(filteredTotal) {
+        const toolbar = document.getElementById('ruleBatchToolbar');
+        const countEl = document.getElementById('batchSelectCount');
+        const enableBtn = document.getElementById('batchEnableBtn');
+        const disableBtn = document.getElementById('batchDisableBtn');
+        const selectAllBtn = document.getElementById('batchSelectAllBtn');
+        if (!toolbar) return;
+
+        countEl.textContent = selectedRuleIds.size;
+        enableBtn.disabled = selectedRuleIds.size === 0;
+        disableBtn.disabled = selectedRuleIds.size === 0;
+
+        if (selectedRuleIds.size > 0) {
+            toolbar.classList.remove('hidden');
+            toolbar.classList.add('flex');
+            // 如果已选数量等于过滤后总数，显示“取消全选”，否则显示“全选全部”
+            const allFiltered = getFilteredRuleIds();
+            const isAllSelected = allFiltered.every(id => selectedRuleIds.has(id));
+            selectAllBtn.textContent = isAllSelected ? '取消全选' : '全选全部';
+            selectAllBtn.onclick = isAllSelected ? clearRuleSelection : toggleSelectAllFiltered;
+        } else {
+            toolbar.classList.add('hidden');
+            toolbar.classList.remove('flex');
+        }
+    }
+
+    function getFilteredRuleIds() {
+        const search = (document.getElementById('ruleSearch')?.value || '').toLowerCase().trim();
+        return allReviewRules
+            .filter(r => {
+                if (currentRuleCategory !== 'all' && r.category !== currentRuleCategory) return false;
+                if (currentRuleSeverity !== 'all' && r.severity !== currentRuleSeverity) return false;
+                if (currentRuleLanguage !== 'all' && (r.language || 'common') !== currentRuleLanguage) return false;
+                if (search) {
+                    const text = (r.name + ' ' + r.code + ' ' + r.description).toLowerCase();
+                    return text.includes(search);
+                }
+                return true;
+            })
+            .map(r => r.id);
+    }
+
+    function onRuleRowCheckboxChange(ruleId, checked) {
+        if (checked) {
+            selectedRuleIds.add(ruleId);
+        } else {
+            selectedRuleIds.delete(ruleId);
+        }
+        updateBatchToolbar();
+        // 更新表头全选 checkbox 状态
+        const allVisibleIds = getFilteredRuleIds();
+        const pageStart = (ruleCurrentPage - 1) * rulePageSize;
+        const pageVisibleIds = allVisibleIds.slice(pageStart, pageStart + rulePageSize);
+        const allPageSelected = pageVisibleIds.length > 0 && pageVisibleIds.every(id => selectedRuleIds.has(id));
+        const selectAllCheckbox = document.getElementById('ruleSelectAll');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.checked = allPageSelected;
+            selectAllCheckbox.indeterminate = !allPageSelected && pageVisibleIds.some(id => selectedRuleIds.has(id));
+        }
+    }
+
+    function toggleSelectAllPage(checked) {
+        const allFilteredIds = getFilteredRuleIds();
+        const pageStart = (ruleCurrentPage - 1) * rulePageSize;
+        const pageIds = allFilteredIds.slice(pageStart, pageStart + rulePageSize);
+        pageIds.forEach(id => {
+            if (checked) {
+                selectedRuleIds.add(id);
+            } else {
+                selectedRuleIds.delete(id);
+            }
+        });
+        // 更新当前页所有 checkbox 状态
+        document.querySelectorAll('.rule-row-checkbox').forEach(cb => {
+            cb.checked = checked;
+        });
+        updateBatchToolbar(allFilteredIds.length);
+    }
+
+    function toggleSelectAllFiltered() {
+        const allFilteredIds = getFilteredRuleIds();
+        // 如果已经全部选中，则取消全选；否则全选
+        const isAllSelected = allFilteredIds.every(id => selectedRuleIds.has(id));
+        if (isAllSelected) {
+            allFilteredIds.forEach(id => selectedRuleIds.delete(id));
+        } else {
+            allFilteredIds.forEach(id => selectedRuleIds.add(id));
+        }
+        renderProjectRules();
+        updateBatchToolbar(allFilteredIds.length);
+    }
+
+    function clearRuleSelection() {
+        selectedRuleIds.clear();
+        renderProjectRules();
+        updateBatchToolbar();
+    }
+
+    let pendingBatchAction = null; // 存储待执行的批量操作 { enabled, count }
+
+    function batchEnableRules(enabled) {
+        if (selectedRuleIds.size === 0) return;
+        const actionText = enabled ? '启用' : '禁用';
+        const count = selectedRuleIds.size;
+        
+        // 收集选中规则的名称（前3条）用于预览
+        const selectedNames = [];
+        for (const id of selectedRuleIds) {
+            const rule = allReviewRules.find(r => r.id === id);
+            if (rule) selectedNames.push(rule.name);
+            if (selectedNames.length >= 3) break;
+        }
+        const preview = selectedNames.join('、') + (selectedRuleIds.size > 3 ? ` 等 ${selectedRuleIds.size} 条规则` : '');
+
+        pendingBatchAction = { enabled, count };
+
+        // 设置弹框内容
+        document.getElementById('batchConfirmTitle').textContent = `确认批量${actionText}`;
+        document.getElementById('batchConfirmAction').textContent = actionText;
+        document.getElementById('batchConfirmAction').className = enabled ? 'font-bold text-blue-600' : 'font-bold text-red-600';
+        document.getElementById('batchConfirmCount').textContent = count;
+        document.getElementById('batchConfirmPreview').textContent = preview;
+        document.getElementById('batchConfirmBtn').textContent = `确认${actionText}`;
+        document.getElementById('batchConfirmBtn').className = enabled 
+            ? 'px-4 py-2 rounded-lg text-sm text-white bg-blue-600 hover:bg-blue-700' 
+            : 'px-4 py-2 rounded-lg text-sm text-white bg-red-600 hover:bg-red-700';
+        const iconBox = document.getElementById('batchConfirmIcon');
+        iconBox.className = enabled ? 'w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center' : 'w-10 h-10 rounded-full bg-red-50 flex items-center justify-center';
+        iconBox.innerHTML = enabled 
+            ? '<i class="fas fa-check text-blue-600 text-lg"></i>' 
+            : '<i class="fas fa-ban text-red-600 text-lg"></i>';
+
+        document.getElementById('batchConfirmDialog').classList.remove('hidden');
+    }
+
+    function hideBatchConfirmDialog() {
+        document.getElementById('batchConfirmDialog').classList.add('hidden');
+        pendingBatchAction = null;
+    }
+
+    function executeBatchAction() {
+        if (!pendingBatchAction) return;
+        const { enabled, count } = pendingBatchAction;
+        const actionText = enabled ? '启用' : '禁用';
+
+        selectedRuleIds.forEach(ruleId => {
+            if (!projectRulesMap[ruleId]) projectRulesMap[ruleId] = {};
+            projectRulesMap[ruleId].is_enabled = enabled;
+        });
+
+        persistProjectRules();
+        clearRuleSelection();
+        renderProjectRules();
+        showToast(`已批量${actionText} ${count} 条规则`);
+        hideBatchConfirmDialog();
+    }
+
+    function changeRulePageSize() {
+        const select = document.getElementById('rulePageSizeSelect');
+        rulePageSize = parseInt(select.value) || 15;
+        ruleCurrentPage = 1;
+        renderProjectRules();
     }
 
     async function resetProjectRules() {

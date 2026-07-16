@@ -14,51 +14,42 @@
     <script src="/static/js/highlight.min.js"></script>
     <script src="/static/js/highlight-diff.min.js"></script>
     <style>
-        .status-badge {
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 500;
-        }
+        .status-badge { padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
         .status-pending { background-color: #fef3c7; color: #92400e; }
         .status-running { background-color: #dbeafe; color: #1e40af; }
         .status-success { background-color: #d1fae5; color: #065f46; }
         .status-failed { background-color: #fee2e2; color: #991b1b; }
         .status-timeout { background-color: #fce7f3; color: #9d174d; }
         .status-stopped { background-color: #f3f4f6; color: #6b7280; }
-        .task-type-badge {
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 500;
-        }
+        .task-type-badge { padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
         .task-type-badge.chat { background-color: #e0e7ff; color: #4338ca; }
         .task-type-badge.review { background-color: #f3e8ff; color: #7c3aed; }
         .sidebar-item:hover { background-color: rgba(255,255,255,0.1); }
         .sidebar-item.active { background-color: rgba(255,255,255,0.15); border-left: 3px solid #3b82f6; }
-        
-        /* markdown-body: 渲染 Markdown 完整样式 */
+
+        .tab-nav { display: flex; gap: 0; border-bottom: 1px solid #e5e7eb; }
+        .tab-nav-btn { padding: 10px 20px; font-size: 14px; color: #6b7280; cursor: pointer; border-bottom: 2px solid transparent; background: none; border: none; }
+        .tab-nav-btn.active { color: #3b82f6; border-bottom-color: #3b82f6; font-weight: 500; }
+        .tab-nav-btn:hover { color: #374151; }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
+
         .markdown-body { line-height: 1.6; }
         .markdown-body h1 { font-size: 1.5em; font-weight: bold; margin: 16px 0 10px; color: #1f2937; border-bottom: 1px solid #e5e7eb; padding-bottom: 6px; }
         .markdown-body h2 { font-size: 1.3em; font-weight: bold; margin: 14px 0 8px; color: #1f2937; }
         .markdown-body h3 { font-size: 1.1em; font-weight: bold; margin: 12px 0 6px; color: #1f2937; }
-        .markdown-body h4, .markdown-body h5, .markdown-body h6 { font-weight: bold; margin: 10px 0 4px; color: #374151; }
+        .markdown-body h4, .markdown-body h5, .markdown-body h6 { font-weight: bold; margin: 10px 0 4px; color: #4b5563; }
         .markdown-body p { margin: 8px 0; }
         .markdown-body ul { list-style-type: disc; padding-left: 24px; margin: 8px 0; }
         .markdown-body ol { list-style-type: decimal; padding-left: 24px; margin: 8px 0; }
         .markdown-body li { margin: 4px 0; }
+        .markdown-body pre { background-color: #1f2937; color: #e5e7eb; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 10px 0; }
+        .markdown-body pre code { background: none; padding: 0; color: #e5e7eb; }
+        .markdown-body code { background-color: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.9em; color: #ef4444; }
         .markdown-body table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 0.9em; }
         .markdown-body th, .markdown-body td { border: 1px solid #d1d5db; padding: 8px 12px; text-align: left; }
-        .markdown-body th { background-color: #f3f4f6; font-weight: 600; }
+        .markdown-body th { background-color: #f9fafb; font-weight: 600; }
         .markdown-body tr:nth-child(even) { background-color: #f9fafb; }
-        .markdown-body code { background-color: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 0.9em; color: #ef4444; }
-        .markdown-body pre { background-color: #1f2937; color: #e5e7eb; padding: 12px 16px; border-radius: 8px; overflow-x: auto; margin: 10px 0; border: 2px solid #4b5563; box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: relative; }
-        .markdown-body pre code { background: none; padding: 0; color: #e5e7eb; }
-        .markdown-body pre::before { content: "Diff"; position: absolute; top: -1px; right: -1px; background: #374151; color: #9ca3af; padding: 2px 8px; font-size: 10px; border-bottom-left-radius: 8px; border-top-right-radius: 8px; }
-        .markdown-body .hljs-addition { color: #86efac; background-color: rgba(34,197,94,0.1); display: block; }
-        .markdown-body .hljs-deletion { color: #fca5a5; background-color: rgba(239,68,68,0.1); display: block; }
-        .markdown-body .hljs-meta { color: #93c5fd; }
-        .markdown-body .hljs-comment { color: #6b7280; font-style: italic; }
         .markdown-body blockquote { border-left: 4px solid #e5e7eb; padding-left: 12px; margin: 10px 0; color: #6b7280; }
         .markdown-body hr { border: none; border-top: 1px solid #e5e7eb; margin: 16px 0; }
         .markdown-body a { color: #2563eb; text-decoration: underline; }
@@ -66,11 +57,116 @@
         .markdown-body em { font-style: italic; }
         .markdown-body img { max-width: 100%; border-radius: 6px; }
 
-        .review-panel { }
+        .diff-file-item { padding: 6px 10px; cursor: pointer; border-radius: 4px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .diff-file-item:hover { background-color: #f3f4f6; }
+        .diff-file-item.active { background-color: #dbeafe; color: #1e40af; font-weight: 500; }
+        .diff-file-item .additions { color: #16a34a; }
+        .diff-file-item .deletions { color: #dc2626; }
+
+        .diff-preview { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 13px; line-height: 1.6; white-space: pre; overflow-x: auto; }
+        .diff-preview .hljs-addition { background-color: #dcfce7; color: #166534; }
+        .diff-preview .hljs-deletion { background-color: #fee2e2; color: #991b1b; }
+        .diff-preview .hljs-meta { color: #6b7280; }
+        .diff-preview .issue-line { background-color: #fef3c7 !important; }
+
+        .issue-card { 
+            border: 1px solid #e5e7eb; 
+            border-left-width: 3px; 
+            border-left-style: solid; 
+            padding: 16px; 
+            border-radius: 8px; 
+            background: #fff; 
+            margin-bottom: 16px; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            transition: box-shadow 0.15s, transform 0.15s;
+        }
+        .issue-detail-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+            opacity: 0;
+        }
+        .issue-detail-content.expanded {
+            max-height: 2000px;
+            opacity: 1;
+            padding-top: 1rem;
+        }
+        .issue-toggle-icon {
+            transition: transform 0.3s ease;
+        }
+        .issue-toggle-icon.expanded {
+            transform: rotate(180deg);
+        }
+        .issue-card.severity-critical { border-left-color: #dc2626; }
+        .issue-card.severity-high { border-left-color: #ea580c; }
+        .issue-card.severity-medium { border-left-color: #ca8a04; }
+        .issue-card.severity-low { border-left-color: #2563eb; }
+        .issue-card.severity-info { border-left-color: #6b7280; }
+
+        .chat-bubble { max-width: 80%; padding: 12px 16px; border-radius: 12px; line-height: 1.5; }
+        .chat-bubble.user { background-color: #3b82f6; color: #fff; border-bottom-right-radius: 4px; }
+        .chat-bubble.ai { background-color: #f3f4f6; color: #1f2937; border-bottom-left-radius: 4px; }
+
+        /* AI loading 占位 */
+        .ai-loading-placeholder {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            animation: fadeIn 0.2s ease;
+        }
+        .ai-loading-placeholder .placeholder-body {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border: 1px solid #bae6fd;
+            border-radius: 12px;
+            border-bottom-left-radius: 4px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            max-width: 720px;
+        }
+        .ai-loading-placeholder .placeholder-text {
+            font-size: 14px;
+            color: #0369a1;
+            font-weight: 500;
+        }
+        .ai-loading-placeholder .spinner-dot {
+            width: 6px;
+            height: 6px;
+            background: #0ea5e9;
+            border-radius: 50%;
+            animation: bounceDot 1.4s infinite ease-in-out both;
+        }
+        .ai-loading-placeholder .spinner-dot:nth-child(1) { animation-delay: -0.32s; }
+        .ai-loading-placeholder .spinner-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounceDot {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* JSON viewer styles */
+        .json-viewer { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; line-height: 1.5; }
+        .json-key { color: #d946ef; }
+        .json-string { color: #22c55e; }
+        .json-number { color: #f59e0b; }
+        .json-boolean { color: #3b82f6; }
+        .json-null { color: #6b7280; }
+        .json-toggle { cursor: pointer; color: #6b7280; display: inline-block; width: 14px; text-align: center; user-select: none; }
+        .json-toggle:hover { color: #374151; }
+        .json-collapsed { display: none; }
+        .json-ellipsis { color: #9ca3af; }
+
+        .toast { position: fixed; top: 20px; right: 20px; z-index: 9999; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     </style>
 </head>
 <body class="bg-gray-50 font-sans">
-    
+
 <div class="flex h-screen">
     <!-- 侧边栏 -->
     <aside id="sidebar" class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
@@ -96,162 +192,224 @@
       </div>
     </aside>
 
-    <!-- 主内容区 -->
+    <!-- 主内容 -->
     <main class="flex-1 overflow-y-auto">
-        <header class="bg-white border-b px-8 py-4 flex items-center justify-between sticky top-0 z-10">
-            <div class="flex items-center gap-4">
-                <a href="tasks.html" class="text-gray-500 hover:text-gray-700 transition-colors">
-                    <i class="fas fa-arrow-left text-lg"></i>
-                </a>
+        <div class="w-full px-8 py-6">
+    <!-- 顶部操作栏 -->
+    <div class="flex items-center justify-between gap-3 mb-5">
+        <div class="flex items-center gap-3">
+            <button onclick="history.back()" class="px-3 py-2 bg-white border rounded-lg text-sm hover:bg-gray-50 text-gray-600 transition-colors">
+                <i class="fas fa-arrow-left mr-1"></i>返回
+            </button>
+            <h2 class="text-xl font-bold text-gray-800">任务详情</h2>
+        </div>
+        <div class="flex items-center gap-2">
+            <span id="detailTaskTypeBadge" class="task-type-badge review">AI评审</span>
+            <span id="detailStatusBadge" class="status-badge status-success">成功</span>
+            <span id="detailTaskId" class="text-gray-400 text-sm font-mono">#-</span>
+        </div>
+    </div>
+
+    <!-- 元信息卡片 -->
+    <div class="bg-white rounded-xl border shadow-sm mb-6 overflow-hidden">
+        <div class="grid grid-cols-2 md:grid-cols-4 divide-x divide-gray-100">
+            <!-- 项目信息 -->
+            <div class="p-4">
+                <div class="mb-4">
+                    <div class="text-xs text-gray-400 mb-1">项目名称</div>
+                    <div id="detailProject" class="text-sm font-semibold text-gray-900 truncate" title="-">-</div>
+                </div>
+                <div class="mb-4">
+                    <div class="text-xs text-gray-400 mb-1">分支</div>
+                    <div id="detailBranch" class="text-sm text-gray-700 truncate" title="-">-</div>
+                </div>
                 <div>
-                    <h2 class="text-xl font-bold text-gray-800">任务详情 <span id="detailTaskId" class="text-gray-500 font-mono">#--</span></h2>
-                    <p class="text-sm text-gray-500 mt-1">查看任务执行记录、结构化评审及 Issue 列表</p>
+                    <div class="text-xs text-gray-400 mb-1">MR</div>
+                    <div id="detailMR" class="text-sm">-</div>
                 </div>
             </div>
-            <div class="flex items-center gap-3" id="headerActions">
+            <!-- 作者与触发 -->
+            <div class="p-4">
+                <div class="mb-4">
+                    <div class="text-xs text-gray-400 mb-1">作者</div>
+                    <div id="detailAuthor" class="text-sm text-gray-700 flex items-center gap-1">
+                        <i class="fas fa-user-circle text-gray-400 text-xs"></i>-
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <div class="text-xs text-gray-400 mb-1">触发方式</div>
+                    <div id="detailTriggerType" class="text-sm">-</div>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-400 mb-1">触发来源</div>
+                    <div id="detailTriggerSource" class="text-sm text-gray-700">-</div>
+                </div>
             </div>
-        </header>
+            <!-- 评分与时长 -->
+            <div class="p-4">
+                <div class="mb-4" id="detailScoreWrap">
+                    <div class="text-xs text-gray-400 mb-1">综合评分</div>
+                    <div id="detailScore" class="text-lg font-bold text-blue-600">-</div>
+                </div>
+                <div class="mb-4">
+                    <div class="text-xs text-gray-400 mb-1">执行时长</div>
+                    <div id="detailDuration" class="text-sm text-gray-700">-</div>
+                </div>
+                <div>
+                    <div class="text-xs text-gray-400 mb-1">创建时间</div>
+                    <div id="detailCreatedAt" class="text-sm text-gray-700">-</div>
+                </div>
+            </div>
+            <!-- 变更统计 -->
+            <div class="p-4 bg-gray-50">
+                <div class="text-xs text-gray-400 mb-3">变更统计</div>
+                <div class="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                        <div id="detailFiles" class="text-xl font-bold text-gray-800">-</div>
+                        <div class="text-xs text-gray-500">文件</div>
+                    </div>
+                    <div>
+                        <div id="detailAdditions" class="text-xl font-bold text-green-600">-</div>
+                        <div class="text-xs text-green-500">新增</div>
+                    </div>
+                    <div>
+                        <div id="detailDeletions" class="text-xl font-bold text-red-600">-</div>
+                        <div class="text-xs text-red-500">删除</div>
+                    </div>
+                </div>
+                <div class="mt-3 text-xs text-gray-500" id="detailDiffInfo"></div>
+            </div>
+        </div>
+    </div>
 
-        <div class="p-8 space-y-6">
-            <!-- 单页布局 -->
-            <div class="flex gap-6 items-start">
-                <!-- 左侧信息面板 -->
-                <div class="w-72 flex-shrink-0 space-y-4">
-                    <!-- 基本信息 -->
-                    <div class="bg-white rounded-xl border p-5">
-                        <h3 class="text-sm font-bold text-gray-700 mb-3"><i class="fas fa-info-circle mr-1 text-blue-500"></i>基础信息</h3>
-                        <div class="space-y-3 text-sm">
-                            <div class="flex justify-between">
-                                <span class="text-gray-400">状态</span>
-                                <span id="detailStatus">-</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-400">评分</span>
-                                <span id="detailScore" class="font-medium text-blue-600">-</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-400">类型</span>
-                                <span id="detailTaskType">-</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-400">触发方式</span>
-                                <span id="detailTrigger">-</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-400">项目</span>
-                                <span id="detailProject" class="text-right max-w-[120px] truncate">-</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-400">MR</span>
-                                <span id="detailMR">-</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-400">作者</span>
-                                <span id="detailAuthor">-</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-400">源分支</span>
-                                <span id="detailSourceBranch" class="font-mono text-xs text-blue-600 text-right max-w-[120px] truncate">-</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-400">目标分支</span>
-                                <span id="detailTargetBranch" class="font-mono text-xs text-blue-600 text-right max-w-[120px] truncate">-</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-400">耗时</span>
-                                <span id="detailDuration">-</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-400">创建时间</span>
-                                <span id="detailCreated">-</span>
+            <!-- Tab 导航 -->
+            <div class="tab-nav mb-0 sticky top-0 bg-gray-50 z-10">
+                <button class="tab-nav-btn active" data-tab="diff" onclick="switchTab('diff')">代码变更</button>
+                <button class="tab-nav-btn" data-tab="report" onclick="switchTab('report')" id="tabBtnReport">评审报告</button>
+                <button class="tab-nav-btn" data-tab="raw" onclick="switchTab('raw')" id="tabBtnRaw">AI Response</button>
+            </div>
+
+            <div class="bg-white rounded-b-xl border border-t-0 p-5 min-h-[500px]">
+                <!-- Tab 1: 代码变更 -->
+                <div id="tab-diff" class="tab-pane active">
+                    <div class="flex gap-4 h-[600px]">
+                        <div class="w-80 flex-shrink-0 border-r pr-4 overflow-y-auto">
+                            <h4 class="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">变更文件</h4>
+                            <div id="diffFileTree" class="space-y-0">
+                                <div class="text-sm text-gray-400 py-8 text-center">加载中...</div>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- 错误信息 -->
-                    <div id="errorMsgContainer" class="bg-white rounded-xl border p-4 hidden">
-                        <h3 class="text-sm font-bold text-red-500 mb-2"><i class="fas fa-exclamation-circle mr-1"></i>错误信息</h3>
-                        <p class="text-xs text-red-600 bg-red-50 p-2 rounded" id="detailErrorMsg">-</p>
+                        <div class="flex-1 overflow-y-auto">
+                            <div id="diffPreviewHeader" class="text-sm font-medium text-gray-700 mb-2 pb-2 border-b hidden">
+                                <span id="diffPreviewFileName"></span>
+                                <span id="diffPreviewTruncated" class="text-xs text-orange-500 ml-2 hidden"><i class="fas fa-exclamation-triangle mr-1"></i>变更过大已截断</span>
+                            </div>
+                            <pre id="diffPreviewContent" class="diff-preview"><code class="language-diff">请选择左侧文件查看变更内容</code></pre>
+                        </div>
                     </div>
                 </div>
 
-                <!-- 右侧主要内容 -->
-                <div class="flex-1 min-w-0 space-y-6">
-                    <!-- AI 评审内容展示 -->
-                    <div id="detailContentContainer" class="hidden">
-                        <!-- Tab 切换 -->
-                        <div class="bg-white rounded-xl border mb-4 overflow-hidden">
-                            <div class="flex border-b bg-gray-50">
-                                <button id="tabStructured" onclick="switchReviewTab('structured')" class="tab-btn review-tab active px-6 py-3 text-sm font-medium border-b-2 border-blue-500 text-blue-600">结构化评审</button>
-                                <button id="tabRaw" onclick="switchReviewTab('raw')" class="tab-btn review-tab px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">原始内容</button>
-                            </div>
-                            
-                            <!-- 结构化评审面板 -->
-                            <div id="structuredReviewPanel" class="review-panel p-6">
-                                <!-- 评审摘要（扣分统计） -->
-                                <div id="reviewSummaryArea" class="mb-6 hidden">
-                                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100 p-5 flex items-center gap-6">
-                                        <div class="text-center flex-shrink-0">
-                                            <div class="text-4xl font-bold text-blue-600" id="structuredTotalScore">-</div>
-                                            <div class="text-xs text-gray-500 mt-1">综合评分</div>
-                                        </div>
-                                        <div class="flex-1 grid grid-cols-3 gap-4">
-                                            <div class="bg-white/80 rounded-lg p-3 text-center border border-blue-100">
-                                                <div class="text-xl font-bold text-gray-800" id="summaryIssueCount">0</div>
-                                                <div class="text-xs text-gray-500 mt-1">发现问题</div>
-                                            </div>
-                                            <div class="bg-white/80 rounded-lg p-3 text-center border border-red-100">
-                                                <div class="text-xl font-bold text-red-600" id="summaryDeductScore">-0</div>
-                                                <div class="text-xs text-gray-500 mt-1">总扣分</div>
-                                            </div>
-                                            <div class="bg-white/80 rounded-lg p-3 text-center border border-orange-100">
-                                                <div class="text-xl font-bold text-orange-600" id="summaryCriticalCount">0</div>
-                                                <div class="text-xs text-gray-500 mt-1">严重/高危</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- 维度评分 -->
-                                <div id="dimensionScoresArea" class="mb-6 hidden">
-                                    <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                                        <i class="fas fa-chart-bar text-blue-500"></i>维度评分
+                <!-- Tab 2: 评审报告 / AI 对话 -->
+                <div id="tab-report" class="tab-pane">
+                    <div id="reportReviewArea">
+                        <div id="dimensionScoresArea" class="mb-6 hidden">
+                            <h4 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                <i class="fas fa-chart-bar text-blue-500"></i>维度评分
+                            </h4>
+                            <div class="flex justify-around items-end gap-4" id="dimensionBars"></div>
+                            <hr class="border-gray-200 mt-4" />
+                        </div>
+                        <!-- 本次评审使用的规则 -->
+                        <div id="taskRulesArea" class="mb-6 hidden">
+                            <div class="bg-blue-50 rounded-xl border border-blue-200 overflow-hidden">
+                                <div class="px-5 py-3 bg-blue-100/50 border-b border-blue-200 flex items-center justify-between cursor-pointer" onclick="toggleCollapse('taskRulesBody')">
+                                    <h4 class="text-sm font-semibold text-blue-800 flex items-center gap-2 m-0">
+                                        <i class="fas fa-list-check text-blue-600"></i>本次评审使用的规则
                                     </h4>
-                                    <div class="flex justify-around items-end gap-4" id="dimensionBars"></div>
-                                    <hr class="border-gray-200 mt-4" />
+                                    <div class="flex items-center gap-2">
+                                        <span id="taskRulesSummary" class="text-xs text-blue-600 font-medium"></span>
+                                        <i class="fas fa-chevron-down text-blue-400 transition-transform duration-200" id="taskRulesBody-icon"></i>
+                                    </div>
                                 </div>
-                                
-                                <!-- Issue 筛选 -->
-                                <div class="flex items-center gap-2 mb-4 flex-wrap bg-gray-50 p-3 rounded-lg">
-                                    <span class="text-xs font-medium text-gray-600">筛选：</span>
-                                    <button onclick="filterIssues('all')" class="issue-filter-btn active text-xs px-3 py-1.5 rounded-full font-medium bg-blue-100 text-blue-700" data-filter="all">全部</button>
-                                    <button onclick="filterIssues('pending')" class="issue-filter-btn text-xs px-3 py-1.5 rounded-full font-medium bg-gray-100 text-gray-600 hover:bg-gray-200" data-filter="pending">待处理</button>
-                                    <button onclick="filterIssues('accepted')" class="issue-filter-btn text-xs px-3 py-1.5 rounded-full font-medium bg-green-100 text-green-700 hover:bg-green-200" data-filter="accepted">已采纳</button>
-                                    <button onclick="filterIssues('rejected')" class="issue-filter-btn text-xs px-3 py-1.5 rounded-full font-medium bg-red-100 text-red-700 hover:bg-red-200" data-filter="rejected">已拒绝</button>
-                                    <select id="issueFileFilter" onchange="renderIssues()" class="text-xs px-3 py-1.5 border rounded-lg ml-auto bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                                        <option value="">所有文件</option>
-                                    </select>
-                                </div>
-                                
-                                <!-- Issue 列表 -->
-                                <div id="issuesListArea" class="space-y-3">
-                                    <div class="text-center text-gray-400 py-12 font-medium">加载中...</div>
-                                </div>
-                                
-                                <!-- 批量操作 -->
-                                <div id="batchActionBar" class="mt-4 pt-4 border-t hidden">
-                                    <div class="flex items-center gap-3">
-                                        <span class="text-sm text-gray-600">已选 <span id="selectedIssueCount" class="font-bold text-blue-600">0</span> 项</span>
-                                        <button onclick="batchAcceptIssues()" class="text-sm px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"><i class="fas fa-check mr-1"></i>批量采纳</button>
-                                        <button onclick="batchRejectIssues()" class="text-sm px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"><i class="fas fa-times mr-1"></i>批量拒绝</button>
+                                <div id="taskRulesBody" class="hidden">
+                                    <div class="p-4 space-y-3">
+                                        <!-- 实际传入的规则 -->
+                                        <div id="taskRulesSelected" class="space-y-2"></div>
+                                        <!-- 被截断的规则 -->
+                                        <div id="taskRulesTruncated" class="space-y-2 border-t border-blue-200 pt-3 mt-3"></div>
                                     </div>
                                 </div>
                             </div>
-                            
-                            <!-- 原始内容面板 -->
-                            <div id="rawReviewPanel" class="review-panel hidden p-6">
-                                <div class="markdown-body" id="detailContentBody">-</div>
+                        </div>
+
+                        <div id="issuesArea" class="mb-6">
+                            <div class="flex items-center gap-2 mb-4 flex-wrap bg-gray-50 p-3 rounded-lg">
+                                <span class="text-xs font-medium text-gray-600">筛选：</span>
+                                <button onclick="filterIssues('all')" class="issue-filter-btn active text-xs px-3 py-1.5 rounded-full font-medium bg-blue-100 text-blue-700" data-filter="all">全部</button>
+                                <button onclick="filterIssues('pending')" class="issue-filter-btn text-xs px-3 py-1.5 rounded-full font-medium bg-gray-100 text-gray-600 hover:bg-gray-200" data-filter="pending">待处理</button>
+                                <button onclick="filterIssues('accepted')" class="issue-filter-btn text-xs px-3 py-1.5 rounded-full font-medium bg-green-100 text-green-700 hover:bg-green-200" data-filter="accepted">已采纳</button>
+                                <button onclick="filterIssues('rejected')" class="issue-filter-btn text-xs px-3 py-1.5 rounded-full font-medium bg-red-100 text-red-700 hover:bg-red-200" data-filter="rejected">已拒绝</button>
+                                <select id="issueFileFilter" onchange="renderIssues()" class="text-xs px-3 py-1.5 border rounded-lg ml-auto bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                    <option value="">所有文件</option>
+                                </select>
                             </div>
+                            <div id="issuesListArea" class="space-y-3">
+                                <div class="text-center text-gray-400 py-12 font-medium">暂无问题</div>
+                            </div>
+                            <div id="batchActionBar" class="mt-3 pt-3 border-t hidden flex items-center justify-between">
+                                <span class="text-xs text-gray-500">已选择 <span id="selectedIssueCount" class="font-medium text-blue-600">0</span> 个问题</span>
+                                <div class="flex gap-2">
+                                    <button onclick="batchAcceptIssues()" class="text-xs px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700">批量采纳</button>
+                                    <button onclick="batchRejectIssues()" class="text-xs px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700">批量拒绝</button>
+                                </div>
+                            </div>
+                            <!-- 查看 GitLab 评审报告 -->
+                            <div class="mt-3 pt-3 border-t flex items-center justify-between">
+                                <span class="text-xs text-gray-400">由 AI 生成并推送到 GitLab 的 Markdown 格式评审报告</span>
+                                <button onclick="showReviewMarkdownModal()" class="text-xs px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-1.5">
+                                    <i class="fab fa-gitlab"></i>查看推送给 GitLab 的评审报告
+                                </button>
+                            </div>
+                        </div>
+                        <div class="markdown-body border-t pt-4 hidden" id="reviewMarkdownArea">
+                            <div class="text-gray-400 text-center py-8">暂无评审报告</div>
+                        </div>
+                    </div>
+                    <!-- chat 对话区域 -->
+                    <div id="reportChatArea" class="hidden flex flex-col h-[600px]">
+                        <div class="flex items-center justify-between pb-2 border-b mb-2">
+                            <div id="chatSessionMeta" class="text-xs text-gray-400 hidden"></div>
+                            <div id="chatTokenMeta" class="text-xs text-gray-400"></div>
+                        </div>
+                        <div id="chatMessages" class="flex-1 overflow-y-auto space-y-4 pr-2"></div>
+                        <div class="mt-4 flex gap-2">
+                            <input type="text" id="chatInput" placeholder="输入消息继续对话..." class="flex-1 px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <button onclick="sendChatMessage()" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"><i class="fas fa-paper-plane mr-1"></i>发送</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 3: AI Response -->
+                <div id="tab-raw" class="tab-pane">
+                    <div class="space-y-4">
+                        <div>
+                            <div class="cursor-pointer bg-gray-50 hover:bg-gray-100 px-4 py-2 rounded-lg border flex items-center justify-between transition-colors mb-2" onclick="toggleCollapse('rawResponseBody')">
+                                <h4 class="text-sm font-semibold text-gray-700 flex items-center gap-2 m-0">
+                                    <i class="fas fa-code text-gray-400"></i>AI Response
+                                </h4>
+                                <i class="fas fa-chevron-down text-gray-400 transition-transform duration-200" id="rawResponseBody-icon"></i>
+                            </div>
+                            <div id="rawResponseBody">
+                                <div class="border rounded-lg p-4 bg-gray-50 overflow-x-auto" id="rawResponseJson">
+                                    <div class="text-gray-400">-</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                                <i class="fas fa-microchip text-gray-400"></i>模型信息
+                            </h4>
+                            <div class="text-sm text-gray-600" id="rawModelInfo">-</div>
                         </div>
                     </div>
                 </div>
@@ -262,25 +420,35 @@
 
 <script>
 const API_BASE = '/api/v1';
-let currentTaskId = null;
+let currentTask = null;
 let currentStructuredReview = null;
 let issueFilter = 'all';
-const taskId = new URLSearchParams(window.location.search).get('id');
-
-// 维度名称映射（从后台 ReviewCategory 加载）
 let reviewCategories = {};
+let diffFiles = [];
+let diffFileMap = {};
+let currentDiffFile = null;
+let chatEventSource = null;
+let chatHasSession = false;
+const taskId = new URLSearchParams(window.location.search).get('id');
 
 async function loadReviewCategories() {
     try {
         const res = await apiFetch(`${API_BASE}/review-categories`);
         const json = await res.json();
         reviewCategories = {};
-        (json.data || []).forEach(cat => {
-            reviewCategories[cat.code] = cat.name;
-        });
-    } catch (e) {
-        console.error('加载维度分类失败:', e);
-        reviewCategories = {};
+        (json.data || []).forEach(cat => { reviewCategories[cat.code] = cat.name; });
+    } catch (e) { console.error('加载维度分类失败:', e); }
+}
+
+function switchTab(tab) {
+    document.querySelectorAll('.tab-nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
+    // 切换到对话/报告 tab 后，如果是 chat 任务滚动对话到底部
+    if (tab === 'report' && currentTask?.task_type === 'chat') {
+        const chatMessages = document.getElementById('chatMessages');
+        if (chatMessages) {
+            setTimeout(() => { chatMessages.scrollTop = chatMessages.scrollHeight; }, 50);
+        }
     }
 }
 
@@ -289,225 +457,262 @@ async function loadTask() {
         document.getElementById('issuesListArea').innerHTML = '<div class="text-center text-red-500 py-12 font-medium">缺少任务 ID</div>';
         return;
     }
-    
     try {
         const res = await apiFetch(`${API_BASE}/tasks/${taskId}`);
         const data = await res.json();
-        const t = data.data;
-        
-        const isReviewDetail = t.task_type === 'review';
-        document.getElementById('detailTaskId').textContent = '#' + t.id;
-        document.getElementById('detailProject').textContent = t.project?.name || '-';
-        document.getElementById('detailTaskType').innerHTML = `<span class="task-type-badge ${isReviewDetail ? 'review' : 'chat'}">${getTaskTypeText(t.task_type)}</span>`;
-        document.getElementById('detailMR').innerHTML = t.mr_iid ? `<a href="${t.mr_url}" target="_blank" class="text-blue-600 hover:underline font-medium">${t.mr_iid}</a>` : '-';
-        document.getElementById('detailAuthor').textContent = t.author || '-';
-        document.getElementById('detailStatus').innerHTML = `<span class="status-badge status-${t.status}">${getStatusText(t.status)}</span>`;
-        document.getElementById('detailScore').innerHTML = t.score_value > 0 
-            ? `<span class="font-bold text-lg">${t.score_value}分</span>${t.raw_ai_score > 0 && t.raw_ai_score !== t.score_value ? ' <span class="text-xs text-orange-500 ml-1">AI原始: ' + t.raw_ai_score + '分</span>' : ''}`
-            : '-';
-        document.getElementById('detailTrigger').innerHTML = getTriggerSourceBadge(t.trigger_source, t.score_value);
-        document.getElementById('detailSourceBranch').textContent = t.source_branch || '-';
-        document.getElementById('detailTargetBranch').textContent = t.target_branch || '-';
-        document.getElementById('detailDuration').textContent = formatDuration(t.duration_sec);
-        document.getElementById('detailCreated').textContent = formatDate(t.created_at);
+        currentTask = data.data;
+        await loadDiffFiles(currentTask);
+        renderTaskMeta(currentTask);
 
-        // 显示错误信息
-        const errorContainer = document.getElementById('errorMsgContainer');
-        const errorMsgEl = document.getElementById('detailErrorMsg');
-        if (t.error_msg) {
-            errorContainer.classList.remove('hidden');
-            errorMsgEl.textContent = t.error_msg;
-        } else {
-            errorContainer.classList.add('hidden');
-        }
-
-        // 加载结构化评审内容
-        const contentContainer = document.getElementById('detailContentContainer');
-        if (isReviewDetail && t.status === 'success') {
-            contentContainer.classList.remove('hidden');
-            loadStructuredReview(t.id);
-            document.getElementById('detailContentBody').innerHTML = t.ai_response ? marked.parse(maskSensitive(t.ai_response)) : '<div class="text-gray-400 text-center py-8">无原始内容</div>';
-        } else if (!isReviewDetail && t.status === 'success') {
-            // chat 类型：不加载结构化评审，仅展示 AI 对话内容
-            contentContainer.classList.remove('hidden');
-            document.getElementById('dimensionScoresArea').classList.add('hidden');
-            document.getElementById('issuesListArea').classList.add('hidden');
-            document.getElementById('detailContentBody').innerHTML = t.ai_response ? marked.parse(maskSensitive(t.ai_response)) : '<div class="text-gray-400 text-center py-8">无原始内容</div>';
-        } else {
-            contentContainer.classList.add('hidden');
-            if (t.status !== 'success') {
-                // 即使非成功状态，在原内容区显示提示
-                document.getElementById('detailContentBody').innerHTML = '<div class="text-gray-400 text-center py-8">任务未完成，无评审内容</div>';
+        if (currentTask.task_type === 'review') {
+            if (currentTask.status === 'success') {
+                await loadStructuredReview(currentTask.id);
             }
+            renderRawRequest(currentTask);
+        } else if (currentTask.task_type === 'chat') {
+            // chat 任务：隐藏原始请求 Tab，加载对话
+            document.getElementById('tabBtnRaw').style.display = 'none';
+            document.getElementById('reportReviewArea').classList.add('hidden');
+            document.getElementById('reportChatArea').classList.remove('hidden');
+            await loadChatMessages();
         }
-
-        // 动态添加操作按钮
-        const headerActions = document.getElementById('headerActions');
-        let actionsHtml = '';
-        if (t.status === 'running' && t.trigger_source === 'chat') {
-            actionsHtml += `<button onclick="viewMessages(${t.id})" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"><i class="fas fa-comments mr-1"></i>实时对话</button>`;
-        }
-        if (t.ai_response || t.ai_prompt) {
-            actionsHtml += `<button onclick="viewLogs(${t.id})" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition-colors"><i class="fas fa-file-alt mr-1"></i>查看日志</button>`;
-        }
-        if (t.status === 'failed') {
-            actionsHtml += `<button onclick="retryTask(${t.id})" class="px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200 transition-colors"><i class="fas fa-redo mr-1"></i>重试任务</button>`;
-        }
-        headerActions.innerHTML = actionsHtml;
-
     } catch (e) {
-        document.body.innerHTML = `
-            <div class="flex h-full items-center justify-center">
-                <div class="text-center">
-                    <i class="fas fa-exclamation-triangle text-4xl text-red-400 mb-4"></i>
-                    <h2 class="text-xl font-bold text-gray-700 mb-2">加载失败</h2>
-                    <p class="text-gray-500 mb-4">无法加载任务详情</p>
-                    <a href="tasks.html" class="text-blue-600 hover:underline">返回任务列表</a>
-                </div>
-            </div>
-        `;
+        console.error('加载任务失败:', e);
+        alert('加载任务失败: ' + e.message);
     }
 }
 
-function getTaskTypeText(type) {
-    const map = { review: '代码评审', chat: 'AI对话' };
-    return map[type] || type;
-}
+function renderTaskMeta(t) {
+    // 顶部标签
+    document.getElementById('detailTaskId').textContent = '#' + t.id;
+    document.getElementById('detailTaskTypeBadge').textContent = t.task_type === 'review' ? 'AI评审' : 'AI对话';
+    document.getElementById('detailTaskTypeBadge').className = 'task-type-badge ' + t.task_type;
+    const statusEl = document.getElementById('detailStatusBadge');
+    statusEl.textContent = getStatusText(t.status);
+    statusEl.className = 'status-badge status-' + t.status;
 
-function getStatusText(status) {
-    const map = { pending: '待处理', running: '运行中', success: '成功', failed: '失败', timeout: '超时', stopped: '已停止' };
-    return map[status] || status;
-}
+    // 第一列：项目信息
+    document.getElementById('detailProject').textContent = t.project?.name || '-';
+    document.getElementById('detailProject').title = t.project?.name || '-';
+    document.getElementById('detailBranch').textContent = (t.source_branch || '-') + ' \u2192 ' + (t.target_branch || '-');
+    document.getElementById('detailBranch').title = document.getElementById('detailBranch').textContent;
+    document.getElementById('detailMR').innerHTML = t.mr_iid ? `<a href="${t.mr_url}" target="_blank" class="text-blue-600 hover:underline font-medium">!${t.mr_iid}</a>` : '-';
 
-function getTriggerSourceBadge(source, score) {
-    if (source === 'webhook') {
-        return `<span class="text-xs px-2 py-1 rounded bg-indigo-100 text-indigo-700 font-medium">Webhook</span>`;
-    } else if (source === 'manual') {
-        return `<span class="text-xs px-2 py-1 rounded bg-green-100 text-green-700 font-medium">手动触发</span>`;
-    } else if (source === 'chat') {
-        return `<span class="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 font-medium">AI对话</span>`;
-    }
-    return `<span class="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 font-medium">${source || '-'}</span>`;
-}
+    // 第二列：作者与触发
+    document.getElementById('detailAuthor').innerHTML = `<i class="fas fa-user-circle text-gray-400 text-xs mr-1"></i>${t.author || '-'}`;
+    const triggerTypeLabels = { manual: '手动触发', webhook: 'Webhook触发', retry: '重试触发' };
+    document.getElementById('detailTriggerType').textContent = triggerTypeLabels[t.trigger_type] || t.trigger_type;
+    document.getElementById('detailTriggerSource').textContent = t.trigger_source || '-';
 
-function formatDuration(sec) {
-    if (!sec) return '-';
-    if (sec < 60) return sec + 's';
-    const m = Math.floor(sec / 60);
-    if (sec < 3600) return m + 'm' + (sec % 60) + 's';
-    const h = Math.floor(sec / 3600);
-    return h + 'h' + (m % 60) + 'm';
-}
-
-function formatDate(ts) {
-    if (!ts) return '-';
-    const d = new Date(ts);
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-}
-
-function switchReviewTab(tab) {
-    document.querySelectorAll('.review-tab').forEach(btn => {
-        btn.classList.remove('active', 'border-blue-500', 'text-blue-600');
-        btn.classList.add('border-transparent', 'text-gray-500');
-    });
-    document.querySelectorAll('.review-panel').forEach(panel => panel.classList.add('hidden'));
-    
-    if (tab === 'structured') {
-        document.getElementById('tabStructured').classList.add('active', 'border-blue-500', 'text-blue-600');
-        document.getElementById('tabStructured').classList.remove('border-transparent', 'text-gray-500');
-        document.getElementById('structuredReviewPanel').classList.remove('hidden');
+    // 第三列：评分、时长、创建时间
+    if (t.task_type === 'review') {
+        const scoreHtml = t.score_value > 0
+            ? `${t.score_value}<span class="text-sm font-normal text-gray-400 ml-1">分</span>`
+            : '-';
+        document.getElementById('detailScore').innerHTML = scoreHtml;
+        document.getElementById('detailScoreWrap').classList.remove('hidden');
     } else {
-        document.getElementById('tabRaw').classList.add('active', 'border-blue-500', 'text-blue-600');
-        document.getElementById('tabRaw').classList.remove('border-transparent', 'text-gray-500');
-        document.getElementById('rawReviewPanel').classList.remove('hidden');
-        if (typeof hljs !== 'undefined') {
-            document.getElementById('detailContentBody').querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
-        }
+        document.getElementById('detailScoreWrap').classList.add('hidden');
     }
+    document.getElementById('detailDuration').textContent = formatDuration(t.duration_sec);
+    document.getElementById('detailCreatedAt').textContent = formatDateTime(t.created_at);
+
+    // 第四列：变更统计
+    let totalFiles = 0, totalAdd = 0, totalDel = 0;
+    if (diffFiles && diffFiles.length > 0) {
+        totalFiles = diffFiles.length;
+        totalAdd = diffFiles.reduce((sum, f) => sum + (f.additions || 0), 0);
+        totalDel = diffFiles.reduce((sum, f) => sum + (f.deletions || 0), 0);
+    }
+    document.getElementById('detailFiles').textContent = totalFiles;
+    document.getElementById('detailAdditions').textContent = totalAdd;
+    document.getElementById('detailDeletions').textContent = totalDel;
+    document.getElementById('detailDiffInfo').textContent = t.mr_title || '';
+
+    // Tab 标签
+    document.getElementById('tabBtnReport').textContent = t.task_type === 'review' ? '评审报告' : 'AI对话';
 }
 
+// ========== Diff 相关 ==========
+async function loadDiffFiles(task) {
+    if (task.diff_files_json && task.diff_files_json !== '[]' && task.diff_files_json !== '{}') {
+        try { diffFiles = JSON.parse(task.diff_files_json); } catch (e) { diffFiles = []; }
+    }
+    if (!diffFiles || diffFiles.length === 0) {
+        try {
+            const res = await apiFetch(`${API_BASE}/tasks/${task.id}/diff`);
+            const json = await res.json();
+            diffFiles = json.data || [];
+        } catch (e) { diffFiles = []; }
+    }
+    renderDiffFileTree();
+}
+
+function renderDiffFileTree() {
+    const container = document.getElementById('diffFileTree');
+    if (!diffFiles || diffFiles.length === 0) {
+        container.innerHTML = '<div class="text-sm text-gray-400 py-8 text-center">无变更文件</div>';
+        return;
+    }
+    diffFileMap = {};
+    container.innerHTML = diffFiles.map((f, idx) => {
+        diffFileMap[f.new_path] = f;
+        const additions = f.additions || 0;
+        const deletions = f.deletions || 0;
+        return `<div class="diff-file-item" data-path="${escapeHtml(f.new_path)}" onclick="selectDiffFile('${escapeHtml(f.new_path)}')">
+            <div class="truncate" title="${escapeHtml(f.new_path)}">${escapeHtml(f.new_path)}</div>
+            <div class="text-xs text-gray-400"><span class="additions">+${additions}</span><span class="deletions">/-${deletions}</span></div>
+        </div>`;
+    }).join('');
+    const first = diffFiles.find(f => !f.truncated) || diffFiles[0];
+    if (first) selectDiffFile(first.new_path);
+}
+
+async function selectDiffFile(path) {
+    if (!path) return;
+    currentDiffFile = path;
+    document.querySelectorAll('.diff-file-item').forEach(el => el.classList.toggle('active', el.dataset.path === path));
+    const file = diffFileMap[path];
+    if (!file) return;
+    document.getElementById('diffPreviewHeader').classList.remove('hidden');
+    document.getElementById('diffPreviewFileName').textContent = file.new_path;
+    document.getElementById('diffPreviewTruncated').classList.toggle('hidden', !file.truncated);
+    const diffText = file.diff || '无 diff 内容';
+    const contentEl = document.getElementById('diffPreviewContent');
+    contentEl.innerHTML = `<code class="language-diff">${escapeHtml(diffText)}</code>`;
+    if (typeof hljs !== 'undefined') hljs.highlightElement(contentEl.querySelector('code'));
+}
+
+// ========== 结构化评审相关 ==========
 async function loadStructuredReview(taskId) {
     try {
         const res = await apiFetch(`${API_BASE}/tasks/${taskId}/structured-review`);
         const data = await res.json();
         if (data.code === 0 && data.data) {
             currentStructuredReview = data.data;
-            currentTaskId = taskId;
             renderStructuredReview();
-        } else {
-            document.getElementById('issuesListArea').innerHTML = '<div class="text-center text-gray-400 py-12 font-medium">暂无结构化评审数据</div>';
         }
-    } catch (err) {
-        console.warn('结构化评审加载失败:', err);
-        document.getElementById('issuesListArea').innerHTML = '<div class="text-center text-red-400 py-12 font-medium">加载失败</div>';
-    }
+    } catch (err) { console.warn('结构化评审加载失败:', err); }
 }
 
 function renderStructuredReview() {
     const data = currentStructuredReview;
     if (!data) return;
-
-    document.getElementById('structuredTotalScore').textContent = data.total_score || '-';
-    
+    // 维度评分
     const dimContainer = document.getElementById('dimensionBars');
     if (data.dimension_scores && data.dimension_scores !== '{}') {
         document.getElementById('dimensionScoresArea').classList.remove('hidden');
         try {
             const dims = typeof data.dimension_scores === 'string' ? JSON.parse(data.dimension_scores) : data.dimension_scores;
-            // 兜底映射（连不上后台时也显示中文）
             const fallbackLabels = { security: '安全性', code_quality: '代码质量', readability: '可读性', maintainability: '可维护性', test_coverage: '测试覆盖', performance: '性能', dockerfile: 'DockerFile', common: '通用' };
-            
             const entries = Object.entries(dims)
-                .filter(([_, val]) => {
-                    const weight = typeof val === 'object' ? (val.weight || 0) : 0;
-                    return weight > 0;
-                })
-                .sort((a, b) => {
-                    const wa = typeof a[1] === 'object' ? (a[1].weight || 0) : 0;
-                    const wb = typeof b[1] === 'object' ? (b[1].weight || 0) : 0;
-                    return wb - wa;
-                });
-
-            if (entries.length === 0) {
-                dimContainer.innerHTML = '';
-                document.getElementById('dimensionScoresArea').classList.add('hidden');
-                return;
-            }
-
+                .filter(([_, val]) => { const w = typeof val === 'object' ? (val.weight || 0) : 0; return w > 0; })
+                .sort((a, b) => { const wa = typeof a[1] === 'object' ? (a[1].weight || 0) : 0; const wb = typeof b[1] === 'object' ? (b[1].weight || 0) : 0; return wb - wa; });
             dimContainer.innerHTML = entries.map(([key, val]) => {
                 const score = typeof val === 'object' ? val.score : val;
                 const weight = typeof val === 'object' ? val.weight : 0;
                 const label = reviewCategories[key] || fallbackLabels[key] || key;
                 const colorClass = score >= 80 ? 'bg-gradient-to-t from-green-500 to-green-400' : score >= 60 ? 'bg-gradient-to-t from-yellow-500 to-yellow-400' : 'bg-gradient-to-t from-red-500 to-red-400';
                 const scoreColor = score >= 60 ? 'text-gray-800' : 'text-red-600';
-                const weightText = weight > 0 ? `${weight}%` : '';
-                return `
-                    <div class="flex flex-col items-center gap-1 flex-shrink-0" style="width: 60px;">
-                        <span class="text-sm font-bold ${scoreColor}">${score}</span>
-                        <div class="w-10 h-24 bg-gray-100 rounded-lg relative overflow-hidden">
-                            <div class="${colorClass} absolute bottom-0 left-0 right-0 rounded-b-lg transition-all duration-700 ease-out" style="height:${score}%"></div>
-                        </div>
-                        <span class="text-xs text-gray-500 font-medium mt-0.5 text-center leading-tight">${label}</span>
-                        <span class="text-[10px] text-gray-400">${weightText}</span>
+                return `<div class="flex flex-col items-center gap-1 flex-shrink-0" style="width:60px;">
+                    <span class="text-sm font-bold ${scoreColor}">${score}</span>
+                    <div class="w-10 h-24 bg-gray-100 rounded-lg relative overflow-hidden">
+                        <div class="${colorClass} absolute bottom-0 left-0 right-0 rounded-b-lg" style="height:${score}%"></div>
                     </div>
-                `;
+                    <span class="text-xs text-gray-500 text-center leading-tight">${label}</span>
+                    <span class="text-[10px] text-gray-400">${weight}%</span>
+                </div>`;
             }).join('');
-        } catch (e) {
-            console.error('维度评分渲染失败:', e);
-            dimContainer.innerHTML = '';
-        }
-    } else {
-        document.getElementById('dimensionScoresArea').classList.add('hidden');
+        } catch (e) { console.error(e); }
     }
-
+    // Issue 文件筛选
     const fileSelect = document.getElementById('issueFileFilter');
     if (data.issues && data.issues.length > 0) {
         const files = [...new Set(data.issues.map(i => i.file).filter(f => f))];
-        fileSelect.innerHTML = '<option value="">所有文件</option>' + 
-            files.map(f => `<option value="${f}">${f}</option>`).join('');
+        fileSelect.innerHTML = '<option value="">所有文件</option>' + files.map(f => `<option value="${f}">${f}</option>`).join('');
+    }
+    renderIssues();
+    // Markdown 报告 - 放入弹窗预览
+    if (data.markdown_comment) {
+        const modalContent = document.getElementById('reviewMarkdownContent');
+        modalContent.innerHTML = marked.parse(maskSensitive(data.markdown_comment));
+        if (typeof hljs !== 'undefined') {
+            modalContent.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+        }
+    }
+    // 加载本次评审使用的规则列表
+    loadTaskReviewRules(currentTask.id);
+}
+
+// ========== 任务关联的评审规则 ==========
+async function loadTaskReviewRules(taskId) {
+    try {
+        const res = await apiFetch(`${API_BASE}/tasks/${taskId}/rules`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.code === 0 && data.data) {
+            renderTaskRules(data.data);
+        }
+    } catch (e) {
+        console.warn('加载任务评审规则失败:', e);
+    }
+}
+
+function renderTaskRules(data) {
+    const area = document.getElementById('taskRulesArea');
+    const summaryEl = document.getElementById('taskRulesSummary');
+    const selectedContainer = document.getElementById('taskRulesSelected');
+    const truncatedContainer = document.getElementById('taskRulesTruncated');
+
+    const selected = data.selected || [];
+    const truncated = data.truncated || [];
+    const total = data.total || 0;
+    const maxRules = data.max_rules || 5;
+
+    if (total === 0) {
+        area.classList.add('hidden');
+        return;
     }
 
-    renderIssues();
+    area.classList.remove('hidden');
+    summaryEl.textContent = `${selected.length} 条传入 / ${truncated.length} 条截断 (最多 ${maxRules} 条)`;
+
+    const severityLabels = { critical: '严重', high: '高危', medium: '中危', low: '低危', info: '提示' };
+    const categoryLabels = { security: '安全', performance: '性能', code_quality: '代码质量', readability: '可读性', maintainability: '可维护性', test_coverage: '测试覆盖', common: '通用' };
+    const severityBadgeColors = {
+        critical: 'bg-red-50 text-red-600 border-red-100',
+        high: 'bg-orange-50 text-orange-600 border-orange-100',
+        medium: 'bg-yellow-50 text-yellow-600 border-yellow-100',
+        low: 'bg-blue-50 text-blue-600 border-blue-100',
+        info: 'bg-gray-50 text-gray-500 border-gray-100'
+    };
+
+    function renderRuleList(rules, container, title) {
+        if (rules.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+        const titleHtml = title ? `<div class="text-xs text-gray-400 mb-2 font-medium">${title}</div>` : '';
+        const listHtml = rules.map((r, idx) => {
+            const sevLabel = severityLabels[r.severity] || r.severity;
+            const catLabel = categoryLabels[r.category] || r.category;
+            const badgeCls = severityBadgeColors[r.severity] || 'bg-gray-50 text-gray-500 border-gray-100';
+            const issueBadge = r.issue_count > 0 ? `<span class="ml-1.5 text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded border border-red-100 font-medium">命中 ${r.issue_count} 次</span>` : '';
+            return `
+            <div class="flex items-center gap-2 text-sm py-1.5 px-2 rounded hover:bg-blue-50/50 transition-colors">
+                <span class="text-xs text-gray-400 w-5 text-right flex-shrink-0">${idx + 1}</span>
+                <span class="text-xs px-1.5 py-0.5 rounded border ${badgeCls} flex-shrink-0">${sevLabel}</span>
+                <span class="text-xs text-gray-400 flex-shrink-0">[${catLabel}]</span>
+                <span class="font-mono text-xs text-gray-500 flex-shrink-0 bg-gray-50 px-1 rounded">${r.rule_code || '-'}</span>
+                <span class="text-gray-700 truncate flex-1" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</span>
+                ${issueBadge}
+            </div>`;
+        }).join('');
+        container.innerHTML = titleHtml + listHtml;
+    }
+
+    renderRuleList(selected, selectedContainer, selected.length > 0 ? `实际传入 Prompt 的规则 (${selected.length} 条)` : null);
+    renderRuleList(truncated, truncatedContainer, truncated.length > 0 ? `因超出 max_rules=${maxRules} 被截断的规则 (${truncated.length} 条)` : null);
 }
 
 function renderIssues() {
@@ -516,95 +721,164 @@ function renderIssues() {
         document.getElementById('issuesListArea').innerHTML = '<div class="text-center text-gray-400 py-12 font-medium">暂无问题</div>';
         return;
     }
-
-    const fileFilter = document.getElementById('issueFileFilter').value;
     let issues = data.issues;
-
-    if (issueFilter !== 'all') {
-        issues = issues.filter(i => i.status === issueFilter);
-    }
-    if (fileFilter) {
-        issues = issues.filter(i => i.file === fileFilter);
-    }
-
+    if (issueFilter !== 'all') issues = issues.filter(i => i.status === issueFilter);
+    const fileFilter = document.getElementById('issueFileFilter').value;
+    if (fileFilter) issues = issues.filter(i => i.file === fileFilter);
     if (issues.length === 0) {
         document.getElementById('issuesListArea').innerHTML = '<div class="text-center text-gray-400 py-12 font-medium">没有符合条件的问题</div>';
         return;
     }
-
     const severityOrder = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
-    const severityColors = { critical: 'border-red-500 bg-red-50', high: 'border-orange-500 bg-orange-50', medium: 'border-yellow-500 bg-yellow-50', low: 'border-blue-500 bg-blue-50', info: 'border-gray-400 bg-gray-50' };
     const severityLabels = { critical: '严重', high: '高危', medium: '中危', low: '低危', info: '提示' };
+    const severityColors = { critical: 'text-red-600', high: 'text-orange-600', medium: 'text-yellow-600', low: 'text-blue-600', info: 'text-gray-500' };
+    const categoryLabels = { security: '安全', performance: '性能', code_quality: '代码质量', readability: '可读性', maintainability: '可维护性', test_coverage: '测试覆盖', common: '通用' };
     const statusLabels = { pending: '待处理', accepted: '已采纳', rejected: '已拒绝' };
     const statusColors = { pending: 'text-gray-500', accepted: 'text-green-600', rejected: 'text-red-600' };
-    const categoryColors = { security: 'bg-red-50 text-red-700 border-red-200', performance: 'bg-orange-50 text-orange-700 border-orange-200', code_quality: 'bg-purple-50 text-purple-700 border-purple-200', readability: 'bg-blue-50 text-blue-700 border-blue-200', maintainability: 'bg-green-50 text-green-700 border-green-200', test_coverage: 'bg-pink-50 text-pink-700 border-pink-200', common: 'bg-gray-50 text-gray-600 border-gray-200' };
-    const categoryLabels = { security: '安全', performance: '性能', code_quality: '代码质量', readability: '可读性', maintainability: '可维护性', test_coverage: '测试覆盖', common: '通用' };
-    const categoryIcons = { security: 'fa-shield-alt', performance: 'fa-bolt', code_quality: 'fa-cogs', readability: 'fa-eye', maintainability: 'fa-wrench', test_coverage: 'fa-vial', common: 'fa-th-list' };
-
-    // 按严重程度排序（critical > high > medium > low > info），同级按扣分降序
-    issues = issues.sort((a, b) => {
-        const orderA = severityOrder[a.severity] || 0;
-        const orderB = severityOrder[b.severity] || 0;
-        if (orderB !== orderA) return orderB - orderA;
-        return (b.deduct_score || 0) - (a.deduct_score || 0);
-    });
-
-    document.getElementById('issuesListArea').innerHTML = issues.map(issue => `
-        <div class="border-l-4 rounded-lg p-4 ${severityColors[issue.severity] || 'border-gray-300 bg-gray-50'} transition-all hover:shadow-md">
-            <div class="flex items-start justify-between">
+    issues.sort((a, b) => severityOrder[b.severity] - severityOrder[a.severity] || (b.deduct_score || 0) - (a.deduct_score || 0));
+    document.getElementById('issuesListArea').innerHTML = issues.map(issue => {
+        const sevClass = 'severity-' + issue.severity;
+        const sevLabel = severityLabels[issue.severity] || issue.severity;
+        const catLabel = categoryLabels[issue.category] || issue.category;
+        const deductBadge = issue.deduct_score > 0 ? `<span class="text-xs text-white bg-red-500 px-1.5 py-0.5 rounded font-bold">-${issue.deduct_score}分</span>` : '';
+        const lineInfo = issue.line_start > 0 ? ':' + issue.line_start + (issue.line_end > issue.line_start ? '-' + issue.line_end : '') : '';
+        const summary = escapeHtml(issue.message).substring(0, 80) + (issue.message.length > 80 ? '...' : '');
+        return `<div class="issue-card ${sevClass}" id="issue-card-${issue.id}" onclick="toggleIssueDetail(${issue.id}, event)">
+            <div class="flex items-start justify-between gap-3">
                 <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <input type="checkbox" class="issue-checkbox rounded cursor-pointer" value="${issue.id}" onchange="updateBatchActionBar()">
-                        <span class="text-xs font-bold px-2 py-0.5 rounded ${issue.severity === 'critical' ? 'bg-red-100 text-red-700' : issue.severity === 'high' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}">${severityLabels[issue.severity] || issue.severity}</span>
-                        ${issue.deduct_score > 0 ? `<span class="text-xs font-bold px-2 py-0.5 rounded bg-red-50 text-red-600 border border-red-100" title="该 Issue 扣分"><i class="fas fa-minus-circle mr-1 text-[10px]"></i>${issue.deduct_score}分</span>` : ''}
-                        <span class="text-xs ${categoryColors[issue.category] || 'bg-gray-100 text-gray-600 border-gray-200'} px-2 py-0.5 rounded border font-medium"><i class="fas ${categoryIcons[issue.category] || 'fa-tag'} mr-1 text-[10px]"></i>${categoryLabels[issue.category] || issue.category}</span>
-                        <span class="text-xs text-gray-500 font-mono">${issue.rule_code || '自定义'}</span>
-                        <span class="text-xs font-medium ${statusColors[issue.status] || 'text-gray-500'}">[${statusLabels[issue.status] || issue.status}]</span>
+                    <!-- 头部摘要区（始终可见） -->
+                    <div class="flex items-center gap-1.5 flex-wrap cursor-pointer">
+                        <input type="checkbox" class="issue-checkbox rounded flex-shrink-0 mr-1" value="${issue.id}" onclick="event.stopPropagation(); updateBatchActionBar()">
+                        <span class="text-xs font-bold ${severityColors[issue.severity] || 'text-gray-500'} flex-shrink-0 bg-gray-50 px-1.5 py-0.5 rounded">${sevLabel}</span>
+                        <span class="text-xs text-gray-400 flex-shrink-0">[${catLabel}]</span>
+                        <span class="text-[11px] font-mono text-gray-500 flex-shrink-0 bg-gray-100 px-1 py-0.5 rounded border border-gray-200">#${issue.id}</span>
+                        <span class="text-xs font-mono text-gray-400 flex-shrink-0 bg-gray-50 px-1.5 py-0.5 rounded">${issue.rule_code || '-'}</span>
+                        ${deductBadge}
+                        <span class="text-xs ${statusColors[issue.status] || 'text-gray-500'} flex-shrink-0 ml-auto">[${statusLabels[issue.status] || issue.status}]</span>
                     </div>
-                    <p class="text-sm font-medium text-gray-800 leading-relaxed">${issue.message}</p>
-                    ${issue.file ? `<p class="text-xs text-gray-500 mt-1.5 flex items-center"><i class="fas fa-file-code mr-1.5 text-gray-400"></i>${issue.file}${issue.line_start > 0 ? ' (第' + issue.line_start + '行)' : ''}</p>` : ''}
-                    ${issue.code_snippet ? `<pre class="text-xs bg-gray-900 text-gray-100 p-3 rounded-lg mt-2 overflow-x-auto max-h-32">${issue.code_snippet}</pre>` : ''}
-                    ${issue.suggestion ? `<p class="text-xs text-gray-600 mt-1.5 flex items-start"><i class="fas fa-lightbulb mr-1.5 text-yellow-500 mt-0.5"></i><span class="flex-1">${issue.suggestion}</span></p>` : ''}
-                    ${issue.reject_reason ? `<p class="text-xs text-red-500 mt-1.5 flex items-start"><i class="fas fa-info-circle mr-1.5 mt-0.5"></i><span class="flex-1">拒绝原因：${issue.reject_reason}</span></p>` : ''}
+                    <!-- 摘要文字 -->
+                    <div class="text-sm text-gray-800 font-medium leading-relaxed mt-2 cursor-pointer">${summary}</div>
+                    <!-- 文件位置快捷展示 -->
+                    ${issue.file ? `<div class="text-xs font-mono text-blue-600 mt-1 cursor-pointer">${escapeHtml(issue.file)}${lineInfo}</div>` : ''}
                 </div>
-                <div class="flex gap-1 ml-3 ${issue.status === 'pending' ? '' : 'hidden'} flex-shrink-0">
-                    <button onclick="resolveIssue(${issue.id}, 'accepted')" class="text-xs px-2.5 py-1.5 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors" title="采纳"><i class="fas fa-check"></i></button>
-                    <button onclick="showRejectInput(${issue.id})" class="text-xs px-2.5 py-1.5 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors" title="拒绝"><i class="fas fa-times"></i></button>
+                <div class="flex flex-col items-center gap-1.5 flex-shrink-0">
+                    <i id="issue-toggle-${issue.id}" class="fas fa-chevron-down issue-toggle-icon text-gray-400 text-sm cursor-pointer p-1 hover:text-gray-600" onclick="toggleIssueDetail(${issue.id}, event)"></i>
+                    <div class="flex flex-col gap-1.5 ${issue.status === 'pending' ? '' : 'hidden'}" onclick="event.stopPropagation()">
+                        <button onclick="resolveIssue(${issue.id}, 'accepted')" class="text-[11px] px-2.5 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 flex items-center gap-1 whitespace-nowrap">
+                            <i class="fas fa-check"></i>采纳
+                        </button>
+                        <button onclick="showRejectInput(${issue.id})" class="text-[11px] px-2.5 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 flex items-center gap-1 whitespace-nowrap">
+                            <i class="fas fa-times"></i>拒绝
+                        </button>
+                    </div>
                 </div>
             </div>
-            <div id="rejectInput-${issue.id}" class="hidden mt-3">
-                <input type="text" placeholder="填写拒绝原因..." class="text-xs px-3 py-2 border rounded-lg w-full mb-2 focus:ring-2 focus:ring-blue-500 focus:outline-none" id="rejectReason-${issue.id}">
-                <div class="flex gap-2">
-                    <button onclick="resolveIssue(${issue.id}, 'rejected', document.getElementById('rejectReason-${issue.id}').value)" class="text-xs px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">确认拒绝</button>
-                    <button onclick="hideRejectInput(${issue.id})" class="text-xs px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300 transition-colors">取消</button>
-                </div>
-            </div>
-        </div>
-    `).join('');
 
+            <!-- 详情区（默认折叠） -->
+            <div id="issue-detail-${issue.id}" class="issue-detail-content">
+                <!-- 问题描述 -->
+                <div class="mb-4">
+                    <div class="flex items-center gap-1.5 mb-1.5">
+                        <div class="w-1 h-3.5 bg-gray-800 rounded-full"></div>
+                        <span class="text-xs font-semibold text-gray-700">问题描述</span>
+                    </div>
+                    <div class="text-sm text-gray-800 font-medium leading-relaxed pl-3">${escapeHtml(issue.message)}</div>
+                </div>
+
+                <!-- 文件位置 -->
+                ${issue.file ? `
+                <div class="mb-4">
+                    <div class="flex items-center gap-1.5 mb-1.5">
+                        <div class="w-1 h-3.5 bg-blue-500 rounded-full"></div>
+                        <span class="text-xs font-semibold text-gray-700">文件位置</span>
+                    </div>
+                    <div class="pl-3">
+                        <a href="#" onclick="switchTab('diff'); selectDiffFile('${escapeHtml(issue.file)}'); return false;" class="text-xs font-mono text-blue-600 hover:underline bg-blue-50 px-2 py-1 rounded inline-block">
+                            ${escapeHtml(issue.file)}${lineInfo}
+                        </a>
+                    </div>
+                </div>` : ''}
+
+                <!-- 问题代码 -->
+                ${issue.code_snippet ? `
+                <div class="mb-4">
+                    <div class="flex items-center gap-1.5 mb-1.5">
+                        <div class="w-1 h-3.5 bg-indigo-500 rounded-full"></div>
+                        <span class="text-xs font-semibold text-gray-700">问题代码</span>
+                    </div>
+                    <div class="pl-3">
+                        <pre class="text-xs bg-gray-800 text-gray-100 p-3 rounded-lg overflow-x-auto border border-gray-700"><code>${escapeHtml(issue.code_snippet)}</code></pre>
+                    </div>
+                </div>` : ''}
+
+                <!-- 修改建议 -->
+                ${issue.suggestion ? `
+                <div class="mb-2">
+                    <div class="flex items-center gap-1.5 mb-1.5">
+                        <div class="w-1 h-3.5 bg-amber-400 rounded-full"></div>
+                        <span class="text-xs font-semibold text-gray-700">修改建议</span>
+                    </div>
+                    <div class="pl-3">
+                        <div class="text-xs text-gray-700 bg-amber-50 border border-amber-100 p-3 rounded-lg leading-relaxed">${escapeHtml(issue.suggestion)}</div>
+                    </div>
+                </div>` : ''}
+
+                <!-- 拒绝原因 -->
+                ${issue.reject_reason ? `<div class="mt-3 pt-3 border-t border-dashed border-red-100"><p class="text-xs text-red-500"><i class="fas fa-info-circle mr-1"></i>拒绝原因：${escapeHtml(issue.reject_reason)}</p></div>` : ''}
+
+                <div id="rejectInput-${issue.id}" class="hidden mt-3" onclick="event.stopPropagation()">
+                    <input type="text" placeholder="填写拒绝原因..." class="text-xs px-2 py-1 border rounded w-full mb-1" id="rejectReason-${issue.id}">
+                    <div class="flex gap-1">
+                        <button onclick="resolveIssue(${issue.id}, 'rejected', document.getElementById('rejectReason-${issue.id}').value)" class="text-xs px-2 py-1 bg-red-600 text-white rounded">确认拒绝</button>
+                        <button onclick="hideRejectInput(${issue.id})" class="text-xs px-2 py-1 bg-gray-200 text-gray-600 rounded">取消</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
     updateBatchActionBar();
 }
 
-function filterIssues(filter) {
-    issueFilter = filter;
-    document.querySelectorAll('.issue-filter-btn').forEach(btn => {
-        if (btn.dataset.filter === filter) {
-            btn.classList.add('active', 'bg-blue-100', 'text-blue-700');
-            btn.classList.remove('bg-gray-100', 'text-gray-600');
-        } else {
-            btn.classList.remove('active', 'bg-blue-100', 'text-blue-700');
-            btn.classList.add('bg-gray-100', 'text-gray-600');
-        }
-    });
+function filterIssues(status) {
+    issueFilter = status;
+    document.querySelectorAll('.issue-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === status));
     renderIssues();
 }
 
 function showRejectInput(issueId) {
-    document.getElementById(`rejectInput-${issueId}`).classList.remove('hidden');
+    // 确保详情已展开
+    const detail = document.getElementById('issue-detail-' + issueId);
+    const icon = document.getElementById('issue-toggle-' + issueId);
+    if (detail && !detail.classList.contains('expanded')) {
+        detail.classList.add('expanded');
+        if (icon) icon.classList.add('expanded');
+    }
+    document.getElementById('rejectInput-' + issueId).classList.remove('hidden');
 }
 
 function hideRejectInput(issueId) {
-    document.getElementById(`rejectInput-${issueId}`).classList.add('hidden');
+    document.getElementById('rejectInput-' + issueId).classList.add('hidden');
+}
+
+function toggleIssueDetail(issueId, event) {
+    if (event) {
+        // 如果点击的是 checkbox 或按钮，不触发展开/折叠
+        const target = event.target;
+        if (target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button') || target.closest('a')) {
+            return;
+        }
+    }
+    const detail = document.getElementById('issue-detail-' + issueId);
+    const icon = document.getElementById('issue-toggle-' + issueId);
+    if (!detail) return;
+    const isExpanded = detail.classList.contains('expanded');
+    if (isExpanded) {
+        detail.classList.remove('expanded');
+        if (icon) icon.classList.remove('expanded');
+    } else {
+        detail.classList.add('expanded');
+        if (icon) icon.classList.add('expanded');
+    }
 }
 
 async function resolveIssue(issueId, status, rejectReason) {
@@ -618,7 +892,7 @@ async function resolveIssue(issueId, status, rejectReason) {
         });
         if (!res.ok) throw new Error('操作失败');
         showToast(status === 'accepted' ? '已采纳' : '已拒绝', 'success');
-        loadStructuredReview(currentTaskId);
+        loadStructuredReview(taskId);
     } catch (err) {
         showToast('操作失败: ' + err.message, 'error');
     }
@@ -627,8 +901,10 @@ async function resolveIssue(issueId, status, rejectReason) {
 function updateBatchActionBar() {
     const checked = document.querySelectorAll('.issue-checkbox:checked');
     const bar = document.getElementById('batchActionBar');
-    document.getElementById('selectedIssueCount').textContent = checked.length;
-    bar.classList.toggle('hidden', checked.length === 0);
+    if (bar) {
+        document.getElementById('selectedIssueCount').textContent = checked.length;
+        bar.classList.toggle('hidden', checked.length === 0);
+    }
 }
 
 async function batchAcceptIssues() {
@@ -654,121 +930,661 @@ async function batchResolve(issues, successMsg) {
         });
         if (!res.ok) throw new Error('操作失败');
         showToast(successMsg, 'success');
-        loadStructuredReview(currentTaskId);
+        loadStructuredReview(taskId);
     } catch (err) {
         showToast('操作失败: ' + err.message, 'error');
     }
 }
 
-function maskSensitive(text) {
-    if (!text || typeof text !== 'string') return text;
-    return text
-        .replace(/(oauth2:)[^@]+(@)/g, '$1****$2')
-        .replace(/(glpat-)[a-zA-Z0-9_-]+/gi, '$1****')
-        .replace(/([a-zA-Z0-9_-]+:)[a-zA-Z0-9_-]+(@[a-zA-Z0-9._:-]+)/g, '$1****$2')
-        .replace(/(Bearer\s+)[a-zA-Z0-9_.-]{10,}/gi, '$1****')
-        .replace(/(\bsk-)[a-zA-Z0-9]{20,}/g, '$1****')
-        .replace(/(api[_-]?key\s*[:=]\s*)\S+/gi, '$1****')
-        .replace(/(password\s*[:=]\s*)\S+/gi, '$1****')
-        .replace(/(passwd\s*[:=]\s*)\S+/gi, '$1****')
-        .replace(/(secret\s*[:=]\s*)\S+/gi, '$1****');
-}
+// ========== 聊天对话相关（完整复制 tasks.html 逻辑） ==========
+async function loadChatMessages() {
+    const contentEl = document.getElementById('chatMessages');
+    contentEl.innerHTML = '<div class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin mr-2"></i>加载对话中...</div>';
 
-function showToast(message, type = 'info') {
-    const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
-    const toast = document.createElement('div');
-    toast.className = `fixed top-4 right-4 ${colors[type] || colors.info} text-white px-4 py-2 rounded-lg shadow-lg z-50 transition-opacity duration-300`;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
-}
-
-// 查看日志
-async function viewLogs(id) {
+    // 检查 session
     try {
-        const res = await apiFetch(`${API_BASE}/tasks/${id}`);
-        const data = await res.json();
-        const task = data.data;
-        
-        let content = '';
-        let promptContent = task.ai_prompt || '';
-        if (promptContent) {
-            promptContent = promptContent.replace(/^@AI\s*/i, '').trim();
+        const taskRes = await apiFetch(`${API_BASE}/tasks/${taskId}`);
+        const taskData = await taskRes.json();
+        const task = taskData.data;
+        if (task?.opencode_session_id) {
+            chatHasSession = true;
+            const metaEl = document.getElementById('chatSessionMeta');
+            metaEl.classList.remove('hidden');
+            metaEl.textContent = `Session: ${task.opencode_session_id}`;
+        } else {
+            contentEl.innerHTML = '<div class="text-center text-gray-400 py-8">该任务没有关联的 session 记录</div>';
+            return;
         }
-        
-        if (promptContent) {
-            content += '<div class="mb-4"><div class="text-yellow-400 font-bold mb-2">用户输入</div><div class="text-white bg-gray-800 p-3 rounded">' + marked.parse(maskSensitive(promptContent)) + '</div></div>';
-        }
-        if (task.ai_response) {
-            content += '<div class="mb-4"><div class="text-green-400 font-bold mb-2">AI回复</div><div class="text-white bg-gray-800 p-3 rounded">' + marked.parse(maskSensitive(task.ai_response)) + '</div></div>';
-        }
-        if (task.status === 'failed' && task.error_msg) {
-            content += '<div class="mt-4"><div class="text-red-400 font-bold mb-2">失败日志</div><div class="text-white bg-red-900 p-3 rounded">' + marked.parse(task.error_msg) + '</div></div>';
-        }
-        if (!content) {
-            content = '<div class="text-gray-500">暂无数据</div>';
-        }
-        
-        // 在新窗口打开日志
-        const win = window.open('', '_blank', 'width=900,height=700');
-        win.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head><title>任务日志 #${id}</title>
-            <link rel="stylesheet" href="/static/fontawesome/6.5.0/css/all.min.css">
-            <script src="/static/js/marked.min.js"><\/script>
-            <link rel="stylesheet" href="/static/css/highlight-github-dark.min.css">
-            <script src="/static/js/highlight.min.js"><\/script>
-            <style>
-                body { background: #1f2937; color: #e5e7eb; padding: 20px; font-family: sans-serif; line-height: 1.6; }
-                h2 { color: #60a5fa; border-bottom: 1px solid #374151; padding-bottom: 10px; }
-                pre { background: #111827; padding: 16px; border-radius: 8px; overflow-x: auto; }
-                code { background: #374151; padding: 2px 4px; border-radius: 3px; }
-                a { color: #60a5fa; }
-            </style></head>
-            <body>
-                <h2><i class="fas fa-file-alt mr-2"></i>任务日志 #${id}</h2>
-                <div>${content}</div>
-                <script>hljs?.highlightAll();<\/script>
-            </body>
-            </html>
-        `);
-        win.document.close();
     } catch (e) {
-        showToast('加载失败: ' + e.message, 'error');
+        contentEl.innerHTML = `<div class="text-center text-red-400 py-8">获取任务信息失败: ${e.message}</div>`;
+        return;
+    }
+
+    try {
+        const res = await apiFetch(`${API_BASE}/tasks/${taskId}/messages`);
+        if (!res.ok) throw new Error((await res.json()).error || '加载失败');
+        const data = await res.json();
+        const messages = data.data || [];
+
+        if (messages.length === 0) {
+            contentEl.innerHTML = '<div class="text-center text-gray-400 py-8">暂无对话记录</div>';
+        } else {
+            renderChatMessages(messages);
+        }
+
+        if (chatHasSession) connectChatSSE();
+        setTimeout(() => { contentEl.scrollTop = contentEl.scrollHeight; }, 50);
+    } catch (e) {
+        contentEl.innerHTML = `<div class="text-center text-red-400 py-8"><i class="fas fa-exclamation-circle mr-2"></i>${e.message}</div>`;
     }
 }
 
-// 实时对话 - 打开独立弹窗
-async function viewMessages(id) {
-    // 使用现有弹框逻辑，跳转到 tasks.html 的 messagesModal
-    // 或者这里我们直接导航回 tasks.html 的弹框
-    // 暂时简单实现为跳转回 tasks.html 触发弹框
-    window.location.href = `tasks.html?openMessageTaskId=${id}`;
+function renderChatMessages(messages) {
+    const contentEl = document.getElementById('chatMessages');
+    let totalInput = 0, totalOutput = 0;
+    const html = messages.map((msg, idx) => {
+        const role = msg.info?.role || 'unknown';
+        const isUser = role === 'user';
+        if (msg.info?.tokens?.input) totalInput += msg.info.tokens.input;
+        if (msg.info?.tokens?.output) totalOutput += msg.info.tokens.output;
+
+        const avatar = isUser
+            ? `<div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-xs shadow-sm flex-shrink-0"><i class="fas fa-user"></i></div>`
+            : `<div class="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white text-xs shadow-sm flex-shrink-0"><i class="fas fa-robot"></i></div>`;
+        const name = isUser ? '你' : 'AI';
+
+        const parts = msg.parts || [];
+        const sections = [];
+        parts.forEach(part => {
+            switch (part.type) {
+                case 'text':
+                    if (part.text) sections.push({ type: 'text', html: marked.parse(maskSensitive(part.text)) });
+                    break;
+                case 'reasoning':
+                    if (part.text) {
+                        const rid = 'reasoning-' + idx + '-' + Math.random().toString(36).substr(2, 5);
+                        sections.push({
+                            type: 'reasoning',
+                            html: `<div class="my-2 rounded-lg overflow-hidden border border-yellow-200 w-full">
+                                <div class="cursor-pointer bg-yellow-50 hover:bg-yellow-100 px-3 py-1.5 text-xs text-yellow-700 font-medium flex items-center justify-between transition-colors" onclick="toggleCollapse('${rid}')">
+                                    <span><i class="fas fa-brain mr-1"></i>思考过程</span>
+                                    <i class="fas fa-chevron-down text-yellow-500 transition-transform duration-200" id="${rid}-icon"></i>
+                                </div>
+                                <div id="${rid}" class="hidden">
+                                    <div class="p-3 text-sm text-gray-700 markdown-body">${marked.parse(maskSensitive(part.text))}</div>
+                                </div>
+                            </div>`
+                        });
+                    }
+                    break;
+                case 'tool': {
+                    const toolName = part.tool || 'tool';
+                    const tid = 'tool-' + idx + '-' + Math.random().toString(36).substr(2, 5);
+                    sections.push({
+                        type: 'tool',
+                        html: `<div class="my-1 rounded-lg overflow-hidden border border-gray-200 w-full">
+                            <div class="cursor-pointer bg-gray-50 hover:bg-gray-100 px-3 py-1.5 text-xs text-gray-600 font-medium flex items-center justify-between transition-colors" onclick="toggleCollapse('${tid}')">
+                                <span><i class="fas fa-wrench mr-1"></i>工具: ${escapeHtml(toolName)}</span>
+                                <i class="fas fa-chevron-down text-gray-400 transition-transform duration-200" id="${tid}-icon"></i>
+                            </div>
+                            <div id="${tid}" class="hidden">${renderToolPart(part)}</div>
+                        </div>`
+                    });
+                    break;
+                }
+                case 'step-start':
+                    sections.push({ type: 'step-start', html: '<div class="my-1 flex items-center gap-2 text-xs text-gray-400"><i class="fas fa-play-circle text-blue-400"></i><span>步骤开始</span></div>' });
+                    break;
+                case 'step-finish':
+                    sections.push({ type: 'step-finish', html: '<div class="my-1 flex items-center gap-2 text-xs text-gray-400"><i class="fas fa-check-circle text-green-400"></i><span>步骤完成</span></div>' });
+                    break;
+            }
+        });
+        if (sections.length === 0) sections.push({ type: 'empty', html: '<span class="text-gray-400 italic text-sm">（无内容）</span>' });
+
+        const bodyHtml = sections.map(s => s.html).join('');
+        return `<div class="flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}">
+            ${isUser ? '' : avatar}
+            <div class="${isUser ? 'max-w-[720px] min-w-[80px]' : 'flex-1 min-w-0 max-w-[720px]'}">
+                <div class="flex items-center gap-2 mb-1 ${isUser ? 'justify-end' : ''} text-xs text-gray-400">
+                    <span class="font-medium text-gray-600">${name}</span>
+                    ${msg.info?.finish ? `<span class="text-green-600 text-[10px] bg-green-50 px-1.5 py-0.5 rounded">${msg.info.finish}</span>` : ''}
+                </div>
+                <div class="bg-white text-gray-800 border border-gray-200 rounded-2xl ${isUser ? 'rounded-tr-sm' : 'rounded-tl-sm'} px-4 py-3 text-sm shadow-sm">
+                    <div class="markdown-body">${bodyHtml}</div>
+                </div>
+            </div>
+            ${isUser ? avatar : ''}
+        </div>`;
+    }).join('');
+
+    contentEl.innerHTML = html;
+    document.getElementById('chatTokenMeta').textContent = `${messages.length} 条 · In:${totalInput.toLocaleString()} · Out:${totalOutput.toLocaleString()}`;
+    if (typeof hljs !== 'undefined') {
+        contentEl.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+    }
 }
 
-function retryTask(id) {
-    apiFetch(`${API_BASE}/tasks/${id}/retry`, { method: 'POST' })
-        .then(() => showToast('任务已重试', 'success'))
-        .catch(e => showToast('重试失败: ' + e.message, 'error'));
+function renderToolPart(part) {
+    const tool = part.tool || '';
+    const state = part.state || {};
+    const title = state.title || '';
+    const safeInput = state.input || {};
+    const inputStr = (typeof safeInput === 'string') ? safeInput : (safeInput.command || safeInput.pattern || safeInput.name || JSON.stringify(safeInput));
+
+    switch (tool) {
+        case 'read': {
+            const output = state.output || '';
+            return `<div class="my-2 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                <div class="bg-gray-100 px-3 py-1.5 text-xs text-gray-600 flex items-center justify-between border-b border-gray-200">
+                    <span class="font-medium"><i class="fas fa-file-alt mr-1 text-blue-500"></i>读取文件${title ? ' · ' + escapeHtml(title) : ''}</span>
+                </div>
+                <pre class="bg-gray-900 text-gray-100 p-3 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(maskSensitive(output))}</code></pre>
+            </div>`;
+        }
+        case 'bash': {
+            const output = state.output || '';
+            const cmd = safeInput.command || inputStr || '';
+            return `<div class="my-2 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                <div class="bg-gray-800 px-3 py-1.5 text-xs text-gray-300 flex items-center justify-between">
+                    <span class="font-medium"><i class="fas fa-terminal mr-1 text-green-400"></i>Bash 终端</span>${title ? `<span class="text-gray-500">${escapeHtml(title)}</span>` : ''}</div>
+                <div class="p-0">
+                    <div class="bg-gray-900 border-b border-gray-700 px-3 py-1.5">
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Input</div>
+                        <pre class="text-gray-300 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(maskSensitive(cmd))}</code></pre>
+                    </div>
+                    <div class="bg-gray-900 px-3 py-1.5">
+                        <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Output</div>
+                        <pre class="text-green-400 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(maskSensitive(output))}</code></pre>
+                    </div>
+                </div>
+            </div>`;
+        }
+        case 'skill': {
+            const output = state.output || '';
+            return `<div class="my-2 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                <div class="bg-purple-50 px-3 py-1.5 text-xs text-purple-700 flex items-center justify-between border-b border-purple-100">
+                    <span class="font-medium"><i class="fas fa-magic mr-1"></i>${escapeHtml(safeInput.name || 'Skill')}</span>
+                    <span class="bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded text-[10px]">Skill</span>
+                </div>
+                <div class="bg-white p-3 text-sm text-gray-700 markdown-body">${marked.parse(maskSensitive(output || ''))}</div>
+            </div>`;
+        }
+        case 'glob': {
+            const output = state.output || '';
+            const pattern = safeInput.pattern || inputStr || '';
+            return `<div class="my-2 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                <div class="bg-gray-100 px-3 py-1.5 text-xs text-gray-600 flex items-center justify-between border-b border-gray-200">
+                    <span class="font-medium"><i class="fas fa-search mr-1 text-orange-500"></i>文件搜索</span>
+                </div>
+                <div class="p-3 text-xs text-gray-700"><code class="bg-gray-100 px-1.5 py-0.5 rounded text-gray-700">${escapeHtml(pattern)}</code><pre class="mt-1 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(maskSensitive(output))}</pre></div>
+            </div>`;
+        }
+        case 'grep': {
+            const output = state.output || '';
+            return `<div class="my-2 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                <div class="bg-gray-800 px-3 py-1.5 text-xs text-gray-300 flex items-center justify-between border-b border-gray-700">
+                    <span class="font-medium"><i class="fas fa-search-plus mr-1 text-yellow-400"></i>内容搜索</span>
+                </div>
+                <div class="bg-gray-900 px-3 py-1.5">
+                    <pre class="text-green-400 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0"><code class="language-shell">${escapeHtml(maskSensitive(output))}</code></pre>
+                </div>
+            </div>`;
+        }
+        case 'edit': {
+            const oldStr = safeInput.old_string || safeInput.oldString || '';
+            const newStr = safeInput.new_string || safeInput.newString || '';
+            return `<div class="my-2 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                <div class="bg-blue-50 px-3 py-1.5 text-xs text-blue-700 flex items-center justify-between border-b border-blue-100">
+                    <span class="font-medium"><i class="fas fa-edit mr-1 text-blue-500"></i>编辑文件</span>
+                </div>
+                <div class="p-0">
+                    ${oldStr ? `<div class="bg-red-50 border-b border-red-100 px-3 py-1.5"><div class="text-[10px] text-red-400 uppercase tracking-wider mb-1">移除</div><pre class="text-red-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(maskSensitive(oldStr))}</pre></div>` : ''}
+                    ${newStr ? `<div class="bg-green-50 border-b border-green-100 px-3 py-1.5"><div class="text-[10px] text-green-400 uppercase tracking-wider mb-1">替换为</div><pre class="text-green-700 text-xs overflow-x-auto whitespace-pre-wrap break-words m-0">${escapeHtml(maskSensitive(newStr))}</pre></div>` : ''}
+                </div>
+            </div>`;
+        }
+        default:
+            return `<div class="my-2 bg-gray-50 p-3 rounded-lg text-xs text-gray-600"><pre class="overflow-x-auto">${escapeHtml(JSON.stringify(state, null, 2))}</pre></div>`;
+    }
 }
 
-// 加载当前用户
-async function loadUser() {
+function toggleCollapse(id) {
+    const el = document.getElementById(id);
+    const icon = document.getElementById(id + '-icon');
+    if (el) el.classList.toggle('hidden');
+    if (icon) icon.style.transform = el.classList.contains('hidden') ? '' : 'rotate(180deg)';
+}
+
+// ========== SSE 流式对话（完整复制自 tasks.html 对话系统） ==========
+// Part 类型和内容缓存（用于增量渲染） 
+const chatPartTypeMap = {};
+const chatPartContentMap = {};
+
+function connectChatSSE() {
+    if (chatEventSource) {
+        chatEventSource.close();
+        chatEventSource = null;
+        console.log('[Chat SSE] closed prev connection');
+    }
+    const url = `${API_BASE}/tasks/${taskId}/events?token=${encodeURIComponent(getToken())}`;
+    chatEventSource = new EventSource(url);
+
+    chatEventSource.onopen = () => console.log('[Chat SSE] opened');
+
+    chatEventSource.addEventListener('connected', () => {
+        console.log('[Chat SSE] connected');
+    });
+
+    // 文本增量（reasoning / text）
+    chatEventSource.addEventListener('delta', (e) => {
+        // 收到 AI 首包，移除 loading 占位
+        removeChatLoadingPlaceholder();
+
+        let data;
+        try { data = JSON.parse(e.data); } catch(err) {
+            console.warn('[Chat SSE] delta fallback to plain text');
+            chatAppendPlainText(e.data);
+            return;
+        }
+        const { delta, partID, inferredType, tool, state } = data;
+        if (!partID) { chatAppendPlainText(delta); return; }
+        if (!chatPartTypeMap[partID]) {
+            chatPartTypeMap[partID] = { type: inferredType || 'unknown', tool, state };
+        }
+        chatPartContentMap[partID] = (chatPartContentMap[partID] || '') + delta;
+        chatAppendStreamingDelta(delta, partID, chatPartTypeMap[partID], chatPartContentMap);
+    });
+
+    // part_updated 事件（tool / reasoning 的完整元数据更新）
+    chatEventSource.addEventListener('part_updated', (e) => {
+        let data;
+        try { data = JSON.parse(e.data); } catch(err) { return; }
+        const { partID, type: inferredType, tool, state, text, time } = data;
+        if (!partID || !inferredType) return;
+        chatPartTypeMap[partID] = { type: inferredType, tool, state, time };
+        if (inferredType === 'reasoning' && time && time.end > 0) {
+            const indicator = document.getElementById('reasoning-stream-' + partID + '-indicator');
+            if (indicator) {
+                const durationSec = ((time.end - time.start) / 1000).toFixed(1);
+                indicator.innerHTML = `<i class="fas fa-check text-green-500 text-[10px]"></i><span class="text-green-500 text-[10px]">完成 · ${durationSec}s</span>`;
+                indicator.classList.remove('reasoning-indicator');
+            }
+            return;
+        }
+        if (inferredType === 'tool') {
+            chatRenderStreamingToolCard(partID, chatPartTypeMap[partID]);
+        } else if (text && (inferredType === 'reasoning' || inferredType === 'text')) {
+            chatPartContentMap[partID] = text;
+            chatAppendStreamingDelta('', partID, chatPartTypeMap[partID], chatPartContentMap);
+        }
+    });
+
+    // AI 回复完成
+    chatEventSource.addEventListener('finish', () => {
+        console.log('[Chat SSE] finish');
+        removeChatLoadingPlaceholder(); // 兜底移除（AI回复为空时可能没有delta）
+        const bubble = document.getElementById('streaming-bubble');
+        if (bubble) {
+            bubble.removeAttribute('id');
+            bubble.classList.add('ai-message-final');
+        }
+        document.querySelectorAll('.reasoning-indicator').forEach(ind => {
+            ind.innerHTML = '<i class="fas fa-check text-green-500 text-[10px]"></i><span class="text-green-500 text-[10px]">完成</span>';
+        });
+    });
+
+    chatEventSource.addEventListener('error', (e) => {
+        console.error('[Chat SSE] error', e.data);
+        removeChatLoadingPlaceholder();
+    });
+
+    chatEventSource.onerror = (e) => {
+        console.error('[Chat SSE] connection error/closed', e);
+        removeChatLoadingPlaceholder();
+        const bubble = document.getElementById('streaming-bubble');
+        if (bubble) {
+            bubble.querySelectorAll('.reasoning-indicator').forEach(ind => {
+                ind.innerHTML = '<i class="fas fa-check text-green-500 text-[10px]"></i><span class="text-green-500 text-[10px]">完成</span>';
+            });
+            bubble.removeAttribute('id');
+            bubble.classList.add('ai-message-final');
+        }
+    };
+}
+
+// ---- 简单纯文本追加（fallback） ----
+function chatAppendPlainText(text) {
+    const contentEl = document.getElementById('chatMessages');
+    let bubble = document.getElementById('streaming-bubble');
+    if (!bubble) {
+        bubble = document.createElement('div');
+        bubble.id = 'streaming-bubble';
+        bubble.className = 'mb-4';
+        bubble.innerHTML = `<div class="flex gap-3 justify-start"><div class="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white text-xs shadow-sm flex-shrink-0"><i class="fas fa-robot"></i></div><div class="flex-1 min-w-0 max-w-[720px]"><div class="flex items-center gap-2 mb-1 text-xs text-gray-400"><span class="font-medium text-gray-600">AI</span></div><div class="p-4 bg-white rounded-lg border border-gray-200"><div class="chat-streaming-content text-sm markdown-body"></div></div></div></div>`;
+        contentEl.appendChild(bubble);
+    } else if (contentEl.lastElementChild !== bubble) {
+        contentEl.appendChild(bubble);
+    }
+    const div = bubble.querySelector('.chat-streaming-content');
+    if (div) div.appendChild(document.createTextNode(maskSensitive(text)));
+    contentEl.scrollTop = contentEl.scrollHeight;
+}
+
+// ---- 增量文本渲染（reasoning / text） ----
+function chatAppendStreamingDelta(delta, partID, meta, partContentMap) {
+    const contentEl = document.getElementById('chatMessages');
+    let bubble = document.getElementById('streaming-bubble');
+    if (!bubble) {
+        bubble = document.createElement('div');
+        bubble.id = 'streaming-bubble';
+        bubble.className = 'mb-4';
+        bubble.innerHTML = `<div class="flex gap-3 justify-start"><div class="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white text-xs shadow-sm flex-shrink-0"><i class="fas fa-robot"></i></div><div class="flex-1 min-w-0 max-w-[720px]"><div class="flex items-center gap-2 mb-1 text-xs text-gray-400"><span class="font-medium text-gray-600">AI</span></div><div class="p-4 bg-white rounded-lg border border-gray-200"><div id="chat-streaming-container" class="space-y-1 text-sm"></div></div></div></div>`;
+        contentEl.appendChild(bubble);
+    } else if (contentEl.lastElementChild !== bubble) {
+        contentEl.appendChild(bubble);
+    }
+
+    const container = bubble.querySelector('#chat-streaming-container');
+    const partElId = 'chat-stream-part-' + partID;
+    let partEl = document.getElementById(partElId);
+    const inferredType = meta.type || 'unknown';
+    const fullText = partContentMap[partID] || '';
+
+    if (!partEl) {
+        partEl = document.createElement('div');
+        partEl.id = partElId;
+        partEl.className = 'mb-1';
+        if (inferredType === 'reasoning') {
+            const rid = 'chat-reasoning-stream-' + partID;
+            partEl.innerHTML = `<div class="my-2 rounded-lg overflow-hidden border border-yellow-200 w-full"><div class="cursor-pointer bg-yellow-50 hover:bg-yellow-100 px-3 py-1.5 text-xs text-yellow-700 font-medium flex items-center justify-between transition-colors" onclick="toggleCollapse('${rid}')"><span class="flex items-center gap-2"><i class="fas fa-brain"></i>思考过程<span class="reasoning-indicator flex items-center gap-1" id="${rid}-indicator"><i class="fas fa-circle-notch fa-spin text-yellow-400 text-[10px]"></i><span class="text-yellow-500 text-[10px]">思考中</span></span></span><i class="fas fa-chevron-down text-yellow-500 transition-transform duration-200" id="${rid}-icon"></i></div><div id="${rid}" class="hidden"><div class="chat-stream-body p-3 text-sm text-gray-700 markdown-body"></div></div></div>`;
+        } else {
+            partEl.innerHTML = `<div class="markdown-body chat-stream-body text-sm"></div>`;
+        }
+        container.appendChild(partEl);
+    }
+
+    const body = partEl.querySelector('.chat-stream-body');
+    if (body) {
+        body.innerHTML = marked.parse(maskSensitive(fullText));
+    }
+    contentEl.scrollTop = contentEl.scrollHeight;
+}
+
+// ---- 实时工具卡片渲染 ----
+function chatRenderStreamingToolCard(partID, meta) {
+    const contentEl = document.getElementById('chatMessages');
+    let bubble = document.getElementById('streaming-bubble');
+    if (!bubble) {
+        bubble = document.createElement('div');
+        bubble.id = 'streaming-bubble';
+        bubble.className = 'mb-4';
+        bubble.innerHTML = `<div class="flex gap-3 justify-start"><div class="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white text-xs shadow-sm flex-shrink-0"><i class="fas fa-robot"></i></div><div class="flex-1 min-w-0 max-w-[720px]"><div class="flex items-center gap-2 mb-1 text-xs text-gray-400"><span class="font-medium text-gray-600">AI</span></div><div class="p-4 bg-white rounded-lg border border-gray-200"><div id="chat-streaming-container" class="space-y-1 text-sm"></div></div></div></div>`;
+        contentEl.appendChild(bubble);
+    } else if (contentEl.lastElementChild !== bubble) {
+        contentEl.appendChild(bubble);
+    }
+
+    const container = bubble.querySelector('#chat-streaming-container');
+    const partElId = 'chat-stream-part-' + partID;
+    let partEl = document.getElementById(partElId);
+    const toolName = meta.tool || 'tool';
+    const state = meta.state || {};
+    const status = state.status || 'unknown';
+    const toolPart = { tool: toolName, state: state };
+
+    if (!partEl) {
+        partEl = document.createElement('div');
+        partEl.id = partElId;
+        partEl.className = 'mb-1';
+        container.appendChild(partEl);
+    }
+
+    const cid = 'chat-tool-live-' + partID;
+    const statusIcon = status === 'completed' ? 'fa-check-circle text-green-500' : status === 'running' ? 'fa-spinner fa-spin text-blue-500' : status === 'error' ? 'fa-times-circle text-red-500' : 'fa-wrench text-gray-400';
+    const statusLabel = status === 'completed' ? '完成' : status === 'running' ? '运行中...' : status === 'error' ? '失败' : '等待中...';
+    const statusClass = status === 'completed' ? 'text-green-600' : status === 'running' ? 'text-blue-600' : status === 'error' ? 'text-red-600' : 'text-gray-500';
+
+    partEl.innerHTML = `<div class="my-1 rounded-lg overflow-hidden border border-gray-200 w-full"><div class="cursor-pointer bg-gray-50 hover:bg-gray-100 px-3 py-1.5 text-xs ${statusClass} font-medium flex items-center justify-between" onclick="toggleCollapse('${cid}')"><span class="flex items-center gap-2"><i class="fas ${statusIcon}"></i>${escapeHtml(toolName)}<span class="text-[10px] ${statusClass}">${statusLabel}</span></span><i class="fas fa-chevron-down text-gray-400 transition-transform duration-200" id="${cid}-icon"></i></div><div id="${cid}" class="hidden"><div class="p-3 text-xs text-gray-700">${renderToolPart(toolPart)}</div></div></div>`;
+}
+
+// ---- 发送消息 ----
+async function sendChatMessage() {
+    const input = document.getElementById('chatInput');
+    const content = input.value.trim();
+    if (!content || !currentTask) return;
+
+    // 拦截：如果会话已被删除，禁止发送
+    if (!currentTask.opencode_session_id) {
+        showToast('会话已删除，无法发送消息', 'error');
+        return;
+    }
+
+    const contentEl = document.getElementById('chatMessages');
+
+    // 关闭旧 SSE，固化旧气泡
+    if (chatEventSource) { chatEventSource.close(); chatEventSource = null; }
+    const oldBubble = document.getElementById('streaming-bubble');
+    if (oldBubble) {
+        oldBubble.querySelectorAll('.reasoning-indicator').forEach(ind => {
+            ind.innerHTML = '<i class="fas fa-check text-green-500 text-[10px]"></i><span class="text-green-500 text-[10px]">完成</span>';
+        });
+        oldBubble.removeAttribute('id');
+        oldBubble.classList.add('ai-message-final');
+    }
+    // 清空流式缓存
+    Object.keys(chatPartTypeMap).forEach(k => delete chatPartTypeMap[k]);
+    Object.keys(chatPartContentMap).forEach(k => delete chatPartContentMap[k]);
+
+    // 乐观更新：立即显示用户消息
+    contentEl.insertAdjacentHTML('beforeend', `<div class="flex gap-3 justify-end mb-4"><div class="max-w-[720px]"><div class="flex items-center gap-2 mb-1 justify-end text-xs text-gray-400"><span class="font-medium text-gray-600">你</span></div><div class="bg-white text-gray-800 border border-gray-200 rounded-2xl rounded-tr-sm px-4 py-3 text-sm shadow-sm"><div class="markdown-body">${escapeHtml(maskSensitive(content))}</div></div></div><div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-xs shadow-sm flex-shrink-0"><i class="fas fa-user"></i></div></div>`);
+
+    // 插入 AI loading 占位（填补 POST → SSE 首包空白期）
+    contentEl.insertAdjacentHTML('beforeend', `<div class="ai-loading-placeholder" id="ai-chat-loading"><div class="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white text-xs shadow-sm flex-shrink-0"><i class="fas fa-robot"></i></div><div class="placeholder-body"><div class="spinner-dot"></div><div class="spinner-dot"></div><div class="spinner-dot"></div><span class="placeholder-text">AI 正在思考</span></div></div>`);
+
+    input.value = '';
+    contentEl.scrollTop = contentEl.scrollHeight;
+
     try {
-        const res = await apiFetch(`${API_BASE}/users/me`);
-        const data = await res.json();
-        document.getElementById('currentUser').textContent = data.username || data.email || '未知';
-    } catch(e) {}
+        const res = await apiFetch(`${API_BASE}/tasks/${currentTask.id}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content })
+        });
+        if (!res.ok) throw new Error((await res.json()).error || '发送失败');
+        // 发送成功，立即重建 SSE 连接开始接收新回复
+        // loading 占位会在 SSE 首个 delta / finish / error 时自动移除
+        connectChatSSE();
+    } catch (e) {
+        removeChatLoadingPlaceholder();
+        showToast('发送失败: ' + e.message, 'error');
+    }
 }
 
-// 初始化
+function removeChatLoadingPlaceholder() {
+    const loadingEl = document.getElementById('ai-chat-loading');
+    if (loadingEl) loadingEl.remove();
+}
+
+// 输入框回车发送
+document.addEventListener('DOMContentLoaded', () => {
+    const chatInput = document.getElementById('chatInput');
+    if (chatInput) {
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendChatMessage();
+        });
+    }
+});
+
+// ========== 原始请求相关 ==========
+function renderRawRequest(task) {
+    // AI Response JSON - 可折叠 JSON viewer
+    const jsonEl = document.getElementById('rawResponseJson');
+    if (task.ai_response_json) {
+        try {
+            const obj = JSON.parse(task.ai_response_json);
+            jsonEl.innerHTML = formatJSONViewer(obj);
+        } catch (e) {
+            jsonEl.textContent = task.ai_response_json;
+        }
+    } else {
+        jsonEl.innerHTML = '<div class="text-gray-400">(无)</div>';
+    }
+
+    const modelInfo = task.used_model ? (task.used_model.provider + ' / ' + task.used_model.model_id) : '未记录';
+    document.getElementById('rawModelInfo').textContent = modelInfo;
+}
+
+function formatJSONViewer(obj, key) {
+    if (obj === null) return '<span class="json-null">null</span>';
+    if (typeof obj === 'boolean') return `<span class="json-boolean">${obj}</span>`;
+    if (typeof obj === 'number') return `<span class="json-number">${obj}</span>`;
+    if (typeof obj === 'string') return `<span class="json-string">"${escapeHtml(obj)}"</span>`;
+    if (Array.isArray(obj)) {
+        if (obj.length === 0) return '[ ]';
+        const id = 'json-arr-' + Math.random().toString(36).substr(2, 8);
+        return `<span class="json-toggle" onclick="toggleJSON('${id}')">▼</span>[<span id="${id}-count" class="json-ellipsis"> ${obj.length} items</span><span id="${id}" class="json-viewer">
+            ${obj.map((item, i) => `<div style="padding-left:16px;">${formatJSONViewer(item)}${i < obj.length - 1 ? ',' : ''}</div>`).join('')}
+        </span>]`;
+    }
+    if (typeof obj === 'object') {
+        const keys = Object.keys(obj);
+        if (keys.length === 0) return '{ }';
+        const id = 'json-obj-' + Math.random().toString(36).substr(2, 8);
+        return `<span class="json-toggle" onclick="toggleJSON('${id}')">▼</span>{<span id="${id}-count" class="json-ellipsis"> ${keys.length} keys</span><span id="${id}" class="json-viewer">
+            ${keys.map((k, i) => `<div style="padding-left:16px;"><span class="json-key">"${escapeHtml(k)}"</span>: ${formatJSONViewer(obj[k], k)}${i < keys.length - 1 ? ',' : ''}</div>`).join('')}
+        </span>}`;
+    }
+    return String(obj);
+}
+
+function toggleJSON(id) {
+    const el = document.getElementById(id);
+    const count = document.getElementById(id + '-count');
+    const toggle = el.previousElementSibling;
+    if (el.classList.contains('json-collapsed')) {
+        el.classList.remove('json-collapsed');
+        if (count) count.style.display = 'none';
+        if (toggle) toggle.textContent = '▼';
+    } else {
+        el.classList.add('json-collapsed');
+        if (count) count.style.display = 'inline';
+        if (toggle) toggle.textContent = '▶';
+    }
+}
+
+// ========== 工具函数 ==========
+function getStatusText(status) {
+    const map = { pending: '等待中', running: '运行中', success: '成功', failed: '失败', timeout: '超时', stopped: '已停止', cancelled: '已取消' };
+    return map[status] || status;
+}
+
+function getTriggerSourceBadge(trigger, score) {
+    const labels = { manual: '手动触发', webhook: 'Webhook触发', score_threshold: '低于阈值触发', retry: '重试触发' };
+    const label = labels[trigger] || trigger;
+    const color = trigger === 'score_threshold' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600';
+    return `<span class="text-xs px-2 py-0.5 rounded ${color}">${label}</span>`;
+}
+
+function formatDuration(sec) {
+    if (!sec || sec <= 0) return '-';
+    if (sec < 60) return sec + '秒';
+    const min = Math.floor(sec / 60);
+    const s = sec % 60;
+    return s > 0 ? `${min}分${s}秒` : `${min}分`;
+}
+
+function formatDateTime(dateStr) {
+    if (!dateStr) return '-';
+    const d = new Date(dateStr);
+    return d.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function maskSensitive(text) {
+    if (!text || typeof text !== 'string') return text;
+    return text
+        // GitLab OAuth2: oauth2:glpat-xxx@host → oauth2:****@host
+        .replace(/(oauth2:)[^@]+(@)/g, '$1****$2')
+        // GitLab personal access tokens: glpat-xxx → glpat-****
+        .replace(/(glpat-)[a-zA-Z0-9_-]+/gi, '$1****')
+        // URL Basic Auth: https://user:password@host → https://user:****@host
+        .replace(/(https?:\/\/)[a-zA-Z0-9_-]+:[^@]+(@[a-zA-Z0-9._:-]+)/g, '$1****$2')
+        // Bearer token headers
+        .replace(/(Bearer\s+)[a-zA-Z0-9_.-]{10,}/gi, '$1****')
+        // SK keys
+        .replace(/(\bsk-)[a-zA-Z0-9]{20,}/g, '$1****')
+        // API key patterns
+        .replace(/(api[_-]?key\s*[:=]\s*)\S+/gi, '$1****')
+        // Password patterns
+        .replace(/(password\s*[:=]\s*)\S+/gi, '$1****')
+        .replace(/(passwd\s*[:=]\s*)\S+/gi, '$1****')
+        // Secret patterns
+        .replace(/(secret\s*[:=]\s*)\S+/gi, '$1****')
+        // Token patterns
+        .replace(/(token\s*[:=]\s*)\S+/gi, '$1****');
+}
+
+function showToast(message, type="success") {
+    const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+    const toast = document.createElement('div');
+    toast.className = `toast ${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function showReviewMarkdownModal() {
+    document.getElementById('reviewMarkdownModal').style.display = 'flex';
+}
+
+function hideReviewMarkdownModal() {
+    document.getElementById('reviewMarkdownModal').style.display = 'none';
+}
+
+function copyReviewMarkdown() {
+    const content = currentStructuredReview && currentStructuredReview.markdown_comment ? currentStructuredReview.markdown_comment : '';
+    if (!content) {
+        showToast('没有可复制的内容', 'error');
+        return;
+    }
+    navigator.clipboard.writeText(content).then(() => {
+        showToast('Markdown 已复制到剪贴板', 'success');
+    }).catch(() => {
+        showToast('复制失败', 'error');
+    });
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
     await loadReviewCategories();
-    loadUser();
     loadTask();
 });
 </script>
+    <!-- 推送给 GitLab 的评审报告弹窗 -->
+    <div id="reviewMarkdownModal" class="fixed inset-0 bg-black/60 items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl w-[900px] max-h-[90vh] flex flex-col shadow-2xl">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i class="fab fa-gitlab text-blue-600 text-xl"></i>
+                    <h3 class="font-bold text-gray-800">推送给 GitLab 的评审报告</h3>
+                </div>
+                <button onclick="hideReviewMarkdownModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 bg-gray-50">
+                <div id="reviewMarkdownContent" class="markdown-body bg-white p-6 rounded-lg border shadow-sm">
+                    <div class="text-gray-400 text-center py-8">暂无评审报告内容</div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t bg-gray-50 rounded-b-xl text-center">
+                <span class="text-xs text-gray-400">此报告已通过 GitLab API 推送至 Merge Request 评论</span>
+            </div>
+        </div>
+    </div>
+
     <script defer src="/static/js/tailwindcss.min.js"></script>
 </body>
 </html>

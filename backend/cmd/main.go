@@ -257,6 +257,8 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			task.GET("/:id/messages", h.Messages)
 			task.POST("/:id/messages", h.SendMessage)
 			task.GET("/:id/events", h.SubscribeEvents)
+			task.GET("/:id/diff", h.GetDiff)           // 获取任务 diff 文件内容
+			task.GET("/:id/rules", h.ListTaskReviewRules) // 获取任务实际使用的评审规则
 			task.GET("/:id/review-comments", h.ListReviewComments)
 			task.POST("/:id/retry", h.Retry)
 			task.POST("/:id/stop", h.Stop)

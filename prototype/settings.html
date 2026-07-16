@@ -1067,7 +1067,7 @@ function previewTemplate() {
                     <td class="px-4 py-3 text-gray-500">${formatDate(l.CreatedAt)}</td>
                     <td class="px-4 py-3 text-xs text-gray-600">${l.username || '-'}</td>
                     <td class="px-4 py-3"><span class="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-xs">${l.OpType || '-'}</span></td>
-                    <td class="px-4 py-3">${l.OpObject || '-'}</td>
+                    <td class="px-4 py-3 max-w-[300px] truncate" title="${(l.OpObject || '').replace(/"/g, '&quot;')}">${l.OpObject || '-'}</td>
                     <td class="px-4 py-3"><span class="${l.OpResult === 'success' ? 'text-green-600' : 'text-red-600'}"><i class="fas fa-${l.OpResult === 'success' ? 'check' : 'times'} mr-1"></i>${resultMap[l.OpResult] || l.OpResult || '-'}</span></td>
                     <td class="px-4 py-3 text-gray-500">${l.RequestIP || '-'}</td>
                 </tr>

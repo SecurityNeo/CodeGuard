@@ -995,19 +995,19 @@ const reportTemplate = `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitiona
 <br><br>
 <table cellpadding="0" cellspacing="0" border="0" width="852">
   <tr>
-    <td style="padding:6px 8px;border-bottom:1px solid #e0e0e0;"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>项目</b></font></td>
-    <td style="padding:6px 8px;border-bottom:1px solid #e0e0e0;"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>MR 标题</b></font></td>
-    <td align="center" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>作者</b></font></td>
-    <td align="center" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>评分</b></font></td>
-    <td align="right" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>变更量</b></font></td>
+    <td width="12%" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>项目</b></font></td>
+    <td width="53%" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>MR 标题</b></font></td>
+    <td width="20%" align="center" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>作者</b></font></td>
+    <td width="5%" align="center" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>评分</b></font></td>
+    <td width="10%" align="center" style="padding:6px 8px;border-bottom:1px solid #e0e0e0;"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666"><b>变更量</b></font></td>
   </tr>
 {{range .LowQualityList}}
   <tr>
-    <td style="padding:8px;border-bottom:1px solid #f0f0f0;" valign="top"><font face="Arial,Helvetica,sans-serif" size="1" color="#333333"><b>{{.Project}}</b></font></td>
-    <td style="padding:8px;border-bottom:1px solid #f0f0f0;" valign="top"><font face="Arial,Helvetica,sans-serif" size="1" color="#333333">{{.Title}}</font></td>
-    <td align="center" style="padding:8px;border-bottom:1px solid #f0f0f0;" valign="top"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666">{{.DisplayName}}</font></td>
-    <td align="center" style="padding:8px;border-bottom:1px solid #f0f0f0;" valign="top"><font face="Arial,Helvetica,sans-serif" size="2" color="#c62828"><b>{{printf "%.0f" .Score}}</b></font></td>
-    <td align="right" style="padding:8px;border-bottom:1px solid #f0f0f0;" valign="top"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666">+{{.Additions}} / -{{.Deletions}}</font></td>
+    <td width="12%" style="padding:8px;border-bottom:1px solid #f0f0f0;" valign="top"><font face="Arial,Helvetica,sans-serif" size="1" color="#333333"><b>{{.Project}}</b></font></td>
+    <td width="53%" style="padding:8px;border-bottom:1px solid #f0f0f0;word-break:break-all;" valign="top"><font face="Arial,Helvetica,sans-serif" size="1" color="#333333">{{.Title}}</font></td>
+    <td width="20%" align="center" style="padding:8px;border-bottom:1px solid #f0f0f0;" valign="top"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666">{{.DisplayName}}</font></td>
+    <td width="5%" align="center" style="padding:8px;border-bottom:1px solid #f0f0f0;" valign="top"><font face="Arial,Helvetica,sans-serif" size="2" color="#c62828"><b>{{printf "%.0f" .Score}}</b></font></td>
+    <td width="10%" align="center" style="padding:8px;border-bottom:1px solid #f0f0f0;" valign="top"><font face="Arial,Helvetica,sans-serif" size="1" color="#666666">+{{.Additions}} / -{{.Deletions}}</font></td>
   </tr>
 {{end}}
 </table>

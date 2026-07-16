@@ -327,3 +327,102 @@ func (h *TaskHandler) Callback(c *gin.Context) {
 	zap.L().Info("task callback", zap.Any("body", req))
 	c.JSON(200, gin.H{"message": "callback received"})
 }
+
+// GetDiff 获取任务关联的指定文件的 diff 内容（实时从 GitLab 拉取）
+// 参数: file 文件路径，不传则返回所有文件的 diff
+func (h *TaskHandler) GetDiff(c *gin.Context) {
+	user, ok := middleware.GetUser(c)
+	if !ok {
+		c.JSON(401, gin.H{"error": "未登录"})
+		return
+	}
+
+	id, _ := strconv.Atoi(c.Param("id"))
+	task, err := service.NewTaskService().Get(uint(id))
+	if err != nil {
+		c.JSON(404, gin.H{"error": "not found"})
+		return
+	}
+
+	// 权限检查
+	if user.Role != model.RoleAdmin && task.MRAuthor != user.GitlabUsername {
+		c.JSON(403, gin.H{"error": "无权查看此任务"})
+		return
+	}
+
+	if task.MRMergeID == 0 || task.ProjectID == 0 {
+		c.JSON(400, gin.H{"error": "任务无关联 MR"})
+		return
+	}
+
+	// 拉取 diff（复用 service 逻辑）
+	diffFiles, err := service.NewTaskService().GetTaskDiffFiles(*task)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	filePath := c.Query("file")
+	if filePath != "" {
+		// 返回指定文件
+		for _, df := range diffFiles {
+			if np, ok := df["new_path"].(string); ok && np == filePath {
+				c.JSON(200, gin.H{"code": 0, "data": df})
+				return
+			}
+		}
+		c.JSON(404, gin.H{"error": "file not found in diff"})
+		return
+	}
+
+	// 返回全部
+	c.JSON(200, gin.H{"code": 0, "data": diffFiles})
+}
+
+// ListTaskReviewRules 获取任务实际使用的评审规则（含截断记录）
+func (h *TaskHandler) ListTaskReviewRules(c *gin.Context) {
+	user, ok := middleware.GetUser(c)
+	if !ok {
+		c.JSON(401, gin.H{"error": "未登录"})
+		return
+	}
+
+	id, _ := strconv.Atoi(c.Param("id"))
+	task, err := service.NewTaskService().Get(uint(id))
+	if err != nil {
+		c.JSON(404, gin.H{"error": "not found"})
+		return
+	}
+
+	// 权限检查
+	if user.Role != model.RoleAdmin && task.MRAuthor != user.GitlabUsername {
+		c.JSON(403, gin.H{"error": "无权查看此任务"})
+		return
+	}
+
+	selected, truncated, total, err := service.NewTaskService().ListTaskReviewRules(task.ID)
+	if err != nil {
+		zap.L().Error("load task review rules failed", zap.Uint("task_id", task.ID), zap.Error(err))
+		c.JSON(500, gin.H{"error": "加载规则列表失败"})
+		return
+	}
+
+	// 获取模版配置中的 max_rules_per_review
+	maxRules := 5
+	var template model.ProjectTemplate
+	if task.Project.TemplateID > 0 {
+		if err := model.DB.First(&template, task.Project.TemplateID).Error; err == nil && template.MaxRulesPerReview > 0 {
+			maxRules = template.MaxRulesPerReview
+		}
+	}
+
+	c.JSON(200, gin.H{
+		"code": 0,
+		"data": gin.H{
+			"total":     total,
+			"selected":  selected,
+			"truncated": truncated,
+			"max_rules": maxRules, // 返回实际配置的 max_rules_per_review
+		},
+	})
+}

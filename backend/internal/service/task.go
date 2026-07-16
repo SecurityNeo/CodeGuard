@@ -20,6 +20,7 @@ import (
 	"github.com/ai-optimizer/backend/pkg/gitlab"
 	"github.com/ai-optimizer/backend/pkg/llm"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 type TaskService struct {
@@ -294,6 +295,8 @@ func (s *TaskService) ExecuteWithComment(taskID uint, commentOverride string) er
 	}
 
 	model.DB.Model(&task).Select("OpencodeSessionID", "AIResponse", "Status", "CompletedAt", "DurationSec").Where("status = ?", model.TaskRunning).Updates(task)
+	// chat 任务也获取 diff 元信息用于详情页展示（异步）
+	s.SaveChatTaskDiffFiles(task.ID)
 	zap.L().Info("task saved to DB", zap.Uint("task_id", task.ID), zap.Int("duration_sec", task.DurationSec))
 
 	zap.L().Info("task completed", zap.Uint("task_id", task.ID), zap.String("session_id", sessionID))
@@ -472,7 +475,7 @@ func (s *TaskService) Retry(taskID uint, userReviewComment string, selectedComme
 		var selected []model.TaskReviewComment
 		if err := model.DB.Where("task_id = ? AND id IN ?", taskID, selectedCommentIDs).Order("retry_round asc").Find(&selected).Error; err == nil {
 			for _, c := range selected {
-				injectedParts = append(injectedParts, fmt.Sprintf("【第%d次复核】%s", c.RetryRound, c.Content))
+				injectedParts = append(injectedParts, fmt.Sprintf("- 【第%d次复核】%s", c.RetryRound, c.Content))
 			}
 		}
 	}
@@ -489,9 +492,9 @@ func (s *TaskService) Retry(taskID uint, userReviewComment string, selectedComme
 			zap.L().Error("create task review comment failed", zap.Error(err))
 			return fmt.Errorf("保存复核意见失败: %w", err)
 		}
-		injectedParts = append(injectedParts, fmt.Sprintf("【第%d次复核】%s", task.RetryCount+1, userReviewComment))
+		injectedParts = append(injectedParts, fmt.Sprintf("- 【第%d次复核】%s", task.RetryCount+1, userReviewComment))
 	}
-	injectedText := strings.Join(injectedParts, "\n\n")
+	injectedText := strings.Join(injectedParts, "\n")
 
 	// 记录操作日志（无论是否有新评论，只要发生重试即记录）
 	opDetail := fmt.Sprintf("任务ID:%d, 选中历史意见:%d条", task.ID, len(selectedCommentIDs))
@@ -845,32 +848,33 @@ func (s *TaskService) ExecuteAIReviewTaskWithComment(taskID uint, commentOverrid
 	// 这里先保存，后续在 runStructuredAIReview 中使用
 	_ = reviewCommentText
 
-	// 执行结构化 AI 评审
-	var userPrompt string
-	reviewReport, score, userPrompt, actualModelID, _, err := s.runStructuredAIReview(task, diffFiles, commitsText)
+	// 执行结构化 AI 评审（传入复核意见）
+	reviewReport, score, _, actualModelID, _, err := s.runStructuredAIReview(task, diffFiles, commitsText, reviewCommentText)
 	if err != nil {
 		return s.failReviewTask(task, err.Error())
 	}
-	// 保存实际使用的 prompt 用于详情展示（入库前对超大 diff 截断）
+	// 生成 diff 文件元信息用于详情页展示
 	var sysCfg model.SystemConfig
 	truncationThreshold := 5000
 	if err := model.DB.First(&sysCfg).Error; err == nil && sysCfg.DiffTruncationThreshold > 0 {
 		truncationThreshold = sysCfg.DiffTruncationThreshold
 	}
-	task.AIPrompt = truncateDiffInPrompt(userPrompt, truncationThreshold)
+	meta := prepareDiffFilesMeta(diffFiles, truncationThreshold)
+	diffFilesJSONBytes, _ := json.Marshal(meta)
+	diffFilesJSON := string(diffFilesJSONBytes)
 
 	// 更新 Task（含实际使用的大模型信息）
 	// 条件更新：只有状态仍是 running 时才写入成功，防止被 TimeoutCheck 覆盖后回写
 	now := time.Now()
 	res := model.DB.Model(&model.Task{}).Where("id = ? AND status = ?", task.ID, model.TaskRunning).Updates(map[string]interface{}{
-		"status":       model.TaskSuccess,
-		"ai_response":  reviewReport,
-		"score_value":  score,
-		"model_id":     actualModelID,
-		"started_at":   startedAt,
-		"completed_at": now,
-		"duration_sec": int(now.Sub(startedAt).Seconds()),
-		"ai_prompt":    truncateDiffInPrompt(userPrompt, truncationThreshold),
+		"status":          model.TaskSuccess,
+		"ai_response":     reviewReport,
+		"score_value":     score,
+		"model_id":        actualModelID,
+		"started_at":      startedAt,
+		"completed_at":    now,
+		"duration_sec":    int(now.Sub(startedAt).Seconds()),
+		"diff_files_json": diffFilesJSON,
 	})
 	if res.Error != nil {
 		zap.L().Error("failed to update review task status to success", zap.Uint("task_id", task.ID), zap.Uint("used_model_id", actualModelID), zap.Error(res.Error))
@@ -1351,11 +1355,39 @@ func min(a, b int) int {
 
 // runStructuredAIReview 使用结构化输出进行 AI 评审
 // 返回：reviewReport(Markdown), score, userPrompt, actualModelID, actualModelName, error
-func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.DiffFile, commitsText string) (string, int, string, uint, string, error) {
-	// 1. 加载项目评审规则配置
+func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.DiffFile, commitsText string, reviewComment string) (string, int, string, uint, string, error) {
+	// 1. 加载所有规则，并与项目配置合并（无配置时 fallback 到全局状态）
+	var allRules []model.ReviewRule
+	if err := model.DB.Find(&allRules).Error; err != nil {
+		zap.L().Warn("load all review rules failed", zap.Uint("project_id", task.ProjectID), zap.Error(err))
+	}
+
 	var configs []model.ProjectReviewConfig
-	if err := model.DB.Where("project_id = ? AND is_enabled = ?", task.ProjectID, true).Find(&configs).Error; err != nil {
+	if err := model.DB.Where("project_id = ?", task.ProjectID).Find(&configs).Error; err != nil {
 		zap.L().Warn("load project review configs failed", zap.Uint("project_id", task.ProjectID), zap.Error(err))
+	}
+	configMap := make(map[uint]model.ProjectReviewConfig)
+	for _, cfg := range configs {
+		configMap[cfg.RuleID] = cfg
+	}
+
+	var rules []model.ReviewRule
+	for _, rule := range allRules {
+		if cfg, hasConfig := configMap[rule.ID]; hasConfig {
+			// 有项目配置，以配置为准
+			if !cfg.IsEnabled {
+				continue
+			}
+			if cfg.Severity != "" {
+				rule.Severity = cfg.Severity
+			}
+		} else {
+			// 无项目配置，fallback 到全局启用状态
+			if !rule.IsEnabled {
+				continue
+			}
+		}
+		rules = append(rules, rule)
 	}
 
 	// 1.5 预加载项目及其模板信息（避免 task.Project 空值）
@@ -1367,34 +1399,7 @@ func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.
 		}
 	}
 
-	// 2. 收集规则列表，批量查询避免 N+1
-	var rules []model.ReviewRule
-	var ruleIDs []uint
-	for _, cfg := range configs {
-		ruleIDs = append(ruleIDs, cfg.RuleID)
-	}
-
-	ruleMap := make(map[uint]model.ReviewRule)
-	if len(ruleIDs) > 0 {
-		var allRules []model.ReviewRule
-		model.DB.Where("id IN ?", ruleIDs).Find(&allRules)
-		for _, r := range allRules {
-			ruleMap[r.ID] = r
-		}
-	}
-
-	for _, cfg := range configs {
-		rule := ruleMap[cfg.RuleID]
-		if rule.ID == 0 {
-			continue // 规则不存在，跳过
-		}
-		if cfg.Severity != "" {
-			rule.Severity = cfg.Severity
-		}
-		rules = append(rules, rule)
-	}
-
-	// 3. 解析维度权重（使用项目模板配置），自动补齐已启用规则的分类维度
+	// 2. 解析维度权重（使用项目模板配置），自动补齐已启用规则的分类维度
 	var dimWeights map[string]engine.DimensionWeight
 	if template.ID > 0 {
 		dimWeights = engine.BuildDimensionWeights(template.DimensionWeights, rules)
@@ -1408,10 +1413,27 @@ func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.
 		maxRules = template.MaxRulesPerReview
 	}
 
-	// 5. 组装 Prompt
+	// 4.1 规则截断：记录传入和被截断的规则
+	selectedRules, truncatedRules := engine.SelectTopRules(rules, maxRules)
+
+	// 5. 解析扣分规则配置
+	deductCfg := engine.DefaultDeductScoreConfig()
+	if template.ID > 0 && template.DeductScoreConfig != "" {
+		if dc, err := engine.ParseDeductScoreConfig(template.DeductScoreConfig); err == nil {
+			deductCfg = dc
+		}
+	}
+
+	// 6. 组装 Prompt - 合并：模板自定义指令 + 人工复核意见
 	customInstruction := ""
 	if template.ID > 0 {
 		customInstruction = template.CustomInstruction
+	}
+	if reviewComment != "" {
+		if customInstruction != "" {
+			customInstruction += "\n\n"
+		}
+		customInstruction += "### 【人工复核意见】（请重点参考以下意见进行审查）\n" + reviewComment
 	}
 
 	promptCtx := &engine.PromptContext{
@@ -1420,7 +1442,8 @@ func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.
 		MRTitle:           task.MRTitle,
 		CustomInstruction: customInstruction,
 		DimensionWeights:  dimWeights,
-		Rules:             rules,
+		DeductScoreConfig: deductCfg,
+		Rules:             selectedRules,
 		MaxRules:          maxRules,
 	}
 	userPrompt := engine.BuildReviewPrompt(promptCtx)
@@ -1497,7 +1520,7 @@ func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.
 		return result.Content, nil
 	}
 
-	parsedResult, err := engine.ParseReviewResult(rawContent, retryCall, retryCfg)
+	parsedResult, err := engine.ParseReviewResult(rawContent, retryCall, retryCfg, deductCfg)
 	if err != nil {
 		return "", 0, userPrompt, actualModelID, actualModelName,
 			fmt.Errorf("结构化输出解析失败: %w", err)
@@ -1506,6 +1529,11 @@ func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.
 	// 10. 持久化结构化数据
 	if err := engine.PersistStructuredReview(task.ID, parsedResult); err != nil {
 		zap.L().Warn("persist structured review failed", zap.Error(err))
+	}
+
+	// 10.5 持久化本次任务使用的规则（传入 + 截断）
+	if err := persistTaskReviewRules(task.ID, selectedRules, truncatedRules); err != nil {
+		zap.L().Warn("persist task review rules failed", zap.Uint("task_id", task.ID), zap.Error(err))
 	}
 
 	// 11. 组装 Markdown 评论
@@ -1538,4 +1566,167 @@ func (s *TaskService) runAIReviewFallback(diffFiles []gitlab.DiffFile, commitsTe
 	// 简单处理：对第一批做结构化评审，其余忽略
 	// 或直接用旧方法
 	return s.runAIReview(diffFiles, commitsText, mrTitle, userPrompt, 0)
+}
+
+// persistTaskReviewRules 持久化任务实际使用的规则（含被截断记录）
+func persistTaskReviewRules(taskID uint, selected []model.ReviewRule, truncated []model.ReviewRule) error {
+	return model.DB.Transaction(func(tx *gorm.DB) error {
+		// 先清理旧记录（幂等写入，避免重试时重复）
+		if err := tx.Where("task_id = ?", taskID).Delete(&model.TaskReviewRule{}).Error; err != nil {
+			return fmt.Errorf("delete old task review rules failed: %w", err)
+		}
+
+		var records []model.TaskReviewRule
+		now := time.Now()
+
+		for i, rule := range selected {
+			records = append(records, model.TaskReviewRule{
+				TaskID:      taskID,
+				RuleID:      &rule.ID,
+				RuleCode:    rule.Code,
+				Name:        rule.Name,
+				Category:    rule.Category,
+				Severity:    rule.Severity,
+				SortOrder:   i + 1,
+				WasSelected: true,
+				IssueCount:  0,
+				CreatedAt:   now,
+			})
+		}
+		for i, rule := range truncated {
+			records = append(records, model.TaskReviewRule{
+				TaskID:      taskID,
+				RuleID:      &rule.ID,
+				RuleCode:    rule.Code,
+				Name:        rule.Name,
+				Category:    rule.Category,
+				Severity:    rule.Severity,
+				SortOrder:   len(selected) + i + 1,
+				WasSelected: false,
+				IssueCount:  0,
+				CreatedAt:   now,
+			})
+		}
+
+		if err := tx.Create(&records).Error; err != nil {
+			return fmt.Errorf("create task review rules failed: %w", err)
+		}
+
+		zap.L().Info("task review rules persisted",
+			zap.Uint("task_id", taskID),
+			zap.Int("selected", len(selected)),
+			zap.Int("truncated", len(truncated)))
+
+		return nil
+	})
+}
+
+// prepareDiffFilesMeta 将 diff 文件列表处理为前端展示所需格式
+// 包含文件名、diff 内容和截断标记
+func prepareDiffFilesMeta(diffFiles []gitlab.DiffFile, threshold int) []map[string]interface{} {
+	const maxDiffChars = 50000 // 单个文件最大存储字符数（约50KB）
+	var result []map[string]interface{}
+	for _, f := range diffFiles {
+		truncated := false
+		preview := ""
+		diffContent := f.Diff
+		block := fmt.Sprintf("```diff\n%s\n```", f.Diff)
+		if utf8.RuneCountInString(block) > threshold {
+			truncated = true
+			lines := strings.Split(f.Diff, "\n")
+			if len(lines) > 20 {
+				preview = strings.Join(lines[:20], "\n")
+				diffContent = preview + "\n... （变更内容过大已截断，请在代码库中查看）\n"
+			}
+		}
+		// 限制未截断文件的存储大小
+		if !truncated && len(diffContent) > maxDiffChars {
+			truncated = true
+			diffContent = diffContent[:maxDiffChars] + "\n... （diff 内容超过存储上限，请在代码库中查看）\n"
+		}
+		result = append(result, map[string]interface{}{
+			"new_path":   f.NewPath,
+			"additions":  f.Additions,
+			"deletions":  f.Deletions,
+			"truncated":  truncated,
+			"diff":       diffContent,
+		})
+	}
+	return result
+}
+
+// SaveChatTaskDiffFiles 在 chat 任务成功完成后，异步获取并保存 diff 元信息
+func (s *TaskService) SaveChatTaskDiffFiles(taskID uint) {
+	go func() {
+		var task model.Task
+		if err := model.DB.Preload("Project").First(&task, taskID).Error; err != nil {
+			zap.L().Warn("save chat diff files: task not found", zap.Uint("task_id", taskID))
+			return
+		}
+		if task.MRMergeID == 0 || task.Project.ID == 0 {
+			return
+		}
+		diffFiles, _, _, err := s.fetchMRDiffFiles(task)
+		if err != nil {
+			zap.L().Warn("save chat diff files: fetch failed", zap.Uint("task_id", taskID), zap.Error(err))
+			return
+		}
+		var sysCfg model.SystemConfig
+		threshold := 5000
+		if err := model.DB.First(&sysCfg).Error; err == nil && sysCfg.DiffTruncationThreshold > 0 {
+			threshold = sysCfg.DiffTruncationThreshold
+		}
+		if len(diffFiles) > maxDiffFiles {
+			diffFiles = diffFiles[:maxDiffFiles]
+		}
+		meta := prepareDiffFilesMeta(diffFiles, threshold)
+		b, _ := json.Marshal(meta)
+		model.DB.Model(&model.Task{}).Where("id = ?", taskID).Update("diff_files_json", string(b))
+		zap.L().Info("chat task diff files saved", zap.Uint("task_id", taskID), zap.Int("files", len(meta)))
+	}()
+}
+
+// GetTaskDiffFiles 获取任务的 diff 文件列表（优先从缓存读取，无缓存时实时获取）
+func (s *TaskService) GetTaskDiffFiles(task model.Task) ([]map[string]interface{}, error) {
+	// 优先从缓存读取
+	if task.DiffFilesJSON != "" && task.DiffFilesJSON != "[]" && task.DiffFilesJSON != "{}" {
+		var cached []map[string]interface{}
+		if err := json.Unmarshal([]byte(task.DiffFilesJSON), &cached); err == nil && len(cached) > 0 {
+			return cached, nil
+		}
+	}
+
+	// 兜底：实时获取
+	if task.MRMergeID == 0 || task.Project.ID == 0 {
+		return nil, nil
+	}
+	diffFiles, _, _, err := s.fetchMRDiffFiles(task)
+	if err != nil {
+		return nil, err
+	}
+	var sysCfg model.SystemConfig
+	threshold := 5000
+	if err := model.DB.First(&sysCfg).Error; err == nil && sysCfg.DiffTruncationThreshold > 0 {
+		threshold = sysCfg.DiffTruncationThreshold
+	}
+	if len(diffFiles) > maxDiffFiles {
+		diffFiles = diffFiles[:maxDiffFiles]
+	}
+	return prepareDiffFilesMeta(diffFiles, threshold), nil
+}
+
+// ListTaskReviewRules 查询任务实际使用的评审规则（含截断记录）
+func (s *TaskService) ListTaskReviewRules(taskID uint) (selected []model.TaskReviewRule, truncated []model.TaskReviewRule, total int, err error) {
+	var rules []model.TaskReviewRule
+	if err := model.DB.Where("task_id = ?", taskID).Order("sort_order ASC").Find(&rules).Error; err != nil {
+		return nil, nil, 0, err
+	}
+	for _, r := range rules {
+		if r.WasSelected {
+			selected = append(selected, r)
+		} else {
+			truncated = append(truncated, r)
+		}
+	}
+	return selected, truncated, len(rules), nil
 }

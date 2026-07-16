@@ -147,7 +147,12 @@ func sendMailWithLogin(addr, from string, to []string, msg []byte, username, pas
 		return fmt.Errorf("close writer failed: %w", err)
 	}
 
-	// 11. QUIT
+	// 11. 读取 DATA 结束后的 250 确认响应
+	if _, _, err := text.ReadResponse(250); err != nil {
+		return fmt.Errorf("data end response failed: %w", err)
+	}
+
+	// 12. QUIT
 	if _, err := text.Cmd("QUIT"); err != nil {
 		return fmt.Errorf("quit failed: %w", err)
 	}

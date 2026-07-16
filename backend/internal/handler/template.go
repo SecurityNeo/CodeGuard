@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/ai-optimizer/backend/internal/engine"
 	"github.com/ai-optimizer/backend/internal/model"
@@ -116,6 +117,29 @@ func (h *TemplateHandler) Update(c *gin.Context) {
 	}
 	if v, ok := req["gitlab_comment_template"]; ok {
 		updates["gitlab_comment_template"] = v.(string)
+	}
+
+	// 扣分规则配置
+	if v, ok := req["deduct_score_config"]; ok {
+		dsStr := v.(string)
+		if dsStr == "" {
+			dsStr = "{}"
+		}
+		// 格式为 JSON: {"critical":10,"high":5,"medium":3,"low":1,"info":0}
+		var dsMap map[string]int
+		if err := json.Unmarshal([]byte(dsStr), &dsMap); err != nil {
+			c.JSON(400, gin.H{"error": "扣分规则配置 JSON 格式无效: " + err.Error()})
+			return
+		}
+		// 校验范围
+		for sev, score := range dsMap {
+			sev = strings.ToLower(sev)
+			if score < 0 || score > 100 {
+				c.JSON(400, gin.H{"error": fmt.Sprintf("扣分值必须在 0-100 之间: %s=%d", sev, score)})
+				return
+			}
+		}
+		updates["deduct_score_config"] = dsStr
 	}
 
 	t, err := service.NewTemplateService().Get(uint(id))
