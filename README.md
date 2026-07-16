@@ -69,6 +69,10 @@
 
 ![任务管理](docs/img/task.png)
 
+### 任务详情
+
+![任务详情](docs/img/task-detail.png)
+
 ### AI评审（MR评论）
 
 ![AI评审](docs/img/comment-ai-codereview.png)
