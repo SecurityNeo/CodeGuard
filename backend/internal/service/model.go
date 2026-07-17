@@ -38,7 +38,7 @@ func (s *ModelService) List(page, pageSize int, keyword string) ([]model.LLMMode
 	}
 
 	if err := db.Scopes(model.Paginate(page, pageSize)).
-		Order("is_default DESC, updated_at DESC").
+		Order("created_at DESC").
 		Find(&models).Error; err != nil {
 		return nil, 0, err
 	}

@@ -20,6 +20,14 @@ func (h *ReviewRuleHandler) List(c *gin.Context) {
 	language := c.Query("language")
 	isEnabled := c.Query("is_enabled")
 	keyword := c.Query("keyword")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "15"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 15
+	}
 
 	db := model.DB.Model(&model.ReviewRule{})
 
@@ -36,14 +44,30 @@ func (h *ReviewRuleHandler) List(c *gin.Context) {
 		db = db.Where("name LIKE ? OR code LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	}
 
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		zap.L().Error("count review rules failed", zap.Error(err))
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
 	var rules []model.ReviewRule
-	if err := db.Order("sort_order ASC, id ASC").Find(&rules).Error; err != nil {
+	if err := db.Order("sort_order ASC, id ASC").
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Find(&rules).Error; err != nil {
 		zap.L().Error("list review rules failed", zap.Error(err))
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(200, gin.H{"code": 0, "data": rules, "total": len(rules)})
+	c.JSON(200, gin.H{
+		"code":      0,
+		"data":      rules,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
 }
 
 // Tree 按语言、维度分组返回规则树
@@ -95,10 +119,15 @@ func (h *ReviewRuleHandler) Create(c *gin.Context) {
 	}
 
 	rule.IsBuiltIn = false // 用户创建的规则标记为非内置
+
+	// 零值穿透写入：用 UpdateColumn 直接操作数据库，绕过 GORM 零值跳过机制
 	if err := model.DB.Create(&rule).Error; err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
+	// 兜底：无论数据库列默认值如何，强制覆盖为 false
+	model.DB.Model(&rule).UpdateColumn("is_built_in", false)
+	rule.IsBuiltIn = false
 
 	// 为所有已有项目自动插入默认配置（默认禁用），确保项目列表统计和规则配置页能正确显示
 	autoCreateProjectReviewConfigs(rule.ID)

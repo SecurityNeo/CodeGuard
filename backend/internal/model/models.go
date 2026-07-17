@@ -138,7 +138,7 @@ type ReviewRule struct {
 	Description string    `gorm:"type:text" json:"description"`
 	Prompt      string    `gorm:"type:text" json:"prompt"`
 	SortOrder   int       `gorm:"default:0" json:"sort_order"`
-	IsBuiltIn   bool      `gorm:"default:true" json:"is_built_in"`
+	IsBuiltIn   bool      `gorm:"default:false" json:"is_built_in"`               // 自定义规则默认false,内置规则由初始化脚本显式设为true
 	IsEnabled   bool      `gorm:"default:true" json:"is_enabled"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`

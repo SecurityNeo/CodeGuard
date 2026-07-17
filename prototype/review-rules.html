@@ -142,6 +142,22 @@
             <div id="rulesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <!-- 动态加载 -->
             </div>
+
+            <!-- 分页控制 -->
+            <div class="flex items-center justify-between mt-6 px-2">
+                <div class="flex items-center gap-2 text-sm text-gray-600">
+                    <span>每页</span>
+                    <select id="pageSizeSelect" onchange="changePageSize()" class="px-2 py-1 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <option value="10">10</option>
+                        <option value="15" selected>15</option>
+                        <option value="20">20</option>
+                        <option value="30">30</option>
+                        <option value="50">50</option>
+                    </select>
+                    <span>条</span>
+                </div>
+                <div id="pagination" class="flex gap-2"></div>
+            </div>
         </div>
     </main>
 </div>
@@ -157,9 +173,12 @@
             </div>
             <div class="flex-1 overflow-y-auto p-6 space-y-4" id="drawerBody">
                 <!-- 动态填充 -->
-            </div>
         </div>
     </div>
+</div>
+
+</body>
+</html>
 </div>
 
 <!-- 创建规则 Modal -->
@@ -170,6 +189,7 @@
             <button onclick="closeCreateModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
         </div>
         <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            <input type="hidden" id="editRuleId" value="">
             <!-- 基础信息 -->
             <div>
                 <h4 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -246,7 +266,7 @@
         </div>
         <div class="px-6 py-4 border-t flex justify-end gap-3 flex-shrink-0">
             <button onclick="closeCreateModal()" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">取消</button>
-            <button onclick="submitCreateRule()" class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">创建规则</button>
+            <button onclick="submitCreateRule()" id="createSubmitBtn" class="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">创建规则</button>
         </div>
     </div>
 </div>
@@ -362,6 +382,10 @@ async function apiFetch(url, options = {}) {
 
 let rulesData = [];
 let categoriesData = [];
+let pendingDeleteRuleId = null;
+let currentPage = 1;
+let pageSize = 15;
+let totalPages = 1;
 
 const severityLabels = { critical: '严重', high: '高危', medium: '中危', low: '低危', info: '提示' };
 const severityColors = { critical: 'text-red-600 bg-red-50', high: 'text-orange-600 bg-orange-50', medium: 'text-yellow-600 bg-yellow-50', low: 'text-blue-600 bg-blue-50', info: 'text-gray-600 bg-gray-50' };
@@ -423,6 +447,8 @@ async function loadRules() {
     const severity = document.getElementById('severityFilter').value;
 
     const params = new URLSearchParams();
+    params.append('page', currentPage);
+    params.append('page_size', pageSize);
     if (keyword) params.append('keyword', keyword);
     if (category) params.append('category', category);
     if (language) params.append('language', language);
@@ -435,8 +461,11 @@ async function loadRules() {
         const res = await apiFetch(API_BASE + '/review-rules?' + params.toString());
         const data = await res.json();
         rulesData = data.data || [];
+        const total = data.total || 0;
+        totalPages = Math.ceil(total / pageSize) || 1;
         renderRules();
-        document.getElementById('totalCount').textContent = rulesData.length;
+        renderPagination(currentPage, totalPages);
+        document.getElementById('totalCount').textContent = total;
     } catch (err) {
         grid.innerHTML = '<div class="col-span-full text-center py-12 text-red-500">加载失败: ' + err.message + '</div>';
     }
@@ -538,6 +567,9 @@ function showRuleDetail(ruleId) {
 
         ${!rule.is_built_in ? `
         <div class="pt-4 border-t flex gap-2">
+            <button onclick="openEditModal(${rule.id})" class="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg text-sm hover:bg-blue-100 transition-colors">
+                <i class="fas fa-edit mr-1"></i>编辑规则
+            </button>
             <button onclick="deleteRule(${rule.id})" class="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm hover:bg-red-100 transition-colors">
                 <i class="fas fa-trash mr-1"></i>删除规则
             </button>
@@ -555,13 +587,59 @@ function closeDetailDrawer() {
 }
 
 async function deleteRule(ruleId) {
-    if (!confirm('确定要删除此自定义规则吗？')) return;
+    const rule = rulesData.find(r => r.id === ruleId);
+    if (!rule) return;
+    pendingDeleteRuleId = ruleId;
+    
+    // 移除之前的弹框
+    const existing = document.getElementById('deleteRuleConfirmDialog');
+    if (existing) existing.remove();
+    
+    // 创建新的遮罩和弹框
+    const overlay = document.createElement('div');
+    overlay.id = 'deleteRuleConfirmDialog';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:99999;display:block;';
+    
+    overlay.innerHTML = `
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:16px;width:440px;max-width:90%;box-shadow:0 20px 25px rgba(0,0,0,0.1);">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
+                <div style="width:40px;height:40px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-exclamation-triangle" style="color:#dc2626;font-size:18px;"></i>
+                </div>
+                <div>
+                    <h4 style="margin:0;font-size:18px;font-weight:bold;color:#111;">确认删除规则</h4>
+                    <p style="margin:2px 0 0 0;font-size:14px;color:#6b7280;">此操作不可撤销，请谨慎操作</p>
+                </div>
+            </div>
+            <div style="margin:20px 0;padding:12px 16px;background:#fef2f2;border-radius:8px;border:1px solid #fee2e2;">
+                <p style="margin:0;font-size:14px;color:#374151;">即将删除规则：<strong style="color:#dc2626;">${rule.name}</strong></p>
+                <p style="margin:8px 0 0 0;font-size:12px;color:#9ca3af;">删除后，该规则将不再用于AI代码评审</p>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;">
+                <button onclick="hideDeleteRuleConfirm()" style="padding:8px 16px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;color:#4b5563;background:#fff;cursor:pointer;">取消</button>
+                <button onclick="executeDeleteRule()" style="padding:8px 16px;border:none;border-radius:8px;font-size:14px;color:#fff;background:#dc2626;cursor:pointer;">确认删除</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+}
+
+function hideDeleteRuleConfirm() {
+    const el = document.getElementById('deleteRuleConfirmDialog');
+    if (el) el.remove();
+    pendingDeleteRuleId = null;
+}
+
+async function executeDeleteRule() {
+    if (!pendingDeleteRuleId) return;
     try {
-        const res = await apiFetch(API_BASE + '/review-rules/' + ruleId, {
+        const res = await apiFetch(API_BASE + '/review-rules/' + pendingDeleteRuleId, {
             method: 'DELETE',
             headers: authHeaders()
         });
         if (!res.ok) throw new Error('删除失败');
+        hideDeleteRuleConfirm();
         closeDetailDrawer();
         loadRules();
         showToast('规则已删除');
@@ -577,10 +655,47 @@ function openCreateModal() {
 
 function closeCreateModal() {
     document.getElementById('createModal').classList.remove('active');
-    setTimeout(() => document.getElementById('createModal').classList.add('hidden'), 200);
+    setTimeout(() => {
+        document.getElementById('createModal').classList.add('hidden');
+        clearCreateForm();
+    }, 200);
+}
+
+function clearCreateForm() {
+    document.getElementById('createCode').value = '';
+    document.getElementById('createName').value = '';
+    document.getElementById('createDescription').value = '';
+    document.getElementById('createPrompt').value = '';
+    document.getElementById('editRuleId').value = '';
+    document.getElementById('createModalTitle').textContent = '创建自定义规则';
+    document.getElementById('createSubmitBtn').textContent = '创建规则';
+    document.getElementById('createCode').disabled = false;
+}
+
+function openEditModal(ruleId) {
+    const rule = rulesData.find(r => r.id === ruleId);
+    if (!rule) return;
+    
+    document.getElementById('editRuleId').value = rule.id;
+    document.getElementById('createCode').value = rule.code;
+    document.getElementById('createCode').disabled = true; // code不可编辑
+    document.getElementById('createName').value = rule.name;
+    document.getElementById('createCategory').value = rule.category;
+    document.getElementById('createLanguage').value = rule.language;
+    document.getElementById('createSeverity').value = rule.severity;
+    document.getElementById('createDescription').value = rule.description || '';
+    document.getElementById('createPrompt').value = rule.prompt || '';
+    document.getElementById('createModalTitle').textContent = '编辑自定义规则';
+    document.getElementById('createSubmitBtn').textContent = '保存修改';
+    
+    document.getElementById('createModal').classList.remove('hidden');
+    document.getElementById('createModal').classList.add('active');
 }
 
 async function submitCreateRule() {
+    const ruleId = document.getElementById('editRuleId').value;
+    const isEdit = !!ruleId;
+    
     const payload = {
         code: document.getElementById('createCode').value.trim(),
         name: document.getElementById('createName').value.trim(),
@@ -597,17 +712,26 @@ async function submitCreateRule() {
     }
 
     try {
-            const res = await apiFetch(API_BASE + '/review-rules', {
+        let res;
+        if (isEdit) {
+            res = await apiFetch(API_BASE + '/review-rules/' + ruleId, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        } else {
+            res = await apiFetch(API_BASE + '/review-rules', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-        if (!res.ok) throw new Error('创建失败');
+        }
+        if (!res.ok) throw new Error(isEdit ? '保存失败' : '创建失败');
         closeCreateModal();
         loadRules();
-        showToast('规则创建成功');
+        showToast(isEdit ? '规则已更新' : '规则创建成功');
     } catch (err) {
-        showToast('创建失败: ' + err.message, 'error');
+        showToast((isEdit ? '保存失败: ' : '创建失败: ') + err.message, 'error');
     }
 }
 
@@ -730,6 +854,53 @@ function closeDeleteCategoryModal() {
     document.getElementById('deleteCategoryModal').classList.remove('active');
     setTimeout(() => document.getElementById('deleteCategoryModal').classList.add('hidden'), 200);
 }
+
+// ========== 分页相关函数 ==========
+function renderPagination(page, pages) {
+    const pg = document.getElementById('pagination');
+    if (!pg) return;
+    if (pages <= 1) {
+        pg.innerHTML = '';
+        return;
+    }
+    let html = '';
+    html += `<button onclick="goPage(${page - 1})" class="px-3 py-1 border rounded text-sm ${page <= 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'}" ${page <= 1 ? 'disabled' : ''}>上一页</button>`;
+    if (page > 3) {
+        html += `<button onclick="goPage(1)" class="px-3 py-1 border rounded text-sm text-gray-500 hover:bg-gray-50">1</button>`;
+        if (page > 4) html += `<span class="px-2 py-1 text-sm text-gray-400">...</span>`;
+    }
+    let start = Math.max(1, page - 2);
+    let end = Math.min(pages, page + 2);
+    if (end === pages) {
+        start = Math.max(1, pages - 4);
+    } else if (start === 1) {
+        end = Math.min(pages, 5);
+    }
+    for (let i = start; i <= end; i++) {
+        html += `<button onclick="goPage(${i})" class="px-3 py-1 border rounded text-sm ${i === page ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}">${i}</button>`;
+    }
+    if (page < pages - 2) {
+        if (page < pages - 3) html += `<span class="px-2 py-1 text-sm text-gray-400">...</span>`;
+        html += `<button onclick="goPage(${pages})" class="px-3 py-1 border rounded text-sm text-gray-500 hover:bg-gray-50">${pages}</button>`;
+    }
+    html += `<button onclick="goPage(${page + 1})" class="px-3 py-1 border rounded text-sm ${page >= pages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'}" ${page >= pages ? 'disabled' : ''}>下一页</button>`;
+    pg.innerHTML = html;
+}
+
+function goPage(page) {
+    if (page < 1 || page > totalPages) return;
+    currentPage = page;
+    loadRules();
+}
+
+function changePageSize() {
+    const sel = document.getElementById('pageSizeSelect');
+    if (!sel) return;
+    pageSize = parseInt(sel.value) || 15;
+    currentPage = 1;
+    loadRules();
+}
+
 async function submitDeleteCategory() {
     const id = document.getElementById('deleteCatId').value;
     try {
@@ -748,5 +919,32 @@ async function submitDeleteCategory() {
 }
 </script>
 <script defer src="/static/js/tailwindcss.min.js"></script>
+
+<!-- 删除规则确认弹框 -->
+<div id="deleteRuleConfirmDialog" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
+    <div style="background: white; padding: 24px; border-radius: 16px; width: 440px; max-width: 90%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); position: relative; z-index: 10000;">
+        <div class="flex items-center gap-3 mb-1">
+            <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
+                <i class="fas fa-exclamation-triangle text-red-600 text-lg"></i>
+            </div>
+            <div>
+                <h4 class="font-bold text-gray-900 text-lg">确认删除规则</h4>
+                <p class="text-sm text-gray-500 mt-0.5">此操作不可撤销，请谨慎操作</p>
+            </div>
+        </div>
+        <div class="my-5 px-4 py-3 bg-red-50 rounded-lg border border-red-100">
+            <p class="text-sm text-gray-700">
+                即将删除规则：
+                <span id="deleteRuleConfirmName" class="font-bold text-red-600">-</span>
+            </p>
+            <p class="text-xs text-gray-400 mt-2">删除后，该规则将不再用于AI代码评审</p>
+        </div>
+        <div class="flex justify-end gap-2">
+            <button onclick="hideDeleteRuleConfirm()" class="px-4 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">取消</button>
+            <button onclick="executeDeleteRule()" class="px-4 py-2 rounded-lg text-sm text-white bg-red-600 hover:bg-red-700">确认删除</button>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
