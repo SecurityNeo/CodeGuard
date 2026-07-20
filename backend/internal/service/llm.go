@@ -94,10 +94,14 @@ func (e *ChainError) Unwrap() error {
 // sysCfgCache 缓存 SystemConfig，避免每次 LLM 调用都查询数据库。
 // 使用 atomic.Value 提供 lock-free 读；写由后台 goroutine + TTL 触发。
 type sysCfgCacheEntry struct {
-	taskTimeoutMin    int
-	maxDiffFiles      int
-	maxTokensPerBatch int
-	fetchedAt         time.Time
+	taskTimeoutMin          int
+	maxDiffFiles            int
+	maxTokensPerBatch       int
+	llmRetryMaxAttempts     int
+	llmRetryInitialDelayMs  int
+	llmRetryBackoffMult     float64
+	llmRetryMaxDelayMs      int
+	fetchedAt               time.Time
 }
 
 var (
@@ -297,13 +301,6 @@ func (s *LLMService) callLLMAPI(taskID *uint, llmModel *model.LLMModel, caller, 
 		return nil, fmt.Errorf("marshal request failed: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return nil, fmt.Errorf("create request failed: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Content-Type", "application/json")
-
 	// AI 评审任务超时时间使用系统配置中的 task_timeout_min
 	timeoutSec := llmModel.TimeoutSec
 	if cached := loadSysCfgCached(); cached != nil && cached.taskTimeoutMin > 0 {
@@ -316,29 +313,93 @@ func (s *LLMService) callLLMAPI(taskID *uint, llmModel *model.LLMModel, caller, 
 	}
 
 	client := newHTTPClient(time.Duration(timeoutSec) * time.Second)
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("LLM API call failed: %w", err)
-	}
-	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read LLM response body failed: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("LLM API error: status=%d, body=%s", resp.StatusCode, sanitizeForLog(string(respBody)))
+	// 重试配置：针对 502/503/504 与网络层瞬时错误做指数退避重试
+	maxAttempts := SysCfgLLMRetryMaxAttempts()
+	initialDelayMs := SysCfgLLMRetryInitialDelayMs()
+	backoffMult := SysCfgLLMRetryBackoffMultiplier()
+	maxDelayMs := SysCfgLLMRetryMaxDelayMs()
+	delay := initialDelayMs
+
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if attempt > 1 {
+			zap.L().Warn("retrying LLM call after transient error",
+				zap.Uint("model_id", llmModel.ID),
+				zap.String("model", llmModel.ModelID),
+				zap.Int("attempt", attempt),
+				zap.Int("max_attempts", maxAttempts),
+				zap.Int("delay_ms", delay),
+				zap.Error(lastErr))
+			time.Sleep(time.Duration(delay) * time.Millisecond)
+			delay = int(float64(delay) * backoffMult)
+			if delay > maxDelayMs {
+				delay = maxDelayMs
+			}
+		}
+
+		// 每次重试需重建 Request（body 是 reader，已被前次 Do 消费完）
+		req, err := http.NewRequest("POST", url, bytes.NewReader(jsonBody))
+		if err != nil {
+			return nil, fmt.Errorf("create request failed: %w", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			// 网络层瞬时错误：可重试
+			lastErr = fmt.Errorf("LLM API call failed: %w", err)
+			continue
+		}
+
+		respBody, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			lastErr = fmt.Errorf("read LLM response body failed: %w", readErr)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("LLM API error: status=%d, body=%s", resp.StatusCode, sanitizeForLog(string(respBody)))
+			if !isRetryableHTTPStatus(resp.StatusCode) {
+				// 不可重试（4xx 业务错误等）→ 立即返回
+				return nil, lastErr
+			}
+			// 502/503/504 → 进入下一轮重试
+			continue
+		}
+
+		// 成功：解析响应
+		var result llm.ChatResponse
+		if err := json.Unmarshal(respBody, &result); err != nil {
+			// JSON 解析失败通常说明上游返回了非预期内容（瞬时），按可重试处理
+			lastErr = fmt.Errorf("parse LLM response failed: %w", err)
+			continue
+		}
+		if len(result.Choices) == 0 {
+			// 空 choices 也是上游瞬时异常，重试
+			lastErr = errors.New("LLM returned empty choices")
+			continue
+		}
+		return &result, nil
 	}
 
-	var result llm.ChatResponse
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("parse LLM response failed: %w", err)
-	}
-	if len(result.Choices) == 0 {
-		return nil, errors.New("LLM returned empty choices")
-	}
+	// 所有尝试均失败
+	return nil, lastErr
+}
 
-	return &result, nil
+// isRetryableHTTPStatus 判断 HTTP 状态码是否需要触发 LLM 调用重试。
+// 当前覆盖 502/503/504（nginx/上游网关层瞬时不可用）；4xx 一律不重试（业务错误）。
+func isRetryableHTTPStatus(code int) bool {
+	switch code {
+	case http.StatusBadGateway,        // 502
+		http.StatusServiceUnavailable, // 503
+		http.StatusGatewayTimeout:     // 504
+		return true
+	default:
+		return false
+	}
 }
 
 // loadSysCfgCached 读取缓存的 SystemConfig，过期或未初始化时返回 nil（调用方按 nil 处理）。
@@ -361,24 +422,41 @@ func RefreshSysCfgCache() {
 		return
 	}
 	entry := &sysCfgCacheEntry{
-		taskTimeoutMin:    sysCfg.TaskTimeoutMin,
-		maxDiffFiles:      sysCfg.MaxDiffFiles,
-		maxTokensPerBatch: sysCfg.MaxTokensPerBatch,
-		fetchedAt:         time.Now(),
+		taskTimeoutMin:         sysCfg.TaskTimeoutMin,
+		maxDiffFiles:           sysCfg.MaxDiffFiles,
+		maxTokensPerBatch:      sysCfg.MaxTokensPerBatch,
+		llmRetryMaxAttempts:    sysCfg.LLMRetryMaxAttempts,
+		llmRetryInitialDelayMs: sysCfg.LLMRetryInitialDelayMs,
+		llmRetryBackoffMult:    sysCfg.LLMRetryBackoffMultiplier,
+		llmRetryMaxDelayMs:     sysCfg.LLMRetryMaxDelayMs,
+		fetchedAt:              time.Now(),
 	}
-	// 兜底：旧记录这两个字段为 0 时用硬编码默认值，避免误判为"不限制"
+	// 兜底：旧记录为 0 时用硬编码默认值，避免误判为"不限制/不重试"
 	if entry.maxDiffFiles <= 0 {
 		entry.maxDiffFiles = 50
 	}
 	if entry.maxTokensPerBatch <= 0 {
 		entry.maxTokensPerBatch = 100000
 	}
+	if entry.llmRetryMaxAttempts <= 0 {
+		entry.llmRetryMaxAttempts = 3
+	}
+	if entry.llmRetryInitialDelayMs <= 0 {
+		entry.llmRetryInitialDelayMs = 1000
+	}
+	if entry.llmRetryBackoffMult <= 0 {
+		entry.llmRetryBackoffMult = 2.0
+	}
+	if entry.llmRetryMaxDelayMs <= 0 {
+		entry.llmRetryMaxDelayMs = 30000
+	}
 	sysCfgCache.Store(entry)
 	if sysCfgCacheOnce.CompareAndSwap(false, true) {
 		zap.L().Info("sys cfg cache initialized",
 			zap.Int("task_timeout_min", entry.taskTimeoutMin),
 			zap.Int("max_diff_files", entry.maxDiffFiles),
-			zap.Int("max_tokens_per_batch", entry.maxTokensPerBatch))
+			zap.Int("max_tokens_per_batch", entry.maxTokensPerBatch),
+			zap.Int("llm_retry_max_attempts", entry.llmRetryMaxAttempts))
 	}
 }
 
@@ -396,6 +474,38 @@ func SysCfgMaxTokensPerBatch() int {
 		return c.maxTokensPerBatch
 	}
 	return 100000
+}
+
+// SysCfgLLMRetryMaxAttempts 返回当前生效的 LLM 最大尝试次数（含首次尝试）。
+func SysCfgLLMRetryMaxAttempts() int {
+	if c := loadSysCfgCached(); c != nil && c.llmRetryMaxAttempts > 0 {
+		return c.llmRetryMaxAttempts
+	}
+	return 3
+}
+
+// SysCfgLLMRetryInitialDelayMs 返回初始重试延迟（毫秒）。
+func SysCfgLLMRetryInitialDelayMs() int {
+	if c := loadSysCfgCached(); c != nil && c.llmRetryInitialDelayMs > 0 {
+		return c.llmRetryInitialDelayMs
+	}
+	return 1000
+}
+
+// SysCfgLLMRetryBackoffMultiplier 返回指数退避倍数。
+func SysCfgLLMRetryBackoffMultiplier() float64 {
+	if c := loadSysCfgCached(); c != nil && c.llmRetryBackoffMult > 0 {
+		return c.llmRetryBackoffMult
+	}
+	return 2.0
+}
+
+// SysCfgLLMRetryMaxDelayMs 返回重试延迟上限（毫秒）。
+func SysCfgLLMRetryMaxDelayMs() int {
+	if c := loadSysCfgCached(); c != nil && c.llmRetryMaxDelayMs > 0 {
+		return c.llmRetryMaxDelayMs
+	}
+	return 30000
 }
 
 // calcCostCents 根据模型价格计算成本（单位：分）。

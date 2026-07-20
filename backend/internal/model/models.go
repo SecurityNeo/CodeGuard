@@ -383,6 +383,12 @@ type SystemConfig struct {
 	JSONRetryBackoffMultiplier float64 `gorm:"default:2.0;column:json_retry_backoff_multiplier" json:"json_retry_backoff_multiplier"`
 	JSONRetryMaxDelaySec       int     `gorm:"default:30;column:json_retry_max_delay_sec" json:"json_retry_max_delay_sec"`
 	JSONRetryFallbackStrategy  string  `gorm:"size:20;default:'regex';column:json_retry_fallback_strategy" json:"json_retry_fallback_strategy"`
+
+	// LLM HTTP 调用重试配置（针对 502/503/504 与网络层瞬时错误）
+	LLMRetryMaxAttempts      int     `gorm:"default:3;column:llm_retry_max_attempts" json:"llm_retry_max_attempts"`
+	LLMRetryInitialDelayMs   int     `gorm:"default:1000;column:llm_retry_initial_delay_ms" json:"llm_retry_initial_delay_ms"`
+	LLMRetryBackoffMultiplier float64 `gorm:"default:2.0;column:llm_retry_backoff_multiplier" json:"llm_retry_backoff_multiplier"`
+	LLMRetryMaxDelayMs       int     `gorm:"default:30000;column:llm_retry_max_delay_ms" json:"llm_retry_max_delay_ms"`
 	DefaultDimensionWeights      string `gorm:"type:json;column:default_dimension_weights" json:"default_dimension_weights"`
 	DefaultGitLabCommentTemplate string `gorm:"type:text;column:default_gitlab_comment_template" json:"default_gitlab_comment_template"`
 

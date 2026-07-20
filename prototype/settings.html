@@ -117,6 +117,35 @@
                         </div>
                     </div>
 
+                    <!-- LLM 调用重试卡片 -->
+                    <div class="bg-gray-50 rounded-lg p-5 border">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                            <i class="fas fa-redo text-blue-500"></i>LLM 调用重试
+                        </h4>
+                        <div class="grid grid-cols-2 gap-5">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">最大尝试次数（含首次）</label>
+                                <input type="number" id="llmRetryMaxAttempts" value="3" min="1" max="10" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <p class="text-xs text-gray-400 mt-1">遇到 502/503/504 或网络瞬时错误时的最大尝试次数</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">初始重试延迟（毫秒）</label>
+                                <input type="number" id="llmRetryInitialDelayMs" value="1000" min="100" max="60000" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <p class="text-xs text-gray-400 mt-1">第 1 次重试前的等待时长</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">退避倍数</label>
+                                <input type="number" id="llmRetryBackoffMultiplier" value="2" step="0.1" min="1" max="10" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <p class="text-xs text-gray-400 mt-1">每次重试延迟 = 上次 × 倍数（指数退避）</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">最大重试延迟（毫秒）</label>
+                                <input type="number" id="llmRetryMaxDelayMs" value="30000" min="1000" max="300000" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <p class="text-xs text-gray-400 mt-1">退避延迟上限，避免等待过长</p>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- 日志保留卡片 -->
                     <div class="bg-gray-50 rounded-lg p-5 border">
                         <h4 class="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
@@ -694,6 +723,10 @@
                     setVal('mrSyncIntervalSec', data.data.mr_sync_interval_sec, 60);
                     setVal('maxDiffFiles', data.data.max_diff_files, 50);
                     setVal('maxTokensPerBatch', data.data.max_tokens_per_batch, 100000);
+                    setVal('llmRetryMaxAttempts', data.data.llm_retry_max_attempts, 3);
+                    setVal('llmRetryInitialDelayMs', data.data.llm_retry_initial_delay_ms, 1000);
+                    setVal('llmRetryBackoffMultiplier', data.data.llm_retry_backoff_multiplier, 2);
+                    setVal('llmRetryMaxDelayMs', data.data.llm_retry_max_delay_ms, 30000);
                     setText('mrSyncIntervalDisplay', data.data.mr_sync_interval_sec, 60);
                     setVal('execLogRetentionDay', data.data.log_retention_day, 7);
                     setVal('logRetentionDay', data.data.log_retention_day, 90);
@@ -849,6 +882,10 @@ function previewTemplate() {
                 diff_truncation_threshold: parseInt(document.getElementById('diffTruncationThreshold').value) || 5000,
                 max_diff_files: parseInt(document.getElementById('maxDiffFiles').value) || 50,
                 max_tokens_per_batch: parseInt(document.getElementById('maxTokensPerBatch').value) || 100000,
+                llm_retry_max_attempts: parseInt(document.getElementById('llmRetryMaxAttempts').value) || 3,
+                llm_retry_initial_delay_ms: parseInt(document.getElementById('llmRetryInitialDelayMs').value) || 1000,
+                llm_retry_backoff_multiplier: parseFloat(document.getElementById('llmRetryBackoffMultiplier').value) || 2.0,
+                llm_retry_max_delay_ms: parseInt(document.getElementById('llmRetryMaxDelayMs').value) || 30000,
                 alert_duration_sec: parseInt(document.getElementById('alertDurationSec').value) || 300,
                 alert_cooldown_sec: parseInt(document.getElementById('alertCooldownSec').value) || 3600,
                 alert_notifier_id: parseInt(document.getElementById('alertNotifierID').value) || 0,

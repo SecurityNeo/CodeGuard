@@ -33,6 +33,10 @@ func (h *SystemHandler) GetConfig(c *gin.Context) {
 			DiffTruncationThreshold: 5000,
 			MaxDiffFiles:            50,
 			MaxTokensPerBatch:       100000,
+			LLMRetryMaxAttempts:     3,
+			LLMRetryInitialDelayMs:  1000,
+			LLMRetryBackoffMultiplier: 2.0,
+			LLMRetryMaxDelayMs:      30000,
 			AlertDurationSec:        300,
 			AlertCooldownSec:        3600,
 			AlertNotifierID:         0,
@@ -146,6 +150,43 @@ func (h *SystemHandler) UpdateConfig(c *gin.Context) {
 			val = 2000000
 		}
 		updates["max_tokens_per_batch"] = val
+	}
+	// LLM 调用重试配置
+	if v, ok := data["llm_retry_max_attempts"]; ok {
+		val := int(v.(float64))
+		if val < 1 {
+			val = 1
+		} else if val > 10 {
+			val = 10
+		}
+		updates["llm_retry_max_attempts"] = val
+	}
+	if v, ok := data["llm_retry_initial_delay_ms"]; ok {
+		val := int(v.(float64))
+		if val < 100 {
+			val = 100
+		} else if val > 60000 {
+			val = 60000
+		}
+		updates["llm_retry_initial_delay_ms"] = val
+	}
+	if v, ok := data["llm_retry_backoff_multiplier"]; ok {
+		val := v.(float64)
+		if val < 1.0 {
+			val = 1.0
+		} else if val > 10.0 {
+			val = 10.0
+		}
+		updates["llm_retry_backoff_multiplier"] = val
+	}
+	if v, ok := data["llm_retry_max_delay_ms"]; ok {
+		val := int(v.(float64))
+		if val < 1000 {
+			val = 1000
+		} else if val > 300000 {
+			val = 300000
+		}
+		updates["llm_retry_max_delay_ms"] = val
 	}
 	if v, ok := data["alert_duration_sec"]; ok {
 		val := int(v.(float64))
@@ -261,13 +302,21 @@ func (h *SystemHandler) UpdateConfig(c *gin.Context) {
 		service.RebuildMRSyncCron()
 	}
 
-	// 主动刷新 sysCfg 缓存：max_diff_files / max_tokens_per_batch / task_timeout_min
-	// 变更后无需等待 cron（1m）即可立即生效
+	// 主动刷新 sysCfg 缓存：max_diff_files / max_tokens_per_batch / task_timeout_min /
+	// llm_retry_* 变更后无需等待 cron（1m）即可立即生效
 	if _, ok := data["max_diff_files"]; ok {
 		service.RefreshSysCfgCache()
 	} else if _, ok := data["max_tokens_per_batch"]; ok {
 		service.RefreshSysCfgCache()
 	} else if _, ok := data["task_timeout_min"]; ok {
+		service.RefreshSysCfgCache()
+	} else if _, ok := data["llm_retry_max_attempts"]; ok {
+		service.RefreshSysCfgCache()
+	} else if _, ok := data["llm_retry_initial_delay_ms"]; ok {
+		service.RefreshSysCfgCache()
+	} else if _, ok := data["llm_retry_backoff_multiplier"]; ok {
+		service.RefreshSysCfgCache()
+	} else if _, ok := data["llm_retry_max_delay_ms"]; ok {
 		service.RefreshSysCfgCache()
 	}
 
