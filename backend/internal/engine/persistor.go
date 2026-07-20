@@ -32,7 +32,11 @@ func PersistStructuredReview(taskID uint, result *llm.AIReviewResult) error {
 			return fmt.Errorf("delete old review issues failed: %w", err)
 		}
 
-		// 3. 插入最新 Issue
+		// 3. 预加载本次 Issue 引用的 ReviewRule，避免逐条 First 触发 GORM "record not found" Warn 日志
+		//    AI 自助发现的 Issue（RuleCode 为空）不参与；规则已删除时静默忽略（RuleID 留空即可）
+		ruleByCode := loadReviewRulesByCode(tx, result.Issues)
+
+		// 4. 插入最新 Issue
 		for _, issue := range result.Issues {
 			reviewIssue := model.ReviewIssue{
 				TaskID:      taskID,
@@ -47,13 +51,8 @@ func PersistStructuredReview(taskID uint, result *llm.AIReviewResult) error {
 				Message:     issue.Message,
 				Suggestion:  issue.Suggestion,
 			}
-
-			// 查找 rule_id
-			if issue.RuleCode != "" {
-				var rule model.ReviewRule
-				if err := tx.Where("code = ?", issue.RuleCode).First(&rule).Error; err == nil {
-					reviewIssue.RuleID = &rule.ID
-				}
+			if rule, ok := ruleByCode[issue.RuleCode]; ok {
+				reviewIssue.RuleID = &rule.ID
 			}
 
 			if err := tx.Create(&reviewIssue).Error; err != nil {
@@ -104,4 +103,35 @@ func marshalJSON(v interface{}) string {
 		return "{}"
 	}
 	return string(b)
+}
+
+// loadReviewRulesByCode 一次性查回 issues 引用的所有 ReviewRule，避免逐条 First
+// 在 GORM Warn 模式下产生"record not found"噪音日志；规则已删除/AI 自主发现（code 为空）静默忽略。
+func loadReviewRulesByCode(tx *gorm.DB, issues []llm.AIReviewIssue) map[string]model.ReviewRule {
+	codes := make([]string, 0, len(issues))
+	seen := make(map[string]struct{}, len(issues))
+	for _, issue := range issues {
+		if issue.RuleCode == "" {
+			continue
+		}
+		if _, ok := seen[issue.RuleCode]; ok {
+			continue
+		}
+		seen[issue.RuleCode] = struct{}{}
+		codes = append(codes, issue.RuleCode)
+	}
+	if len(codes) == 0 {
+		return map[string]model.ReviewRule{}
+	}
+	var rules []model.ReviewRule
+	// 单条 SELECT IN 查询替代 N 条 First，未命中的 code 自然不返回，不会触发 ErrRecordNotFound
+	if err := tx.Where("code IN ?", codes).Find(&rules).Error; err != nil {
+		zap.L().Warn("preload review rules failed", zap.Error(err))
+		return map[string]model.ReviewRule{}
+	}
+	out := make(map[string]model.ReviewRule, len(rules))
+	for i := range rules {
+		out[rules[i].Code] = rules[i]
+	}
+	return out
 }
