@@ -308,13 +308,20 @@
     }
 
     async function loadTrend() {
-        const res = await apiFetch(`${API_BASE}/token-usage/trend?range=${getRange()}&granularity=day`);
+        // range=today 自动按小时粒度拉取，横坐标展示 00:00 ~ 当前小时
+        const range = getRange();
+        const granularity = range === 'today' ? 'hour' : 'day';
+        const res = await apiFetch(`${API_BASE}/token-usage/trend?range=${range}&granularity=${granularity}`);
         if (!res.ok) throw new Error('趋势接口 HTTP ' + res.status);
         const json = await res.json();
         const data = json.data || [];
         if (data.length === 0) { showChartEmpty('trendChart', 'trend'); return; }
 
-        const dates = data.map(t => (t.date || '').slice(5));
+        // hour 粒度返回 "YYYY-MM-DD HH:00:00" → "HH:00"；day 粒度返回 "YYYY-MM-DD" → "MM-DD"
+        const dates = data.map(t => {
+            const d = t.date || '';
+            return granularity === 'hour' ? d.slice(11, 16) : d.slice(5);
+        });
         const promptSeries = data.map(t => t.prompt_tokens || 0);
         const completionSeries = data.map(t => t.completion_tokens || 0);
 
@@ -322,9 +329,22 @@
         charts.trend = echarts.init(document.getElementById('trendChart'));
         charts.trend.setOption({
             tooltip: { trigger: 'axis' },
-            legend: { data: ['输入', '输出'], right: 10, top: 0 },
-            grid: { left: 60, right: 20, top: 30, bottom: 30 },
-            xAxis: { type: 'category', data: dates },
+            // 图例顶部居中，避免贴右/被圆角裁剪
+            legend: {
+                data: ['输入', '输出'],
+                top: 0,
+                left: 'center',
+                itemWidth: 12,
+                itemHeight: 8,
+                itemGap: 16,
+                textStyle: { fontSize: 12 }
+            },
+            grid: { left: 60, right: 20, top: 36, bottom: 30 },
+            xAxis: {
+                type: 'category',
+                data: dates,
+                axisLabel: { fontSize: 11, interval: granularity === 'hour' ? 1 : 'auto' }
+            },
             yAxis: { type: 'value', axisLabel: { formatter: v => formatNumber(v) } },
             series: [
                 { name: '输入', type: 'line', smooth: true, data: promptSeries, itemStyle: { color: '#3b82f6' }, areaStyle: { opacity: 0.15 } },
