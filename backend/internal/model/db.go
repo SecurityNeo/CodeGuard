@@ -629,6 +629,8 @@ func initSystemConfig() {
 			MaxParallelTask:         20,
 			LogRetentionDay:         90,
 			DiffTruncationThreshold: 5000,
+			MaxDiffFiles:            50,
+			MaxTokensPerBatch:       100000,
 			AlertDurationSec:        300,
 			AlertCooldownSec:        3600,
 			AlertNotifierID:         0,
@@ -647,8 +649,26 @@ func initSystemConfig() {
 			zap.L().Info("system config initialized with defaults")
 		}
 	} else {
+		// 兼容旧记录：新加列 max_diff_files / max_tokens_per_batch 默认值 0，
+		// 这里回填为默认值，避免业务读取到 0（"不限制"）导致分批 / 截断逻辑异常
+		if cfg.MaxDiffFiles <= 0 || cfg.MaxTokensPerBatch <= 0 {
+			update := map[string]interface{}{}
+			if cfg.MaxDiffFiles <= 0 {
+				update["max_diff_files"] = 50
+			}
+			if cfg.MaxTokensPerBatch <= 0 {
+				update["max_tokens_per_batch"] = 100000
+			}
+			if err := DB.Model(&cfg).Updates(update).Error; err != nil {
+				zap.L().Error("backfill system config defaults failed", zap.Error(err))
+			} else {
+				zap.L().Info("system config backfilled defaults", zap.Any("updates", update))
+			}
+		}
 		zap.L().Info("system config already exists",
 			zap.Int("task_timeout_min", cfg.TaskTimeoutMin),
-			zap.Int("max_parallel_task", cfg.MaxParallelTask))
+			zap.Int("max_parallel_task", cfg.MaxParallelTask),
+			zap.Int("max_diff_files", cfg.MaxDiffFiles),
+			zap.Int("max_tokens_per_batch", cfg.MaxTokensPerBatch))
 	}
 }

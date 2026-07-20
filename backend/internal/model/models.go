@@ -370,6 +370,8 @@ type SystemConfig struct {
 	ScoreThreshold          int    `gorm:"default:60" json:"score_threshold"`
 	ReviewTemplate          string `gorm:"type:text" json:"review_template"`
 	DiffTruncationThreshold int    `gorm:"default:5000" json:"diff_truncation_threshold"`
+	MaxDiffFiles            int    `gorm:"default:50;column:max_diff_files" json:"max_diff_files"`
+	MaxTokensPerBatch       int    `gorm:"default:100000;column:max_tokens_per_batch" json:"max_tokens_per_batch"`
 	AlertDurationSec        int    `gorm:"default:300" json:"alert_duration_sec"`
 	AlertCooldownSec        int    `gorm:"default:3600" json:"alert_cooldown_sec"`
 	AlertNotifierID         uint   `gorm:"default:0" json:"alert_notifier_id"`

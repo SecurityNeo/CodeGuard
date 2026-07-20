@@ -31,6 +31,8 @@ func (h *SystemHandler) GetConfig(c *gin.Context) {
 			MaxParallelTask:         20,
 			LogRetentionDay:         90,
 			DiffTruncationThreshold: 5000,
+			MaxDiffFiles:            50,
+			MaxTokensPerBatch:       100000,
 			AlertDurationSec:        300,
 			AlertCooldownSec:        3600,
 			AlertNotifierID:         0,
@@ -125,6 +127,25 @@ func (h *SystemHandler) UpdateConfig(c *gin.Context) {
 			val = 0
 		}
 		updates["diff_truncation_threshold"] = val
+	}
+	// 任务设置 - 分批评审阈值
+	if v, ok := data["max_diff_files"]; ok {
+		val := int(v.(float64))
+		if val < 1 {
+			val = 1
+		} else if val > 500 {
+			val = 500
+		}
+		updates["max_diff_files"] = val
+	}
+	if v, ok := data["max_tokens_per_batch"]; ok {
+		val := int(v.(float64))
+		if val < 1000 {
+			val = 1000
+		} else if val > 2000000 {
+			val = 2000000
+		}
+		updates["max_tokens_per_batch"] = val
 	}
 	if v, ok := data["alert_duration_sec"]; ok {
 		val := int(v.(float64))
@@ -238,6 +259,16 @@ func (h *SystemHandler) UpdateConfig(c *gin.Context) {
 	// 如果 MR 同步间隔有变更，重建定时任务
 	if _, ok := data["mr_sync_interval_sec"]; ok {
 		service.RebuildMRSyncCron()
+	}
+
+	// 主动刷新 sysCfg 缓存：max_diff_files / max_tokens_per_batch / task_timeout_min
+	// 变更后无需等待 cron（1m）即可立即生效
+	if _, ok := data["max_diff_files"]; ok {
+		service.RefreshSysCfgCache()
+	} else if _, ok := data["max_tokens_per_batch"]; ok {
+		service.RefreshSysCfgCache()
+	} else if _, ok := data["task_timeout_min"]; ok {
+		service.RefreshSysCfgCache()
 	}
 
 	c.JSON(200, gin.H{"message": "配置已更新", "data": cfg})

@@ -94,8 +94,10 @@ func (e *ChainError) Unwrap() error {
 // sysCfgCache 缓存 SystemConfig，避免每次 LLM 调用都查询数据库。
 // 使用 atomic.Value 提供 lock-free 读；写由后台 goroutine + TTL 触发。
 type sysCfgCacheEntry struct {
-	taskTimeoutMin int
-	fetchedAt      time.Time
+	taskTimeoutMin    int
+	maxDiffFiles      int
+	maxTokensPerBatch int
+	fetchedAt         time.Time
 }
 
 var (
@@ -358,14 +360,42 @@ func RefreshSysCfgCache() {
 		zap.L().Warn("refresh sys cfg cache failed", zap.Error(err))
 		return
 	}
-	sysCfgCache.Store(&sysCfgCacheEntry{
-		taskTimeoutMin: sysCfg.TaskTimeoutMin,
-		fetchedAt:      time.Now(),
-	})
+	entry := &sysCfgCacheEntry{
+		taskTimeoutMin:    sysCfg.TaskTimeoutMin,
+		maxDiffFiles:      sysCfg.MaxDiffFiles,
+		maxTokensPerBatch: sysCfg.MaxTokensPerBatch,
+		fetchedAt:         time.Now(),
+	}
+	// 兜底：旧记录这两个字段为 0 时用硬编码默认值，避免误判为"不限制"
+	if entry.maxDiffFiles <= 0 {
+		entry.maxDiffFiles = 50
+	}
+	if entry.maxTokensPerBatch <= 0 {
+		entry.maxTokensPerBatch = 100000
+	}
+	sysCfgCache.Store(entry)
 	if sysCfgCacheOnce.CompareAndSwap(false, true) {
 		zap.L().Info("sys cfg cache initialized",
-			zap.Int("task_timeout_min", sysCfg.TaskTimeoutMin))
+			zap.Int("task_timeout_min", entry.taskTimeoutMin),
+			zap.Int("max_diff_files", entry.maxDiffFiles),
+			zap.Int("max_tokens_per_batch", entry.maxTokensPerBatch))
 	}
+}
+
+// SysCfgMaxDiffFiles 返回当前生效的最大 diff 文件数（来自缓存，cache miss 时返回硬编码默认值）。
+func SysCfgMaxDiffFiles() int {
+	if c := loadSysCfgCached(); c != nil && c.maxDiffFiles > 0 {
+		return c.maxDiffFiles
+	}
+	return 50
+}
+
+// SysCfgMaxTokensPerBatch 返回当前生效的每批最大 token 数。
+func SysCfgMaxTokensPerBatch() int {
+	if c := loadSysCfgCached(); c != nil && c.maxTokensPerBatch > 0 {
+		return c.maxTokensPerBatch
+	}
+	return 100000
 }
 
 // calcCostCents 根据模型价格计算成本（单位：分）。

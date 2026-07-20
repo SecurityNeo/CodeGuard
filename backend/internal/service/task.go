@@ -788,8 +788,9 @@ func (s *TaskService) DeleteTaskSession(taskID uint) error {
 // ========== AI 评审任务 ==========
 
 const (
-	maxDiffFiles        = 50
-	maxTokensPerBatch   = 100000
+	// charsPerTokenApprox 是 splitIntoBatches / isSingleBatch 估算 token 用的字符/token 比。
+	// maxDiffFiles / maxTokensPerBatch 已迁入 SystemConfig 并通过 service.SysCfgMaxDiffFiles /
+	// SysCfgMaxTokensPerBatch 读取（缓存 5min，UpdateConfig 后主动 RefreshSysCfgCache 立即生效）。
 	charsPerTokenApprox = 4
 )
 
@@ -823,7 +824,8 @@ func (s *TaskService) ExecuteAIReviewTaskWithComment(taskID uint, commentOverrid
 		return s.failReviewTask(task, err.Error())
 	}
 
-	// 限制最多 50 个文件
+	// 限制最多 N 个文件（SystemConfig.max_diff_files，默认 50）
+	maxDiffFiles := SysCfgMaxDiffFiles()
 	if len(diffFiles) > maxDiffFiles {
 		zap.L().Warn("diff files exceed limit, truncating",
 			zap.Int("original", len(diffFiles)),
@@ -1010,7 +1012,7 @@ func (s *TaskService) runAIReview(taskID *uint, caller string, diffFiles []gitla
 		actualModelName = result.ModelName
 	} else {
 		batchReviews := []string{}
-		batches := splitIntoBatches(diffFiles, maxTokensPerBatch)
+		batches := splitIntoBatches(diffFiles, SysCfgMaxTokensPerBatch())
 
 		for i, batch := range batches {
 			batchPrompt := buildBatchPrompt(batch, i+1, len(batches), commitsText, mrTitle, projectTemplate)
@@ -1244,7 +1246,7 @@ func isSingleBatch(files []gitlab.DiffFile) bool {
 	for _, f := range files {
 		totalChars += len(f.Diff)
 	}
-	return totalChars/charsPerTokenApprox < maxTokensPerBatch
+	return totalChars/charsPerTokenApprox < SysCfgMaxTokensPerBatch()
 }
 
 func splitIntoBatches(files []gitlab.DiffFile, maxTokens int) [][]gitlab.DiffFile {
@@ -1680,8 +1682,8 @@ func (s *TaskService) SaveChatTaskDiffFiles(taskID uint) {
 		if err := model.DB.First(&sysCfg).Error; err == nil && sysCfg.DiffTruncationThreshold > 0 {
 			threshold = sysCfg.DiffTruncationThreshold
 		}
-		if len(diffFiles) > maxDiffFiles {
-			diffFiles = diffFiles[:maxDiffFiles]
+		if maxDF := SysCfgMaxDiffFiles(); len(diffFiles) > maxDF {
+			diffFiles = diffFiles[:maxDF]
 		}
 		meta := prepareDiffFilesMeta(diffFiles, threshold)
 		b, _ := json.Marshal(meta)
@@ -1713,8 +1715,8 @@ func (s *TaskService) GetTaskDiffFiles(task model.Task) ([]map[string]interface{
 	if err := model.DB.First(&sysCfg).Error; err == nil && sysCfg.DiffTruncationThreshold > 0 {
 		threshold = sysCfg.DiffTruncationThreshold
 	}
-	if len(diffFiles) > maxDiffFiles {
-		diffFiles = diffFiles[:maxDiffFiles]
+	if maxDF := SysCfgMaxDiffFiles(); len(diffFiles) > maxDF {
+		diffFiles = diffFiles[:maxDF]
 	}
 	return prepareDiffFilesMeta(diffFiles, threshold), nil
 }
