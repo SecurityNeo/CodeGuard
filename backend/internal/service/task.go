@@ -1478,7 +1478,7 @@ func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.
 	if isSingleBatch(diffFiles) {
 		result, err := llmService.ChatCompletionStructured(&task.ID, 0, "runAIReviewStructured", "", userPrompt, responseFormat)
 		if err != nil {
-			return "", 0, userPrompt, 0, "", fmt.Errorf("LLM 结构化调用失败: %w", err)
+			return "", 0, userPrompt, 0, "", err
 		}
 		rawContent = result.Content
 		actualModelID = result.ModelID

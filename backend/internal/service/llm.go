@@ -59,6 +59,38 @@ type StructuredChatResult struct {
 	Response  *llm.ChatResponse // 完整响应（含 Refusal）
 }
 
+// ModelAttempt 描述一次 LLM 模型调用尝试。
+type ModelAttempt struct {
+	Role    string // "主模型" / "备用[1]" / ...
+	ModelID uint
+	Model   string // LLMModel.ModelID（provider/model 标识）
+	Err     error
+}
+
+// ChainError 多模型链式调用全部失败时聚合的错误。
+// 替代"主模型和所有备用模型均不可用"这类丢信息的通用错误，
+// 让任务 ErrorMsg 携带每个尝试的角色/模型/具体错误，便于前端展示和运维排查。
+type ChainError struct {
+	Attempts []ModelAttempt
+}
+
+// Error 输出多行文本，每行一个模型尝试。
+func (e *ChainError) Error() string {
+	var b strings.Builder
+	for _, a := range e.Attempts {
+		fmt.Fprintf(&b, "%s %s (#%d): %v\n", a.Role, a.Model, a.ModelID, a.Err)
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// Unwrap 返回第一个底层 error，保留 errors.Is/As 兼容性。
+func (e *ChainError) Unwrap() error {
+	if len(e.Attempts) == 0 {
+		return nil
+	}
+	return e.Attempts[0].Err
+}
+
 // sysCfgCache 缓存 SystemConfig，避免每次 LLM 调用都查询数据库。
 // 使用 atomic.Value 提供 lock-free 读；写由后台 goroutine + TTL 触发。
 type sysCfgCacheEntry struct {
@@ -84,70 +116,100 @@ var (
 func (s *LLMService) ChatCompletion(taskID *uint, modelID uint, caller, systemPrompt, userPrompt string) (*ChatResult, error) {
 	// ① 用户强制指定了模型 → 直接调用，不走主备
 	if modelID > 0 {
-		var m model.LLMModel
-		if err := model.DB.First(&m, modelID).Error; err != nil {
-			return nil, fmt.Errorf("指定的模型不存在: %w", err)
-		}
-		if m.Status != "active" {
-			return nil, fmt.Errorf("指定的模型[%s]当前状态异常: %s", m.ModelID, m.Status)
-		}
-		content, err := s.callLLMAPI(taskID, &m, caller, systemPrompt, userPrompt, nil)
+		resp, m, err := s.callSpecificModel(taskID, modelID, caller, systemPrompt, userPrompt, nil)
 		if err != nil {
-			return nil, fmt.Errorf("指定模型[%s]调用失败: %w", m.ModelID, err)
+			return nil, err
 		}
-		if len(content.Choices) == 0 {
-			return nil, errors.New("LLM returned empty choices")
-		}
-		return &ChatResult{Content: content.Choices[0].Message.Content, ModelID: m.ID, ModelName: m.ModelID}, nil
+		return &ChatResult{Content: resp.Choices[0].Message.Content, ModelID: m.ID, ModelName: m.ModelID}, nil
 	}
 
 	// ② 未指定 modelID → 走全局主备链路
-	//   先查主模型
+	resp, m, err := s.tryChain(taskID, nil, caller, systemPrompt, userPrompt)
+	if err != nil {
+		return nil, err
+	}
+	return &ChatResult{Content: resp.Choices[0].Message.Content, ModelID: m.ID, ModelName: m.ModelID}, nil
+}
+
+// callSpecificModel 调用指定 ID 的模型，失败时返回"指定模型 X (#Y): <err>"格式错误。
+func (s *LLMService) callSpecificModel(taskID *uint, modelID uint, caller, systemPrompt, userPrompt string, responseFormat *llm.ResponseFormat) (*llm.ChatResponse, *model.LLMModel, error) {
+	var m model.LLMModel
+	if err := model.DB.First(&m, modelID).Error; err != nil {
+		return nil, nil, fmt.Errorf("指定的模型不存在: %w", err)
+	}
+	if m.Status != "active" {
+		return nil, nil, fmt.Errorf("指定的模型[%s]当前状态异常: %s", m.ModelID, m.Status)
+	}
+	content, err := s.callLLMAPI(taskID, &m, caller, systemPrompt, userPrompt, responseFormat)
+	if err != nil {
+		return nil, &m, fmt.Errorf("指定模型 %s (#%d): %w", m.ModelID, m.ID, err)
+	}
+	if len(content.Choices) == 0 {
+		return nil, &m, errors.New("LLM returned empty choices")
+	}
+	return content, &m, nil
+}
+
+// tryChain 主备链调用尝试：依次尝试主模型和所有备用模型，记录每个尝试的错误。
+// 成功时返回 resp 和所用模型；全部失败时返回 *ChainError。
+func (s *LLMService) tryChain(taskID *uint, responseFormat *llm.ResponseFormat, caller, systemPrompt, userPrompt string) (*llm.ChatResponse, *model.LLMModel, error) {
+	attempts := make([]ModelAttempt, 0, 4)
+
+	// ① 主模型
 	var primary model.LLMModel
 	if err := model.DB.Where("is_primary = ? AND status = ?", true, "active").First(&primary).Error; err == nil {
-		resp, err := s.callLLMAPI(taskID, &primary, caller, systemPrompt, userPrompt, nil)
-		if err == nil {
+		resp, callErr := s.callLLMAPI(taskID, &primary, caller, systemPrompt, userPrompt, responseFormat)
+		if callErr == nil && len(resp.Choices) > 0 {
 			zap.L().Info("主模型调用成功",
 				zap.Uint("model_id", primary.ID),
 				zap.String("model", primary.ModelID))
-			return &ChatResult{Content: resp.Choices[0].Message.Content, ModelID: primary.ID, ModelName: primary.ModelID}, nil
+			return resp, &primary, nil
 		}
+		// 失败或空 choices：归一为 attempt 错误
+		if callErr == nil {
+			callErr = errors.New("LLM returned empty choices")
+		}
+		attempts = append(attempts, ModelAttempt{
+			Role: "主模型", ModelID: primary.ID, Model: primary.ModelID, Err: callErr,
+		})
 		zap.L().Warn("主模型调用失败，准备切换备用",
 			zap.Uint("model_id", primary.ID),
 			zap.String("model", primary.ModelID),
-			zap.Error(err))
+			zap.Error(callErr))
 	} else {
 		zap.L().Warn("未找到可用的主模型，直接尝试备用模型", zap.Error(err))
 	}
 
-	// 主模型失败或无主模型 → 按 backup_order 遍历备用
+	// ② 按 backup_order 遍历备用
 	var backups []model.LLMModel
 	model.DB.Where("backup_order > 0 AND status = ?", "active").Order("backup_order ASC, id ASC").Find(&backups)
 
 	for i, b := range backups {
-		resp, err := s.callLLMAPI(taskID, &b, caller, systemPrompt, userPrompt, nil)
-		if err == nil {
-			if len(resp.Choices) == 0 {
-				zap.L().Warn("备用模型返回空 choices，继续下一个",
-					zap.Int("backup_index", i+1),
-					zap.Uint("model_id", b.ID),
-					zap.String("model", b.ModelID))
-				continue
-			}
+		resp, callErr := s.callLLMAPI(taskID, &b, caller, systemPrompt, userPrompt, responseFormat)
+		if callErr == nil && len(resp.Choices) > 0 {
 			zap.L().Info("备用模型调用成功",
 				zap.Int("backup_index", i+1),
 				zap.Uint("model_id", b.ID),
 				zap.String("model", b.ModelID))
-			return &ChatResult{Content: resp.Choices[0].Message.Content, ModelID: b.ID, ModelName: b.ModelID}, nil
+			return resp, &b, nil
 		}
+		if callErr == nil {
+			callErr = errors.New("LLM returned empty choices")
+		}
+		attempts = append(attempts, ModelAttempt{
+			Role: fmt.Sprintf("备用[%d]", i+1), ModelID: b.ID, Model: b.ModelID, Err: callErr,
+		})
 		zap.L().Warn("备用模型调用失败，继续下一个",
 			zap.Int("backup_index", i+1),
 			zap.Uint("model_id", b.ID),
 			zap.String("model", b.ModelID),
-			zap.Error(err))
+			zap.Error(callErr))
 	}
 
-	return nil, fmt.Errorf("主模型和所有备用模型均不可用")
+	if len(attempts) == 0 {
+		return nil, nil, errors.New("未配置任何活跃的大模型（无主模型也无可用备用）")
+	}
+	return nil, nil, &ChainError{Attempts: attempts}
 }
 
 // callLLMAPI 实际发起 HTTP 调用（内部辅助函数）
@@ -334,6 +396,8 @@ func calcCostCents(m *model.LLMModel, promptTokens, completionTokens, cachedToke
 
 // sanitizeForLog 先脱敏敏感字段再截断，避免错误日志泄露 API key 等凭据。
 // 顺序关键：必须先 redact 后 truncate，否则截断后的内容可能遗漏关键字。
+// 截断策略：保留首段（多行错误时取首个换行符之前的内容），便于 ChainError 等
+// 聚合错误保留"主模型"信息；末尾追加提示告知还有更多尝试被省略。
 func sanitizeForLog(s string) string {
 	// 简单关键字脱敏（项目内 LLM 调用通常无此问题，但作为防御性兜底）
 	for _, kw := range []string{"api_key", "authorization", "bearer "} {
@@ -349,7 +413,12 @@ func sanitizeForLog(s string) string {
 	}
 	const maxLen = 512
 	if len(s) > maxLen {
-		s = s[:maxLen] + "...(truncated)"
+		cut := s[:maxLen]
+		// 在 maxLen 范围内找最近的换行符，避免切到行中间；找不到则保留首段（首行本身超长）
+		if idx := strings.LastIndex(cut, "\n"); idx > 0 {
+			cut = cut[:idx]
+		}
+		s = cut + "\n...(truncated, more attempts omitted)"
 	}
 	return s
 }
@@ -386,16 +455,9 @@ func indexCI(s, sub string) int {
 func (s *LLMService) ChatCompletionStructured(taskID *uint, modelID uint, caller, systemPrompt, userPrompt string, responseFormat *llm.ResponseFormat) (*StructuredChatResult, error) {
 	// ① 用户强制指定了模型 → 直接调用，不走主备
 	if modelID > 0 {
-		var m model.LLMModel
-		if err := model.DB.First(&m, modelID).Error; err != nil {
-			return nil, fmt.Errorf("指定的模型不存在: %w", err)
-		}
-		if m.Status != "active" {
-			return nil, fmt.Errorf("指定的模型[%s]当前状态异常: %s", m.ModelID, m.Status)
-		}
-		resp, err := s.callLLMAPI(taskID, &m, caller, systemPrompt, userPrompt, responseFormat)
+		resp, m, err := s.callSpecificModel(taskID, modelID, caller, systemPrompt, userPrompt, responseFormat)
 		if err != nil {
-			return nil, fmt.Errorf("指定模型[%s]调用失败: %w", m.ModelID, err)
+			return nil, err
 		}
 		content := ""
 		if len(resp.Choices) > 0 {
@@ -405,50 +467,13 @@ func (s *LLMService) ChatCompletionStructured(taskID *uint, modelID uint, caller
 	}
 
 	// ② 未指定 modelID → 走全局主备链路
-	var primary model.LLMModel
-	if err := model.DB.Where("is_primary = ? AND status = ?", true, "active").First(&primary).Error; err == nil {
-		resp, err := s.callLLMAPI(taskID, &primary, caller, systemPrompt, userPrompt, responseFormat)
-		if err == nil {
-			zap.L().Info("主模型结构化调用成功",
-				zap.Uint("model_id", primary.ID),
-				zap.String("model", primary.ModelID))
-			content := ""
-			if len(resp.Choices) > 0 {
-				content = resp.Choices[0].Message.Content
-			}
-			return &StructuredChatResult{Content: content, ModelID: primary.ID, ModelName: primary.ModelID, Response: resp}, nil
-		}
-		zap.L().Warn("主模型结构化调用失败，准备切换备用",
-			zap.Uint("model_id", primary.ID),
-			zap.String("model", primary.ModelID),
-			zap.Error(err))
-	} else {
-		zap.L().Warn("未找到可用的主模型，直接尝试备用模型", zap.Error(err))
+	resp, m, err := s.tryChain(taskID, responseFormat, caller, systemPrompt, userPrompt)
+	if err != nil {
+		return nil, err
 	}
-
-	// 主模型失败或无主模型 → 按 backup_order 遍历备用
-	var backups []model.LLMModel
-	model.DB.Where("backup_order > 0 AND status = ?", "active").Order("backup_order ASC, id ASC").Find(&backups)
-
-	for i, b := range backups {
-		resp, err := s.callLLMAPI(taskID, &b, caller, systemPrompt, userPrompt, responseFormat)
-		if err == nil {
-			zap.L().Info("备用模型结构化调用成功",
-				zap.Int("backup_index", i+1),
-				zap.Uint("model_id", b.ID),
-				zap.String("model", b.ModelID))
-			content := ""
-			if len(resp.Choices) > 0 {
-				content = resp.Choices[0].Message.Content
-			}
-			return &StructuredChatResult{Content: content, ModelID: b.ID, ModelName: b.ModelID, Response: resp}, nil
-		}
-		zap.L().Warn("备用模型结构化调用失败，继续下一个",
-			zap.Int("backup_index", i+1),
-			zap.Uint("model_id", b.ID),
-			zap.String("model", b.ModelID),
-			zap.Error(err))
+	content := ""
+	if len(resp.Choices) > 0 {
+		content = resp.Choices[0].Message.Content
 	}
-
-	return nil, fmt.Errorf("主模型和所有备用模型均不可用")
+	return &StructuredChatResult{Content: content, ModelID: m.ID, ModelName: m.ModelID, Response: resp}, nil
 }
