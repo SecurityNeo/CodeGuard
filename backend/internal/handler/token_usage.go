@@ -153,6 +153,7 @@ func (h *TokenUsageHandler) GetTrend(c *gin.Context) {
 		return
 	}
 	gran := c.DefaultQuery("granularity", "day")
+	start, end := parseRange(c)
 	q := scopedQuery(c, model.CallTypeScore)
 
 	// gran 仅接受白名单值；写死两条 SQL 避免任何动态拼接。
@@ -185,16 +186,49 @@ func (h *TokenUsageHandler) GetTrend(c *gin.Context) {
 		return
 	}
 
-	out := make([]gin.H, 0, len(rows))
+	// 按 SQL 结果聚合成 map
+	type agg struct{ Prompt, Completion, Total int64 }
+	bucketData := make(map[string]agg, len(rows))
 	for _, r := range rows {
+		bucketData[r.Bucket] = agg{r.PromptTokens, r.CompletionTokens, r.TotalTokens}
+	}
+
+	// 生成完整期望桶列表（缺失的桶自动补 0），保证 hour 粒度展示 24 个点、day 粒度展示连续日期
+	expected := generateTrendBuckets(gran, start, end)
+
+	out := make([]gin.H, 0, len(expected))
+	for _, b := range expected {
+		d := bucketData[b]
 		out = append(out, gin.H{
-			"date":              r.Bucket,
-			"prompt_tokens":     r.PromptTokens,
-			"completion_tokens": r.CompletionTokens,
-			"total_tokens":      r.TotalTokens,
+			"date":              b,
+			"prompt_tokens":     d.Prompt,
+			"completion_tokens": d.Completion,
+			"total_tokens":      d.Total,
 		})
 	}
 	c.JSON(200, gin.H{"data": out})
+}
+
+// generateTrendBuckets 按 granularity 在 [start, end] 范围内生成所有期望桶的时间字符串。
+// hour：固定生成今天 00:00 ~ 23:00 共 24 个桶（不受 start/end 影响），让图表点位稳定。
+// day：从 start 所在日期 到 end 所在日期，每天一个桶。
+func generateTrendBuckets(gran string, start, end time.Time) []string {
+	loc := start.Location()
+	buckets := make([]string, 0, 24)
+	if gran == "hour" {
+		base := time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, loc)
+		for i := 0; i < 24; i++ {
+			buckets = append(buckets, base.Add(time.Duration(i)*time.Hour).Format("2006-01-02 15:04:05"))
+		}
+		return buckets
+	}
+	endDay := time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, loc)
+	cur := time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, loc)
+	for !cur.After(endDay) {
+		buckets = append(buckets, cur.Format("2006-01-02"))
+		cur = cur.AddDate(0, 0, 1)
+	}
+	return buckets
 }
 
 // GetByModel 按模型聚合
