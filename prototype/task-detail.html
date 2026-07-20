@@ -21,6 +21,20 @@
         .status-failed { background-color: #fee2e2; color: #991b1b; }
         .status-timeout { background-color: #fce7f3; color: #9d174d; }
         .status-stopped { background-color: #f3f4f6; color: #6b7280; }
+
+        /* Token 列表表格样式：明显边框 + 表头底色 + 行 hover */
+        .token-table-wrap { border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; background: white; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+        .token-table-wrap .data-table { border-collapse: separate; border-spacing: 0; width: 100%; }
+        .token-table-wrap .data-table th {
+            padding: 10px 14px; font-weight: 600; color: #374151;
+            background: linear-gradient(180deg, #f9fafb 0%, #f3f4f6 100%);
+            border-bottom: 2px solid #e5e7eb; font-size: 12px;
+            text-align: left; position: sticky; top: 0; z-index: 10;
+        }
+        .token-table-wrap .data-table td { padding: 10px 14px; border-bottom: 1px solid #f3f4f6; color: #1f2937; font-size: 13px; }
+        .token-table-wrap .data-table tbody tr:last-child td { border-bottom: none; }
+        .token-table-wrap .data-table tbody tr:hover { background: #fffbeb; }
+        .token-table-wrap .data-table-wrap { max-height: 480px; overflow-y: auto; }
         .task-type-badge { padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
         .task-type-badge.chat { background-color: #e0e7ff; color: #4338ca; }
         .task-type-badge.review { background-color: #f3e8ff; color: #7c3aed; }
@@ -287,7 +301,7 @@
                 <button class="tab-nav-btn active" data-tab="diff" onclick="switchTab('diff')">代码变更</button>
                 <button class="tab-nav-btn" data-tab="report" onclick="switchTab('report')" id="tabBtnReport">评审报告</button>
                 <button class="tab-nav-btn" data-tab="raw" onclick="switchTab('raw')" id="tabBtnRaw">AI Response</button>
-                <button class="tab-nav-btn" data-tab="token" onclick="switchTab('token'); loadTaskTokenUsage();" id="tabBtnToken" style="display:none;">💰 Token 用量</button>
+                <button class="tab-nav-btn" data-tab="token" onclick="switchTab('token'); loadTaskTokenUsage();" id="tabBtnToken" style="display:none;">Token 用量</button>
             </div>
 
             <div class="bg-white rounded-b-xl border border-t-0 p-5 min-h-[500px]">
@@ -318,6 +332,7 @@
                             <div class="text-2xl font-bold text-gray-800" id="taskTokenAvgDuration">-</div>
                         </div>
                     </div>
+                    <div class="token-table-wrap">
                     <div class="data-table-wrap" style="max-height: 480px; overflow-y: auto;">
                         <table class="data-table w-full text-sm">
                             <thead>
@@ -334,6 +349,7 @@
                                 <tr><td colspan="6" class="text-center text-gray-400 py-8">加载中...</td></tr>
                             </tbody>
                         </table>
+                    </div>
                     </div>
                     <div class="mt-3 text-xs text-gray-400" id="taskTokenHint"></div>
                 </div>
@@ -632,7 +648,7 @@ async function loadTaskTokenUsage(force) {
                     </td>
                     <td style="text-align:right;font-weight:600;font-family:monospace;" class="text-orange-600">${formatNumber(c.total_tokens)}</td>
                     <td style="text-align:right;">
-                        <span class="px-2 py-0.5 rounded text-xs ${c.status === 'success' ? 'badge-success' : 'badge-failed'}">${c.status === 'success' ? '✅ 成功' : '❌ 失败'}</span>
+                        <span class="text-xs font-medium ${c.status === 'success' ? 'text-green-600' : 'text-red-600'}">${c.status === 'success' ? '成功' : '失败'}</span>
                         <span class="text-gray-400 text-xs ml-1">${((c.duration_ms || 0) / 1000).toFixed(1)}s</span>
                     </td>
                 </tr>

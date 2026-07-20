@@ -10,6 +10,7 @@
     <script src="js/menu-config.js?v=2"></script>
     <script src="js/sidebar.js?v=2"></script>
     <link rel="stylesheet" href="/static/fontawesome/6.5.0/css/all.min.css">
+    <script defer src="/static/js/tailwindcss.min.js"></script>
     <style>
         .chart-card { transition: all 0.3s ease; }
         .chart-card:hover { box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
@@ -483,7 +484,7 @@
                         <td style="text-align:right;">${formatNumber(r.completion_tokens)}</td>
                         <td style="text-align:right;font-weight:600;">${formatNumber(r.total_tokens)}</td>
                         <td style="text-align:right;">${((r.duration_ms || 0) / 1000).toFixed(1)}s</td>
-                        <td><span class="px-2 py-1 rounded text-xs ${r.status === 'success' ? 'badge-success' : 'badge-failed'}">${r.status === 'success' ? '✅ 成功' : '❌ 失败'}</span></td>
+                        <td><span class="text-xs font-medium ${r.status === 'success' ? 'text-green-600' : 'text-red-600'}">${r.status === 'success' ? '成功' : '失败'}</span></td>
                         <td>${taskCell}</td>
                     </tr>
                 `;
