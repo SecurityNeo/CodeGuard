@@ -140,13 +140,7 @@
             <!-- 图表第 1 行：趋势 + 模型占比 -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="chart-card bg-white rounded-xl p-6 border">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-bold text-gray-800">Token 用量趋势</h3>
-                        <div class="text-xs text-gray-500">
-                            <span class="inline-block w-3 h-3 rounded-full bg-blue-500 mr-1"></span>输入
-                            <span class="inline-block w-3 h-3 rounded-full bg-green-500 ml-3 mr-1"></span>输出
-                        </div>
-                    </div>
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">Token 用量趋势</h3>
                     <div id="trendChart" style="height: 320px;"></div>
                 </div>
                 <div class="chart-card bg-white rounded-xl p-6 border">
@@ -197,7 +191,6 @@
                                 <th>时间</th>
                                 <th>模型</th>
                                 <th>调用方</th>
-                                <th>类型</th>
                                 <th style="text-align:right;">输入</th>
                                 <th style="text-align:right;">输出</th>
                                 <th style="text-align:right;">总计</th>
@@ -207,7 +200,7 @@
                             </tr>
                         </thead>
                         <tbody id="callsTableBody">
-                            <tr><td colspan="10" class="text-center text-gray-400 py-8">加载中...</td></tr>
+                            <tr><td colspan="9" class="text-center text-gray-400 py-8">加载中...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -435,7 +428,7 @@
         const tbody = document.getElementById('callsTableBody');
 
         if (rows.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">暂无数据</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-gray-400 py-8">暂无数据</td></tr>';
         } else {
             tbody.innerHTML = rows.map(r => {
                 // 安全转义：task_id 用于 href 必须 encodeURIComponent
@@ -448,7 +441,6 @@
                         <td>${(r.created_at || '').slice(0, 19).replace('T', ' ')}</td>
                         <td>${escapeHtml(r.model_name || '-')}</td>
                         <td>${renderCallerBadge(r.caller)}</td>
-                        <td><span class="px-2 py-1 rounded text-xs badge-score">${escapeHtml(r.call_type || '-')}</span></td>
                         <td style="text-align:right;">${formatNumber(r.prompt_tokens)}</td>
                         <td style="text-align:right;">${formatNumber(r.completion_tokens)}</td>
                         <td style="text-align:right;font-weight:600;">${formatNumber(r.total_tokens)}</td>

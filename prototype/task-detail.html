@@ -296,6 +296,17 @@
         </div>
     </div>
 
+    <!-- 失败原因（仅失败/超时/停止时显示） -->
+    <div id="detailErrorPanel" class="hidden mb-6 bg-red-50 border border-red-200 rounded-xl p-4">
+        <div class="flex items-start gap-2">
+            <i class="fas fa-exclamation-circle text-red-500 mt-0.5"></i>
+            <div class="flex-1 min-w-0">
+                <div class="text-sm font-semibold text-red-700 mb-1">失败原因</div>
+                <div id="detailErrorMsg" class="text-sm text-red-600 whitespace-pre-wrap break-words"></div>
+            </div>
+        </div>
+    </div>
+
             <!-- Tab 导航 -->
             <div class="tab-nav mb-0 sticky top-0 bg-gray-50 z-10">
                 <button class="tab-nav-btn active" data-tab="diff" onclick="switchTab('diff')">代码变更</button>
@@ -592,6 +603,18 @@ function renderTaskMeta(t) {
     document.getElementById('detailAdditions').textContent = totalAdd;
     document.getElementById('detailDeletions').textContent = totalDel;
     document.getElementById('detailDiffInfo').textContent = t.mr_title || '';
+
+    // 失败原因面板：失败/超时/停止 且 error_msg 非空时显示
+    const errorPanel = document.getElementById('detailErrorPanel');
+    const errorMsgEl = document.getElementById('detailErrorMsg');
+    const showableFail = ['failed', 'timeout', 'stopped'].includes(t.status);
+    if (showableFail && t.error_msg) {
+        errorMsgEl.textContent = t.error_msg;
+        errorPanel.classList.remove('hidden');
+    } else {
+        errorPanel.classList.add('hidden');
+        errorMsgEl.textContent = '';
+    }
 
     // Tab 标签
     document.getElementById('tabBtnReport').textContent = t.task_type === 'review' ? '评审报告' : 'AI对话';

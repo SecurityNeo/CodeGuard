@@ -365,8 +365,13 @@ func (h *TokenUsageHandler) ListCalls(c *gin.Context) {
 		CreatedAt        time.Time `json:"created_at"`
 	}
 	var rows []row
-	// 加 id DESC 二级排序，避免同秒数据分页错位
-	if err := q.Order("l.created_at DESC, l.id DESC").
+	// 显式 Select 限定 llm_call_logs 列：LEFT JOIN tasks 后两表都有 status 列，
+	// 默认 SELECT * 会同时返回 l.status 和 t.status，Scan 按列序后者覆盖前者，
+	// 导致列表中所有调用状态被错误显示为 task 最终状态。
+	if err := q.Select(`l.id, l.task_id, l.model_name, l.caller, l.call_type,
+		l.prompt_tokens, l.completion_tokens, l.total_tokens,
+		l.duration_ms, l.status, l.error_msg, l.created_at`).
+		Order("l.created_at DESC, l.id DESC").
 		Offset((page - 1) * pageSize).Limit(pageSize).
 		Scan(&rows).Error; err != nil {
 		respondDBError(c, "calls list", err)
