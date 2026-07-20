@@ -276,27 +276,30 @@ type ResourcePool struct {
 // --- LLMModel ---
 
 type LLMModel struct {
-	ID               uint       `gorm:"primaryKey" json:"id"`
-	Provider         string     `gorm:"size:50;not null" json:"provider"`
-	ModelID          string     `gorm:"size:100;not null" json:"model_id"`
-	BaseURL          string     `gorm:"size:512;not null" json:"base_url"`
-	APIKey           string     `gorm:"size:512;not null" json:"api_key"`
-	MaxTokens        int        `gorm:"default:4096" json:"max_tokens"`
-	TimeoutSec       int        `gorm:"default:120" json:"timeout_sec"`
-	Temperature      float64    `gorm:"default:0.1" json:"temperature"`
-	IsDefault        bool       `gorm:"default:false" json:"is_default"`
-	IsPrimary        bool       `gorm:"default:false" json:"is_primary"` // 是否为主模型（全局唯一）
-	BackupOrder      int        `gorm:"default:0" json:"backup_order"`   // 备用顺序：0=非备用，1=第一备用，2=第二备用...
-	CheckIntervalSec int        `gorm:"default:5" json:"check_interval_sec"`
-	Status           string     `gorm:"size:20;default:'active'" json:"status"`
-	CheckError       string     `gorm:"size:512" json:"check_error"`
-	LastCheckAt      *time.Time `json:"last_check_at"`
-	StatusChangedAt  *time.Time `json:"status_changed_at"`
-	LastAlertAt      *time.Time `json:"last_alert_at"`
-	LastTestAt       *time.Time `json:"last_test_at"`
-	LastTestStatus   string     `gorm:"size:20;default:''" json:"last_test_status"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	ID                    uint       `gorm:"primaryKey" json:"id"`
+	Provider              string     `gorm:"size:50;not null" json:"provider"`
+	ModelID               string     `gorm:"size:100;not null" json:"model_id"`
+	BaseURL               string     `gorm:"size:512;not null" json:"base_url"`
+	APIKey                string     `gorm:"size:512;not null" json:"api_key"`
+	MaxTokens             int        `gorm:"default:4096" json:"max_tokens"`
+	TimeoutSec            int        `gorm:"default:120" json:"timeout_sec"`
+	Temperature           float64    `gorm:"default:0.1" json:"temperature"`
+	IsDefault             bool       `gorm:"default:false" json:"is_default"`
+	IsPrimary             bool       `gorm:"default:false" json:"is_primary"`     // 是否为主模型（全局唯一）
+	BackupOrder           int        `gorm:"default:0" json:"backup_order"`       // 备用顺序：0=非备用，1=第一备用，2=第二备用...
+	InputPricePerMTokens  float64    `gorm:"default:0;column:input_price_per_mtokens" json:"input_price_per_mtokens"`   // 输入价格 USD / 百万 token；0=未知/不计入成本
+	OutputPricePerMTokens float64    `gorm:"default:0;column:output_price_per_mtokens" json:"output_price_per_mtokens"` // 输出价格 USD / 百万 token
+	CachedPricePerMTokens float64    `gorm:"default:0;column:cached_price_per_mtokens" json:"cached_price_per_mtokens"` // 缓存命中价格 USD / 百万 token
+	CheckIntervalSec      int        `gorm:"default:5" json:"check_interval_sec"`
+	Status                string     `gorm:"size:20;default:'active'" json:"status"`
+	CheckError            string     `gorm:"size:512" json:"check_error"`
+	LastCheckAt           *time.Time `json:"last_check_at"`
+	StatusChangedAt       *time.Time `json:"status_changed_at"`
+	LastAlertAt           *time.Time `json:"last_alert_at"`
+	LastTestAt            *time.Time `json:"last_test_at"`
+	LastTestStatus        string     `gorm:"size:20;default:''" json:"last_test_status"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
 }
 
 // --- WeComNotifier ---
@@ -488,4 +491,31 @@ type ReportLog struct {
 	ErrorMsg    string    `gorm:"type:text" json:"error_msg"`
 	SentAt      time.Time `json:"sent_at"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+// --- LLMCallLog 每次 LLM 调用的记录（Token 用量监控）---
+
+// CallType 调用类型枚举
+const (
+	CallTypeScore      = "score"       // AI 评分（ChatCompletion / Structured）
+	CallTypeDeepReview = "deep_review" // 深度审查（OpenCode 接入后启用）
+)
+
+type LLMCallLog struct {
+	ID               uint      `gorm:"primaryKey" json:"id"`
+	TaskID           *uint     `gorm:"index:idx_task_call_type,priority:1" json:"task_id,omitempty"`
+	ModelID          *uint     `gorm:"index:idx_model_created,priority:2" json:"model_id,omitempty"`
+	Provider         string    `gorm:"size:32;not null;default:'';index" json:"provider"`
+	ModelName        string    `gorm:"size:128;not null;default:'';index" json:"model_name"`
+	CallType         string    `gorm:"size:32;not null;default:'';index:idx_call_type_created,priority:2" json:"call_type"`
+	Caller           string    `gorm:"size:64;not null;default:'';index" json:"caller"`
+	PromptTokens     int       `gorm:"not null;default:0" json:"prompt_tokens"`
+	CompletionTokens int       `gorm:"not null;default:0" json:"completion_tokens"`
+	CachedTokens     int       `gorm:"not null;default:0" json:"cached_tokens"`
+	TotalTokens      int       `gorm:"not null;default:0" json:"total_tokens"`
+	DurationMs       int       `gorm:"not null;default:0" json:"duration_ms"`
+	Status           string    `gorm:"size:16;not null;default:'success';index:idx_status_created,priority:1" json:"status"`
+	ErrorMsg         string    `gorm:"type:text" json:"error_msg,omitempty"`
+	CostCents        int64     `gorm:"not null;default:0" json:"cost_cents"`
+	CreatedAt        time.Time `gorm:"index:idx_call_type_created,priority:1;index:idx_model_created,priority:1;index:idx_status_created,priority:2;not null" json:"created_at"`
 }

@@ -222,6 +222,40 @@
                     </div>
                 </div>
 
+                <!-- Token 用量摘要（仅 Admin 可见） -->
+                <div class="bg-white rounded-xl p-6 border mb-6" data-admin-only style="display: none;">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-800">
+                                <i class="fas fa-coins text-orange-500 mr-2"></i>Token 用量
+                            </h3>
+                            <p class="text-xs text-gray-400 mt-1">AI 评审大模型调用消耗（仅 score 类型）</p>
+                        </div>
+                        <a href="token-usage.html" class="text-sm text-blue-600 hover:text-blue-700">
+                            完整监控 <i class="fas fa-arrow-right text-xs ml-1"></i>
+                        </a>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        <div class="lg:col-span-1 grid grid-cols-1 gap-4">
+                            <div class="kpi-card bg-orange-50 rounded-lg p-4 border border-orange-100">
+                                <div class="text-xs text-orange-600 mb-1">今日 Token</div>
+                                <div class="text-2xl font-bold text-gray-800" id="todayTokens">-</div>
+                            </div>
+                            <div class="kpi-card bg-blue-50 rounded-lg p-4 border border-blue-100">
+                                <div class="text-xs text-blue-600 mb-1">今日调用次数</div>
+                                <div class="text-2xl font-bold text-gray-800" id="todayCalls">-</div>
+                            </div>
+                            <div class="kpi-card bg-green-50 rounded-lg p-4 border border-green-100">
+                                <div class="text-xs text-green-600 mb-1">平均耗时</div>
+                                <div class="text-2xl font-bold text-gray-800" id="avgDuration">-</div>
+                            </div>
+                        </div>
+                        <div class="lg:col-span-3">
+                            <div id="tokenTrendMiniChart" style="height: 200px;"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 第一行：项目活跃度 + 开发者提交 -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     <div class="chart-card bg-white rounded-xl p-6 border">
@@ -629,6 +663,50 @@
                 console.error('加载统计失败:', e);
                 showToast('加载统计失败: ' + e.message, 'error');
             }
+        }
+
+        // ============ Token 用量摘要（仅 Admin） ============
+        let tokenTrendChart = null;
+
+        async function loadTokenSummary() {
+            if (!isAdmin()) return;
+            try {
+                const resp = await apiFetch(`${API_BASE}/dashboard/token-summary`);
+                if (!resp.ok) return;
+                const json = await resp.json();
+                const d = json.data || json; // 兼容后端包装
+
+                document.getElementById('todayTokens').textContent = formatNumber(d.today_tokens || 0);
+                document.getElementById('todayCalls').textContent = (d.today_calls || 0) + ' 次';
+                document.getElementById('avgDuration').textContent = ((d.avg_duration_ms || 0) / 1000).toFixed(1) + 's';
+
+                renderTokenTrendMini(d.trend_7d || []);
+            } catch (e) {
+                console.error('加载 Token 摘要失败:', e);
+            }
+        }
+
+        function renderTokenTrendMini(trend) {
+            const dom = document.getElementById('tokenTrendMiniChart');
+            if (!dom) return;
+            if (tokenTrendChart) tokenTrendChart.dispose();
+            tokenTrendChart = echarts.init(dom);
+
+            const dates = trend.map(t => t.date);
+            const promptSeries = trend.map(t => t.prompt_tokens || 0);
+            const completionSeries = trend.map(t => t.completion_tokens || 0);
+
+            tokenTrendChart.setOption({
+                tooltip: { trigger: 'axis' },
+                legend: { data: ['输入', '输出'], right: 10, top: 0, textStyle: { fontSize: 12 } },
+                grid: { left: 50, right: 20, top: 30, bottom: 30 },
+                xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 11 } },
+                yAxis: { type: 'value', axisLabel: { fontSize: 11, formatter: v => formatNumber(v) } },
+                series: [
+                    { name: '输入', type: 'line', smooth: true, data: promptSeries, itemStyle: { color: '#3b82f6' }, areaStyle: { opacity: 0.15 } },
+                    { name: '输出', type: 'line', smooth: true, data: completionSeries, itemStyle: { color: '#10b981' }, areaStyle: { opacity: 0.15 } }
+                ]
+            });
         }
 
         function renderAll(d) {
@@ -1206,6 +1284,7 @@
             initDateRange();
             loadFilterOptions();
             loadStatistics();
+            loadTokenSummary();
             renderSidebar('dashboard');
             // 普通用户：作者筛选框只显示自己（数据已由后端过滤）
             if (isUser()) {

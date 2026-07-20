@@ -329,7 +329,7 @@
                 fetch(`${API_BASE}/users/me`, {
                     headers: { 'Authorization': 'Bearer ' + token }
                 }).then(res => {
-                    if (res.ok) { window.location.href = '/index.html'; }
+                    if (res.ok) { window.location.href = '/'; }
                     else { localStorage.removeItem('auth_token'); localStorage.removeItem('user_info'); }
                 }).catch(() => {});
             }
@@ -363,7 +363,7 @@
                 if (res.ok && data.data && data.data.token) {
                     localStorage.setItem('auth_token', data.data.token);
                     localStorage.setItem('user_info', JSON.stringify(data.data));
-                    window.location.href = '/index.html';
+                    window.location.href = '/';
                 } else {
                     errorText.textContent = data.error || '登录失败';
                     errorMsg.classList.add('show');

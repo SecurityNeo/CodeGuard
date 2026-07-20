@@ -15,6 +15,7 @@ import (
 	"github.com/ai-optimizer/backend/internal/model"
 	"github.com/ai-optimizer/backend/internal/service"
 	"github.com/ai-optimizer/backend/pkg/encrypt"
+	"github.com/ai-optimizer/backend/pkg/llmcall"
 	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
@@ -65,6 +66,13 @@ func main() {
 	service.NewPoolService().StartHealthCheckDaemon()
 	service.NewModelService().StartHealthCheckDaemon()
 
+	// 5.2.5. 预热 SystemConfig 缓存 + 定时刷新（5 分钟 TTL）
+	service.RefreshSysCfgCache()
+	_, _ = cronRunner.AddFunc("@every 5m", service.RefreshSysCfgCache)
+
+	// 5.3. 启动 LLM 调用日志后台 worker（依赖 model.DB，必须在 InitDB 之后调用）
+	llmcall.Start()
+
 	// 6. 初始化 HTTP Router
 	router := setupRouter(cfg)
 
@@ -87,11 +95,13 @@ func main() {
 	<-quit
 	logger.Info("shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// 顺序：先停 HTTP（阻断新 Record），再排空 llmcall buffer，最后停 cron
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
-		logger.Fatal("server forced to shutdown", zap.Error(err))
+		logger.Warn("server forced to shutdown", zap.Error(err))
 	}
+	llmcall.Stop()
 	logger.Info("server exited")
 }
 
@@ -192,7 +202,7 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 		c.File(frontendPath + "/statistics.html")
 	})
 	r.GET("/index.html", func(c *gin.Context) {
-		c.File(frontendPath + "/index.html")
+		c.Redirect(http.StatusMovedPermanently, "/")
 	})
 	r.GET("/mail.html", func(c *gin.Context) {
 		c.File(frontendPath + "/mail.html")
@@ -245,6 +255,21 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			dashboard.GET("/recent-projects", h.GetRecentProjects)
 			dashboard.GET("/recent-failures", h.GetRecentFailures)
 			dashboard.GET("/task-distribution", h.GetTaskDistribution)
+		}
+
+		// Token 用量监控
+		th := handler.NewTokenUsageHandler()
+		common.GET("/dashboard/token-summary", th.GetTokenSummary)
+		tokenUsage := common.Group("/token-usage")
+		{
+			tokenUsage.GET("/overview", th.GetOverview)
+			tokenUsage.GET("/trend", th.GetTrend)
+			tokenUsage.GET("/by-model", th.GetByModel)
+			tokenUsage.GET("/by-project", th.GetByProject)
+			tokenUsage.GET("/by-author", th.GetByAuthor)
+			tokenUsage.GET("/by-call-type", th.GetByCallType)
+			tokenUsage.GET("/calls", th.ListCalls)
+			tokenUsage.GET("/by-task", th.GetByTask)
 		}
 
 		// 任务管理（只读 + 日志/消息/事件 + 用户可操作的写操作）

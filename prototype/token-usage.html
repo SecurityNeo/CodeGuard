@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <style>html{background-color:#1e293b;}</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token 用量 - CodeGuard</title>
+    <script defer src="/vendor/echarts.min.js"></script>
+    <script src="js/auth.js?v=5"></script>
+    <script src="js/menu-config.js?v=2"></script>
+    <script src="js/sidebar.js?v=2"></script>
+    <link rel="stylesheet" href="/static/fontawesome/6.5.0/css/all.min.css">
+    <style>
+        .chart-card { transition: all 0.3s ease; }
+        .chart-card:hover { box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
+        .kpi-card { transition: transform 0.2s, box-shadow 0.2s; }
+        .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
+        .toast { position: fixed; top: 20px; right: 20px; z-index: 9999; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .data-table tr:hover { background: #f8f9ff; }
+        .data-table th {
+            padding: 12px 16px;
+            font-weight: 600;
+            color: #555;
+            border-bottom: 2px solid #e0e0e0;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+        }
+        .data-table td { padding: 12px 16px; border-bottom: 1px solid #f0f0f0; color: #333; font-size: 13px; }
+        .badge-success { background: #e8f5e9; color: #2e7d32; }
+        .badge-failed { background: #ffebee; color: #c62828; }
+        .badge-score { background: #e3f2fd; color: #1565c0; }
+        .data-table-wrap { max-height: 480px; overflow-y: auto; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+<div id="page-transition" style="position:fixed;top:0;left:0;right:0;bottom:0;background:#1e293b;z-index:99999;transition:opacity .25s ease;"></div>
+<script>
+(function(){
+  function hide(){var el=document.getElementById('page-transition');if(el){el.style.opacity='0';setTimeout(function(){el.remove();},250);}}
+  if(document.readyState==='complete'){hide();}else{window.addEventListener('load',hide);}
+})();
+</script>
+<div id="toastContainer"></div>
+<div class="flex h-screen">
+    <aside id="sidebar" class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
+        <div class="p-6">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-robot text-xl"></i>
+                </div>
+                <div><h1 class="font-bold text-lg">CodeGuard</h1><p class="text-xs text-gray-400">代码智能门禁</p></div>
+            </div>
+        </div>
+        <nav class="flex-1 px-3 py-4 space-y-1"></nav>
+        <div class="p-4 border-t border-slate-700">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
+                    <i class="fas fa-user text-sm"></i>
+                </div>
+                <div class="text-sm flex-1">
+                    <div class="font-medium" id="currentUser">加载中…</div>
+                    <div class="text-xs text-gray-400" id="currentRole">-</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 overflow-y-auto">
+        <header class="bg-white border-b px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+            <div>
+                <h2 class="text-xl font-bold text-gray-800"><i class="fas fa-coins text-orange-500 mr-2"></i>Token 用量监控</h2>
+                <p class="text-sm text-gray-500 mt-1">AI 评审大模型调用消耗统计（仅 score 类型）</p>
+            </div>
+            <button onclick="loadAll()" class="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg text-sm hover:bg-blue-100">
+                <i class="fas fa-sync-alt mr-1"></i>刷新
+            </button>
+        </header>
+
+        <div class="p-8 space-y-6">
+            <!-- 时间筛选 -->
+            <div class="bg-white rounded-xl p-4 border flex items-center gap-4 flex-wrap">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-gray-500">时间范围：</span>
+                    <select id="rangeFilter" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" onchange="loadAll()">
+                        <option value="today">今日</option>
+                        <option value="7d" selected>近 7 天</option>
+                        <option value="30d">近 30 天</option>
+                    </select>
+                </div>
+                <div class="ml-auto text-sm text-gray-400" id="lastUpdate">-</div>
+            </div>
+
+            <!-- KPI 区 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+                <div class="kpi-card bg-white rounded-xl p-6 border flex items-center gap-5">
+                    <div class="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-2xl">🔥</div>
+                    <div>
+                        <div class="text-3xl font-bold text-gray-800" id="kpiTotalTokens">-</div>
+                        <div class="text-sm text-gray-500 mt-1">总 Tokens</div>
+                    </div>
+                </div>
+                <div class="kpi-card bg-white rounded-xl p-6 border flex items-center gap-5">
+                    <div class="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-2xl">📥</div>
+                    <div>
+                        <div class="text-3xl font-bold text-gray-800" id="kpiPromptTokens">-</div>
+                        <div class="text-sm text-gray-500 mt-1">输入 Tokens</div>
+                    </div>
+                </div>
+                <div class="kpi-card bg-white rounded-xl p-6 border flex items-center gap-5">
+                    <div class="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center text-2xl">📤</div>
+                    <div>
+                        <div class="text-3xl font-bold text-gray-800" id="kpiCompletionTokens">-</div>
+                        <div class="text-sm text-gray-500 mt-1">输出 Tokens</div>
+                    </div>
+                </div>
+                <div class="kpi-card bg-white rounded-xl p-6 border flex items-center gap-5">
+                    <div class="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center text-2xl">🔄</div>
+                    <div>
+                        <div class="text-3xl font-bold text-gray-800" id="kpiCallCount">-</div>
+                        <div class="text-sm text-gray-500 mt-1">LLM 调用次数</div>
+                    </div>
+                </div>
+                <div class="kpi-card bg-white rounded-xl p-6 border flex items-center gap-5">
+                    <div class="w-14 h-14 bg-yellow-50 rounded-2xl flex items-center justify-center text-2xl">⏱️</div>
+                    <div>
+                        <div class="text-3xl font-bold text-gray-800" id="kpiAvgDuration">-</div>
+                        <div class="text-sm text-gray-500 mt-1">平均耗时</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 图表第 1 行：趋势 + 模型占比 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="chart-card bg-white rounded-xl p-6 border">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold text-gray-800">Token 用量趋势</h3>
+                        <div class="text-xs text-gray-500">
+                            <span class="inline-block w-3 h-3 rounded-full bg-blue-500 mr-1"></span>输入
+                            <span class="inline-block w-3 h-3 rounded-full bg-green-500 ml-3 mr-1"></span>输出
+                        </div>
+                    </div>
+                    <div id="trendChart" style="height: 320px;"></div>
+                </div>
+                <div class="chart-card bg-white rounded-xl p-6 border">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">模型占比</h3>
+                    <div id="modelChart" style="height: 320px;"></div>
+                </div>
+            </div>
+
+            <!-- 图表第 2 行：项目排行 + 作者排行 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="chart-card bg-white rounded-xl p-6 border">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">项目 Token 用量 TOP 10</h3>
+                    <div id="projectChart" style="height: 360px;"></div>
+                </div>
+                <div class="chart-card bg-white rounded-xl p-6 border">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">作者 Token 用量 TOP 10</h3>
+                    <div id="authorChart" style="height: 360px;"></div>
+                </div>
+            </div>
+
+            <!-- 调用类型分布 -->
+            <div class="chart-card bg-white rounded-xl p-6 border">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">调用类型分布</h3>
+                <div id="callTypeChart" style="height: 220px;"></div>
+            </div>
+
+            <!-- 调用明细表 -->
+            <div class="chart-card bg-white rounded-xl p-6 border">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-gray-800">调用明细</h3>
+                    <div class="flex gap-3 flex-wrap">
+                        <select id="filterModel" class="px-3 py-2 border rounded-lg text-sm" onchange="loadCalls(1)">
+                            <option value="">所有模型</option>
+                        </select>
+                        <select id="filterCaller" class="px-3 py-2 border rounded-lg text-sm" onchange="loadCalls(1)">
+                            <option value="">所有调用方</option>
+                            <option value="callLLMAPI">callLLMAPI</option>
+                        </select>
+                        <select id="filterStatus" class="px-3 py-2 border rounded-lg text-sm" onchange="loadCalls(1)">
+                            <option value="">所有状态</option>
+                            <option value="success">成功</option>
+                            <option value="failed">失败</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="data-table-wrap">
+                    <table class="data-table w-full">
+                        <thead>
+                            <tr>
+                                <th>时间</th>
+                                <th>模型</th>
+                                <th>调用方</th>
+                                <th>类型</th>
+                                <th style="text-align:right;">输入</th>
+                                <th style="text-align:right;">输出</th>
+                                <th style="text-align:right;">总计</th>
+                                <th style="text-align:right;">耗时</th>
+                                <th>状态</th>
+                                <th>任务</th>
+                            </tr>
+                        </thead>
+                        <tbody id="callsTableBody">
+                            <tr><td colspan="10" class="text-center text-gray-400 py-8">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="flex items-center justify-between mt-4 text-sm text-gray-500">
+                    <div id="paginationInfo">-</div>
+                    <div class="flex gap-2">
+                        <button id="prevPageBtn" onclick="loadCalls(currentPage - 1)" class="px-3 py-1 border rounded disabled:opacity-50" disabled>上一页</button>
+                        <button id="nextPageBtn" onclick="loadCalls(currentPage + 1)" class="px-3 py-1 border rounded disabled:opacity-50" disabled>下一页</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    const API_BASE = '/api/v1';
+    let charts = {};
+    let currentPage = 1;
+    const pageSize = 20;
+
+    function showToast(message, type = 'success') {
+        const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+        const icons = { success: 'fa-check', error: 'fa-times', info: 'fa-info' };
+        const toast = document.createElement('div');
+        toast.className = `toast ${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3`;
+        toast.innerHTML = `<i class="fas ${icons[type]}"></i><span>${escapeHtml(message)}</span>`;
+        document.getElementById('toastContainer').appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    function formatNumber(num) {
+        if (num == null) return '-';
+        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+        return num.toString();
+    }
+
+    function escapeHtml(text) {
+        if (text == null) return '';
+        const div = document.createElement('div');
+        div.textContent = String(text);
+        return div.innerHTML;
+    }
+
+    function getRange() {
+        return document.getElementById('rangeFilter').value;
+    }
+
+    async function loadAll() {
+        currentPage = 1;
+        document.getElementById('lastUpdate').textContent = '更新中...';
+        // 用 Promise.allSettled + 各函数自己抛错，反映真实失败数
+        const results = await Promise.allSettled([
+            loadOverview(), loadTrend(), loadByModel(),
+            loadByProject(), loadByAuthor(), loadByCallType(), loadCalls(1)
+        ]);
+        const failed = results.filter(r => r.status === 'rejected').length;
+        document.getElementById('lastUpdate').textContent = failed === 0
+            ? '更新于 ' + new Date().toLocaleTimeString('zh-CN')
+            : `${failed} 项加载失败，请重试`;
+    }
+
+    // showChartEmpty 在图表容器内显示"暂无数据"占位
+    function showChartEmpty(domId, chartKey) {
+        if (charts[chartKey]) { charts[chartKey].dispose(); charts[chartKey] = null; }
+        const dom = document.getElementById(domId);
+        dom.innerHTML = '<div class="flex items-center justify-center h-full text-gray-400">暂无数据</div>';
+    }
+
+    async function loadOverview() {
+        const res = await apiFetch(`${API_BASE}/token-usage/overview?range=${getRange()}`);
+        if (!res.ok) throw new Error('KPI 接口 HTTP ' + res.status);
+        const json = await res.json();
+        const d = json.data || {};
+        document.getElementById('kpiTotalTokens').textContent = formatNumber(d.total_tokens);
+        document.getElementById('kpiPromptTokens').textContent = formatNumber(d.prompt_tokens);
+        document.getElementById('kpiCompletionTokens').textContent = formatNumber(d.completion_tokens);
+        document.getElementById('kpiCallCount').textContent = formatNumber(d.call_count);
+        const avgSec = (d.avg_duration_ms || 0) / 1000;
+        document.getElementById('kpiAvgDuration').textContent = avgSec.toFixed(1) + 's';
+    }
+
+    async function loadTrend() {
+        const res = await apiFetch(`${API_BASE}/token-usage/trend?range=${getRange()}&granularity=day`);
+        if (!res.ok) throw new Error('趋势接口 HTTP ' + res.status);
+        const json = await res.json();
+        const data = json.data || [];
+        if (data.length === 0) { showChartEmpty('trendChart', 'trend'); return; }
+
+        const dates = data.map(t => (t.date || '').slice(5));
+        const promptSeries = data.map(t => t.prompt_tokens || 0);
+        const completionSeries = data.map(t => t.completion_tokens || 0);
+
+        if (charts.trend) charts.trend.dispose();
+        charts.trend = echarts.init(document.getElementById('trendChart'));
+        charts.trend.setOption({
+            tooltip: { trigger: 'axis' },
+            legend: { data: ['输入', '输出'], right: 10, top: 0 },
+            grid: { left: 60, right: 20, top: 30, bottom: 30 },
+            xAxis: { type: 'category', data: dates },
+            yAxis: { type: 'value', axisLabel: { formatter: v => formatNumber(v) } },
+            series: [
+                { name: '输入', type: 'line', smooth: true, data: promptSeries, itemStyle: { color: '#3b82f6' }, areaStyle: { opacity: 0.15 } },
+                { name: '输出', type: 'line', smooth: true, data: completionSeries, itemStyle: { color: '#10b981' }, areaStyle: { opacity: 0.15 } }
+            ]
+        });
+    }
+
+    async function loadByModel() {
+        const res = await apiFetch(`${API_BASE}/token-usage/by-model?range=${getRange()}`);
+        if (!res.ok) throw new Error('模型接口 HTTP ' + res.status);
+        const json = await res.json();
+        const data = json.data || [];
+        if (data.length === 0) { showChartEmpty('modelChart', 'model'); return; }
+
+        if (charts.model) charts.model.dispose();
+        charts.model = echarts.init(document.getElementById('modelChart'));
+        charts.model.setOption({
+            tooltip: { trigger: 'item', formatter: '{b}<br/>{c} tokens ({d}%)' },
+            series: [{
+                type: 'pie',
+                radius: ['45%', '70%'],
+                label: { formatter: '{b}\n{d}%' },
+                data: data.map(d => ({ name: d.model_name || '未知', value: d.total_tokens || 0 }))
+            }],
+            color: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6b7280']
+        });
+
+        // 同步填充筛选下拉
+        const sel = document.getElementById('filterModel');
+        const cur = sel.value;
+        const names = data.map(d => d.model_name || '未知');
+        sel.innerHTML = '<option value="">所有模型</option>' +
+            names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+        sel.value = cur;
+    }
+
+    async function loadByProject() {
+        const res = await apiFetch(`${API_BASE}/token-usage/by-project?range=${getRange()}&page=1&page_size=10`);
+        if (!res.ok) throw new Error('项目接口 HTTP ' + res.status);
+        const json = await res.json();
+        const data = json.data || [];
+        if (data.length === 0) { showChartEmpty('projectChart', 'project'); return; }
+        const names = data.map(d => d.project_name || '未知');
+        const values = data.map(d => d.total_tokens || 0);
+        renderHorizontalBar('projectChart', names, values, '#3b82f6', 'project');
+    }
+
+    async function loadByAuthor() {
+        const res = await apiFetch(`${API_BASE}/token-usage/by-author?range=${getRange()}&page=1&page_size=10`);
+        if (!res.ok) throw new Error('作者接口 HTTP ' + res.status);
+        const json = await res.json();
+        const data = json.data || [];
+        if (data.length === 0) { showChartEmpty('authorChart', 'author'); return; }
+        const names = data.map(d => d.author || '未知');
+        const values = data.map(d => d.total_tokens || 0);
+        renderHorizontalBar('authorChart', names, values, '#8b5cf6', 'author');
+    }
+
+    function renderHorizontalBar(domId, names, values, color, chartKey) {
+        if (names.length !== values.length) {
+            console.warn(`renderHorizontalBar: 数组长度不一致 (${names.length} vs ${values.length})`);
+        }
+        if (charts[chartKey]) charts[chartKey].dispose();
+        // ECharts 横向条形图：x/y 轴对调
+        const sorted = names.map((n, i) => ({ name: n, value: values[i] || 0 })).sort((a, b) => a.value - b.value);
+        charts[chartKey] = echarts.init(document.getElementById(domId));
+        charts[chartKey].setOption({
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            grid: { left: 100, right: 30, top: 10, bottom: 30 },
+            xAxis: { type: 'value', axisLabel: { formatter: v => formatNumber(v) } },
+            yAxis: { type: 'category', data: sorted.map(d => d.name), axisLabel: { fontSize: 12 } },
+            series: [{
+                type: 'bar',
+                data: sorted.map(d => d.value),
+                itemStyle: { color: color, borderRadius: [0, 4, 4, 0] },
+                label: { show: true, position: 'right', formatter: p => formatNumber(p.value) }
+            }]
+        });
+    }
+
+    async function loadByCallType() {
+        const res = await apiFetch(`${API_BASE}/token-usage/by-call-type?range=${getRange()}`);
+        if (!res.ok) throw new Error('调用类型接口 HTTP ' + res.status);
+        const json = await res.json();
+        const data = json.data || [];
+        if (data.length === 0) { showChartEmpty('callTypeChart', 'callType'); return; }
+        const names = data.map(d => d.call_type || 'unknown');
+        const values = data.map(d => d.total_tokens || 0);
+
+        if (charts.callType) charts.callType.dispose();
+        charts.callType = echarts.init(document.getElementById('callTypeChart'));
+        charts.callType.setOption({
+            tooltip: { trigger: 'axis' },
+            grid: { left: 100, right: 30, top: 10, bottom: 30 },
+            xAxis: { type: 'value', axisLabel: { formatter: v => formatNumber(v) } },
+            yAxis: { type: 'category', data: names },
+            series: [{
+                type: 'bar',
+                data: values,
+                itemStyle: { color: '#f59e0b', borderRadius: [0, 4, 4, 0] },
+                label: { show: true, position: 'right', formatter: p => formatNumber(p.value) }
+            }]
+        });
+    }
+
+    async function loadCalls(page) {
+        if (page < 1) page = 1;
+        currentPage = page;
+        const params = new URLSearchParams({
+            range: getRange(),
+            page: String(page),
+            page_size: String(pageSize),
+        });
+        const m = document.getElementById('filterModel').value;
+        const c = document.getElementById('filterCaller').value;
+        const s = document.getElementById('filterStatus').value;
+        if (m) params.set('model_name', m);
+        if (c) params.set('caller', c);
+        if (s) params.set('status', s);
+
+        const res = await apiFetch(`${API_BASE}/token-usage/calls?${params.toString()}`);
+        if (!res.ok) throw new Error('调用明细 HTTP ' + res.status);
+        const json = await res.json();
+        const rows = json.data || [];
+        const tbody = document.getElementById('callsTableBody');
+
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-gray-400 py-8">暂无数据</td></tr>';
+        } else {
+            tbody.innerHTML = rows.map(r => {
+                // 安全转义：task_id 用于 href 必须 encodeURIComponent
+                const safeId = r.task_id != null ? encodeURIComponent(r.task_id) : '';
+                const taskCell = r.task_id != null
+                    ? `<a href="task-detail.html?id=${safeId}" class="text-blue-600 hover:underline">#${escapeHtml(String(r.task_id))}</a>`
+                    : '-';
+                return `
+                    <tr>
+                        <td>${(r.created_at || '').slice(0, 19).replace('T', ' ')}</td>
+                        <td>${escapeHtml(r.model_name || '-')}</td>
+                        <td>${escapeHtml(r.caller || '-')}</td>
+                        <td><span class="px-2 py-1 rounded text-xs badge-score">${escapeHtml(r.call_type || '-')}</span></td>
+                        <td style="text-align:right;">${formatNumber(r.prompt_tokens)}</td>
+                        <td style="text-align:right;">${formatNumber(r.completion_tokens)}</td>
+                        <td style="text-align:right;font-weight:600;">${formatNumber(r.total_tokens)}</td>
+                        <td style="text-align:right;">${((r.duration_ms || 0) / 1000).toFixed(1)}s</td>
+                        <td><span class="px-2 py-1 rounded text-xs ${r.status === 'success' ? 'badge-success' : 'badge-failed'}">${r.status === 'success' ? '✅ 成功' : '❌ 失败'}</span></td>
+                        <td>${taskCell}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        const total = json.total || 0;
+        const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
+        const end = Math.min(page * pageSize, total);
+        document.getElementById('paginationInfo').textContent = `共 ${total} 条，当前 ${start}-${end}`;
+        document.getElementById('prevPageBtn').disabled = page <= 1;
+        document.getElementById('nextPageBtn').disabled = end >= total;
+    }
+
+    window.addEventListener('resize', () => {
+        Object.values(charts).forEach(c => c && c.resize());
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        if (!isAdmin()) {
+            document.querySelector('main').innerHTML = '<div class="p-8 text-center text-gray-500">该页面仅管理员可访问</div>';
+            return;
+        }
+        renderSidebar('token-usage');
+        const userInfo = JSON.parse(localStorage.getItem('user_info') || '{}');
+        document.getElementById('currentUser').textContent = userInfo.display_name || userInfo.username || '-';
+        document.getElementById('currentRole').textContent = userInfo.role === 'admin' ? '管理员' : '开发者';
+        loadAll();
+    });
+</script>
+</body>
+</html>

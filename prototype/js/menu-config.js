@@ -47,6 +47,13 @@ const MENU_CONFIG = [
         role: ['admin']
     },
     {
+        id: 'token-usage',
+        name: 'Token 用量',
+        href: 'token-usage.html',
+        icon: 'fa-coins',
+        role: ['admin']
+    },
+    {
         id: 'review-rules',
         name: '评审规则库',
         href: 'review-rules.html',

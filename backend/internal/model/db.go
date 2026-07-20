@@ -207,6 +207,13 @@ func autoMigrate() error {
 		DB.Migrator().DropColumn(&WeComNotifier{}, "webhook_key")
 	}
 
+	// Token 用量监控表
+	if err := DB.AutoMigrate(
+		&LLMCallLog{},
+	); err != nil {
+		return err
+	}
+
 	return nil
 }
 

@@ -989,15 +989,19 @@ func (s *TaskService) fetchMRCommits(task model.Task) []gitlab.CommitInfo {
 	return commits
 }
 
-func (s *TaskService) runAIReview(diffFiles []gitlab.DiffFile, commitsText, mrTitle, projectTemplate string, modelID uint) (string, int, string, uint, string, error) {
+func (s *TaskService) runAIReview(taskID *uint, caller string, diffFiles []gitlab.DiffFile, commitsText, mrTitle, projectTemplate string, modelID uint) (string, int, string, uint, string, error) {
 	var reviewReport string
 	var userPrompt string
 	var actualModelID uint
 	var actualModelName string
 
+	if caller == "" {
+		caller = "runAIReview"
+	}
+
 	if isSingleBatch(diffFiles) {
 		userPrompt = buildSingleBatchPrompt(diffFiles, commitsText, mrTitle, projectTemplate)
-		result, err := NewLLMService().ChatCompletion(modelID, "", userPrompt)
+		result, err := NewLLMService().ChatCompletion(taskID, modelID, caller, "", userPrompt)
 		if err != nil {
 			return "", 0, "", 0, "", fmt.Errorf("LLM 调用失败: %w", err)
 		}
@@ -1010,7 +1014,7 @@ func (s *TaskService) runAIReview(diffFiles []gitlab.DiffFile, commitsText, mrTi
 
 		for i, batch := range batches {
 			batchPrompt := buildBatchPrompt(batch, i+1, len(batches), commitsText, mrTitle, projectTemplate)
-			result, err := NewLLMService().ChatCompletion(modelID, "", batchPrompt)
+			result, err := NewLLMService().ChatCompletion(taskID, modelID, caller, "", batchPrompt)
 			if err != nil {
 				return "", 0, "", 0, "", fmt.Errorf("批次 %d/%d 评审失败: %w", i+1, len(batches), err)
 			}
@@ -1024,7 +1028,7 @@ func (s *TaskService) runAIReview(diffFiles []gitlab.DiffFile, commitsText, mrTi
 		}
 
 		userPrompt = buildSummaryPrompt(batchReviews, commitsText, mrTitle, projectTemplate)
-		result, err := NewLLMService().ChatCompletion(modelID, "", userPrompt)
+		result, err := NewLLMService().ChatCompletion(taskID, modelID, caller, "", userPrompt)
 		if err != nil {
 			return "", 0, "", 0, "", fmt.Errorf("汇总评审失败: %w", err)
 		}
@@ -1472,7 +1476,7 @@ func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.
 	llmService := NewLLMService()
 
 	if isSingleBatch(diffFiles) {
-		result, err := llmService.ChatCompletionStructured(0, "", userPrompt, responseFormat)
+		result, err := llmService.ChatCompletionStructured(&task.ID, 0, "runAIReviewStructured", "", userPrompt, responseFormat)
 		if err != nil {
 			return "", 0, userPrompt, 0, "", fmt.Errorf("LLM 结构化调用失败: %w", err)
 		}
@@ -1483,7 +1487,7 @@ func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.
 	} else {
 		// 分批处理（暂不实现结构化分批，fallback 到旧模式）
 		// TODO: 实现分批结构化评审
-		return s.runAIReviewFallback(diffFiles, commitsText, task.MRTitle, userPrompt)
+		return s.runAIReviewFallback(&task.ID, diffFiles, commitsText, task.MRTitle, userPrompt)
 	}
 
 	// 8. Refusal 检测
@@ -1513,7 +1517,7 @@ func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.
 
 	// 重试回调：重新调用 LLM
 	retryCall := func() (string, error) {
-		result, err := llmService.ChatCompletionStructured(0, "", userPrompt, responseFormat)
+		result, err := llmService.ChatCompletionStructured(&task.ID, 0, "retry", "", userPrompt, responseFormat)
 		if err != nil {
 			return "", err
 		}
@@ -1562,10 +1566,10 @@ func (s *TaskService) runStructuredAIReview(task model.Task, diffFiles []gitlab.
 
 // runAIReviewFallback 分批评审 fallback（使用旧模式）
 // TODO: 后续实现分批结构化评审
-func (s *TaskService) runAIReviewFallback(diffFiles []gitlab.DiffFile, commitsText, mrTitle, userPrompt string) (string, int, string, uint, string, error) {
+func (s *TaskService) runAIReviewFallback(taskID *uint, diffFiles []gitlab.DiffFile, commitsText, mrTitle, userPrompt string) (string, int, string, uint, string, error) {
 	// 简单处理：对第一批做结构化评审，其余忽略
 	// 或直接用旧方法
-	return s.runAIReview(diffFiles, commitsText, mrTitle, userPrompt, 0)
+	return s.runAIReview(taskID, "runAIReviewFallback", diffFiles, commitsText, mrTitle, userPrompt, 0)
 }
 
 // persistTaskReviewRules 持久化任务实际使用的规则（含被截断记录）
