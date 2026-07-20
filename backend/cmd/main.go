@@ -382,6 +382,8 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			model.PUT("/:id/default", h.SetDefault)
 			model.DELETE("/:id/default", h.UnsetDefault)
 			model.POST("/:id/check", h.CheckAPI)
+			model.PUT("/:id/disable", h.Disable)
+			model.PUT("/:id/enable", h.Enable)
 		}
 
 		// 企业微信通知

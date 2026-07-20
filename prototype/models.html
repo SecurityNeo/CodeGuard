@@ -480,6 +480,24 @@
         </div>
     </div>
 
+    <!-- 禁用确认弹窗 -->
+    <div id="disableModal" class="modal fixed inset-0 bg-black/50 items-center justify-center z-50">
+        <div class="bg-white rounded-xl w-[400px]">
+            <div class="p-6 text-center">
+                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-pause-circle text-gray-600 text-xl"></i>
+                </div>
+                <h3 class="font-bold text-lg mb-2">确认禁用</h3>
+                <p class="text-gray-500 text-sm" id="disableMsg">确定禁用该模型？禁用后该模型将不再参与服务调用。</p>
+                <input type="hidden" id="disableId">
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end gap-3">
+                <button onclick="closeModal('disableModal')" class="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">取消</button>
+                <button onclick="confirmDisable()" class="px-4 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-700">禁用</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 确认删除弹窗 -->
     <div id="deleteModal" class="modal fixed inset-0 bg-black/50 items-center justify-center z-50">
         <div class="bg-white rounded-xl w-[400px]">
@@ -722,7 +740,7 @@
         function renderTable(models) {
             const tbody = document.getElementById('modelTableBody');
             tbody.innerHTML = models.map(m => `
-                <tr class="hover:bg-gray-50" data-id="${m.id}">
+                <tr class="hover:bg-gray-50 cursor-pointer" onclick="viewModel(${m.id})" data-id="${m.id}">
                     <td class="px-6 py-4 text-sm">
                         <span class="bg-green-50 text-green-700 px-2 py-1 rounded text-xs">${getProviderName(m.provider)}</span>
                     </td>
@@ -737,8 +755,10 @@
                         <span class="px-2 py-1 rounded text-xs ${getStatusClass(m.status)}">${getStatusText(m.status)}</span>
                     </td>
                     <td class="px-6 py-4 text-sm text-gray-500">${formatTime(m.last_check_at)}</td>
-                    <td class="px-6 py-4 text-center space-x-1">
-                        <button onclick="viewModel(${m.id})" class="text-blue-600 hover:text-blue-800 text-xs">查看</button>
+                    <td class="px-6 py-4 text-center space-x-1" onclick="event.stopPropagation()">
+                        ${m.status === 'inactive'
+                            ? `<button onclick="enableModel(${m.id})" class="text-green-600 hover:text-green-800 text-xs">启用</button>`
+                            : `<button onclick="openDisableModal(${m.id}, '${m.provider}-${m.model_id}')" class="text-gray-600 hover:text-gray-800 text-xs">禁用</button>`}
                         ${m.is_default ? `<button onclick="unsetDefault(${m.id})" class="text-blue-600 hover:text-blue-800 text-xs">取消默认</button>` : `<button onclick="setDefault(${m.id})" class="text-blue-600 hover:text-blue-800 text-xs">设为默认</button>`}
                         ${!m.is_primary ? `<button onclick="setPrimary(${m.id})" class="text-purple-600 hover:text-purple-800 text-xs">设为主</button>` : ''}
                         ${m.backup_order === 0 ? `<button onclick="setBackup(${m.id}, 1)" class="text-orange-600 hover:text-orange-800 text-xs">设为备用</button>` : `<button onclick="unsetBackup(${m.id})" class="text-orange-600 hover:text-orange-800 text-xs">取消备用</button>`}
@@ -874,10 +894,20 @@
         }
 
         async function updateModel() {
-            const id = document.getElementById('editId').value;
+            const id = parseInt(document.getElementById('editId').value);
             const role = document.querySelector('input[name="editRole"]:checked')?.value || '';
             const isPrimary = role === 'primary';
             const isBackup = role === 'backup';
+            const backupOrder = isBackup ? (parseInt(document.getElementById('editBackupOrder').value) || 1) : 0;
+
+            if (backupOrder > 0) {
+                const conflict = await checkBackupOrderConflict(backupOrder, id);
+                if (conflict) {
+                    showToast(`备用顺序 ${backupOrder} 已被其他模型占用`, 'error');
+                    return;
+                }
+            }
+
             const data = {
                 model_id: document.getElementById('editModelId').value,
                 base_url: document.getElementById('editBaseUrl').value,
@@ -888,10 +918,9 @@
                 temperature: parseFloat(document.getElementById('editTemperature').value) || 0.1,
                 is_default: document.getElementById('editIsDefault').checked,
                 is_primary: isPrimary,
-                backup_order: isBackup ? (parseInt(document.getElementById('editBackupOrder').value) || 1) : 0
+                backup_order: backupOrder
             };
             
-            // 移除空字段
             if (!data.api_key) delete data.api_key;
 
             try {
@@ -983,6 +1012,7 @@
             try {
                 const resp = await apiFetch(`${API_BASE}/models/${id}`, {
                     method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({is_primary: true, backup_order: 0})
                 });
                 const result = await resp.json();
@@ -1004,17 +1034,34 @@
             showModal('setBackupModal');
         }
 
+        async function checkBackupOrderConflict(order, excludeId) {
+            try {
+                const resp = await apiFetch(`${API_BASE}/models?page=1&page_size=1000`);
+                const data = await resp.json();
+                if (data.data) {
+                    return data.data.some(m => m.backup_order === order && m.id !== excludeId && m.status !== 'inactive');
+                }
+            } catch (e) {}
+            return false;
+        }
+
         async function confirmSetBackup() {
-            const id = document.getElementById('setBackupId').value;
+            const id = parseInt(document.getElementById('setBackupId').value);
             const backupOrder = parseInt(document.getElementById('setBackupOrderInput').value, 10);
             if (isNaN(backupOrder) || backupOrder <= 0) {
                 showToast('请输入大于 0 的整数', 'error');
+                return;
+            }
+            const conflict = await checkBackupOrderConflict(backupOrder, id);
+            if (conflict) {
+                showToast(`备用顺序 ${backupOrder} 已被其他模型占用`, 'error');
                 return;
             }
             closeModal('setBackupModal');
             try {
                 const resp = await apiFetch(`${API_BASE}/models/${id}`, {
                     method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({is_primary: false, backup_order: backupOrder})
                 });
                 const result = await resp.json();
@@ -1035,6 +1082,7 @@
             try {
                 const resp = await apiFetch(`${API_BASE}/models/${id}`, {
                     method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({backup_order: 0})
                 });
                 const result = await resp.json();
@@ -1046,6 +1094,46 @@
                 }
             } catch (err) {
                 showToast('设置失败: ' + err.message, 'error');
+            }
+        }
+
+        // 禁用模型
+        function openDisableModal(id, name) {
+            document.getElementById('disableId').value = id;
+            document.getElementById('disableMsg').textContent = `确定禁用模型 "${name}"？禁用后该模型将不再参与服务调用。`;
+            showModal('disableModal');
+        }
+
+        async function confirmDisable() {
+            const id = document.getElementById('disableId').value;
+            closeModal('disableModal');
+            try {
+                const resp = await apiFetch(`${API_BASE}/models/${id}/disable`, {method: 'PUT'});
+                const result = await resp.json();
+                if (resp.ok) {
+                    showToast('模型已禁用');
+                    loadModels();
+                } else {
+                    showToast(result.error || '禁用失败', 'error');
+                }
+            } catch (err) {
+                showToast('禁用失败: ' + err.message, 'error');
+            }
+        }
+
+        // 启用模型
+        async function enableModel(id) {
+            try {
+                const resp = await apiFetch(`${API_BASE}/models/${id}/enable`, {method: 'PUT'});
+                const result = await resp.json();
+                if (resp.ok) {
+                    showToast('模型已启用');
+                    loadModels();
+                } else {
+                    showToast(result.error || '启用失败', 'error');
+                }
+            } catch (err) {
+                showToast('启用失败: ' + err.message, 'error');
             }
         }
 
@@ -1218,8 +1306,9 @@
         }
 
         function getStatusClass(status) {
-            if (status === 'active') return 'text-green-600';
-            if (status === 'error') return 'text-red-600';
+            if (status === 'active') return 'bg-green-100 text-green-700';
+            if (status === 'error') return 'bg-red-100 text-red-700';
+            if (status === 'inactive') return 'bg-gray-200 text-gray-500';
             return 'text-gray-500';
         }
         

@@ -18,6 +18,9 @@ var (
 	ErrModelNotFound       = errors.New("模型不存在")
 	ErrCannotDeleteDefault = errors.New("不能删除默认模型")
 	ErrModelExists         = errors.New("模型已存在")
+	ErrCannotDisablePrimary = errors.New("不能禁用主模型，请先取消主模型后再禁用")
+	ErrCannotDisableDefault = errors.New("不能禁用默认模型，请先取消默认后再禁用")
+	ErrBackupOrderConflict = errors.New("备用顺序冲突，该顺序已被其他模型占用")
 )
 
 func NewModelService() *ModelService {
@@ -133,6 +136,16 @@ func (s *ModelService) Update(id uint, req *UpdateModelRequest) error {
 		return err
 	}
 
+	if req.BackupOrder != nil && *req.BackupOrder > 0 {
+		var conflict int64
+		model.DB.Model(&model.LLMModel{}).
+			Where("backup_order = ? AND id != ? AND status != ?", *req.BackupOrder, id, "inactive").
+			Count(&conflict)
+		if conflict > 0 {
+			return ErrBackupOrderConflict
+		}
+	}
+
 	updates := map[string]interface{}{}
 
 	if req.BaseURL != nil && *req.BaseURL != "" {
@@ -178,10 +191,10 @@ func (s *ModelService) Update(id uint, req *UpdateModelRequest) error {
 	}
 
 	if req.BackupOrder != nil && *req.BackupOrder != m.BackupOrder {
-		updates["backup_order"] = *req.BackupOrder
 		if *req.BackupOrder > 0 {
 			updates["is_primary"] = false
 		}
+		updates["backup_order"] = *req.BackupOrder
 	}
 
 	if req.IsDefault != nil {
@@ -402,6 +415,35 @@ func (s *ModelService) GetForUpdate(id uint) (*model.LLMModel, error) {
 	}
 
 	return &m, nil
+}
+
+// Disable 禁用模型
+func (s *ModelService) Disable(id uint) error {
+	m, err := s.GetForUpdate(id)
+	if err != nil {
+		return err
+	}
+
+	if m.IsPrimary {
+		return ErrCannotDisablePrimary
+	}
+	if m.IsDefault {
+		return ErrCannotDisableDefault
+	}
+
+	return model.DB.Model(&model.LLMModel{}).Where("id = ?", id).Update("status", "inactive").Error
+}
+
+// Enable 启用模型
+func (s *ModelService) Enable(id uint) error {
+	_, err := s.GetForUpdate(id)
+	if err != nil {
+		return err
+	}
+	return model.DB.Model(&model.LLMModel{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"status":      "active",
+		"check_error": "",
+	}).Error
 }
 
 // CheckConnectivityByConfig 测试配置连通性（不保存）

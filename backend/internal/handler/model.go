@@ -166,6 +166,10 @@ func (h *ModelHandler) Update(c *gin.Context) {
 			c.JSON(400, gin.H{"error": "该提供商下已存在相同模型ID"})
 			return
 		}
+		if err == service.ErrBackupOrderConflict {
+			c.JSON(400, gin.H{"error": "该备用顺序已被其他模型占用，请选择其他顺序"})
+			return
+		}
 		zap.L().Error("update model failed", zap.Error(err), zap.Uint("id", uint(id)))
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
@@ -310,6 +314,78 @@ func (h *ModelHandler) CheckAPI(c *gin.Context) {
 		"success": success,
 		"message": "API 连接成功",
 	})
+}
+
+// Disable 禁用模型
+// PUT /api/v1/models/:id/disable
+func (h *ModelHandler) Disable(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "无效的模型ID"})
+		return
+	}
+
+	m, err := h.service.Get(uint(id))
+	if err != nil {
+		if err == service.ErrModelNotFound {
+			c.JSON(404, gin.H{"error": "模型不存在"})
+			return
+		}
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	err = h.service.Disable(uint(id))
+	if err != nil {
+		if err == service.ErrCannotDisablePrimary {
+			c.JSON(400, gin.H{"error": "不能禁用主模型，请先取消主模型后再禁用"})
+			return
+		}
+		if err == service.ErrCannotDisableDefault {
+			c.JSON(400, gin.H{"error": "不能禁用默认模型，请先取消默认后再禁用"})
+			return
+		}
+		zap.L().Error("disable model failed", zap.Error(err), zap.Uint("id", uint(id)))
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("模型禁用", fmt.Sprintf("%s-%s", m.Provider, m.ModelID), uint(id), userID.(uint), "success", "", c.ClientIP())
+
+	c.JSON(200, gin.H{"message": "模型已禁用"})
+}
+
+// Enable 启用模型
+// PUT /api/v1/models/:id/enable
+func (h *ModelHandler) Enable(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "无效的模型ID"})
+		return
+	}
+
+	m, err := h.service.Get(uint(id))
+	if err != nil {
+		if err == service.ErrModelNotFound {
+			c.JSON(404, gin.H{"error": "模型不存在"})
+			return
+		}
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	err = h.service.Enable(uint(id))
+	if err != nil {
+		zap.L().Error("enable model failed", zap.Error(err), zap.Uint("id", uint(id)))
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID, _ := c.Get("user_id")
+	model.RecordOpLog("模型启用", fmt.Sprintf("%s-%s", m.Provider, m.ModelID), uint(id), userID.(uint), "success", "", c.ClientIP())
+
+	c.JSON(200, gin.H{"message": "模型已启用"})
 }
 
 // GetDefault 获取默认模型
