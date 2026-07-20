@@ -66,9 +66,9 @@ func main() {
 	service.NewPoolService().StartHealthCheckDaemon()
 	service.NewModelService().StartHealthCheckDaemon()
 
-	// 5.2.5. 预热 SystemConfig 缓存 + 定时刷新（5 分钟 TTL）
+	// 5.2.5. 预热 SystemConfig 缓存 + 定时刷新（cache TTL 5min，刷新周期 1min 必须 < TTL）
 	service.RefreshSysCfgCache()
-	_, _ = cronRunner.AddFunc("@every 5m", service.RefreshSysCfgCache)
+	_, _ = cronRunner.AddFunc("@every 1m", service.RefreshSysCfgCache)
 
 	// 5.3. 启动 LLM 调用日志后台 worker（依赖 model.DB，必须在 InitDB 之后调用）
 	llmcall.Start()

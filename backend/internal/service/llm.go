@@ -68,7 +68,10 @@ type sysCfgCacheEntry struct {
 
 var (
 	sysCfgCache     atomic.Pointer[sysCfgCacheEntry]
-	sysCfgCacheTTL  = 60 * time.Second
+	// sysCfgCacheTTL 必须大于 cron 刷新周期，否则 cache 长时间处于"已过期"状态，
+	// loadSysCfgCached 返回 nil，callLLMAPI 会回退到 llmModel.TimeoutSec 默认值（120s），
+	// 导致系统配置 task_timeout_min 不生效。
+	sysCfgCacheTTL  = 5 * time.Minute
 	sysCfgCacheOnce atomic.Bool
 )
 
@@ -241,6 +244,11 @@ func (s *LLMService) callLLMAPI(taskID *uint, llmModel *model.LLMModel, caller, 
 	timeoutSec := llmModel.TimeoutSec
 	if cached := loadSysCfgCached(); cached != nil && cached.taskTimeoutMin > 0 {
 		timeoutSec = cached.taskTimeoutMin * 60
+	} else {
+		// cache 未命中或 task_timeout_min=0：显式 warn，便于排查"配置不生效"问题
+		zap.L().Warn("sysCfgCache miss, using model default timeout",
+			zap.Uint("model_id", llmModel.ID),
+			zap.Int("llm_model_timeout_sec", llmModel.TimeoutSec))
 	}
 
 	client := newHTTPClient(time.Duration(timeoutSec) * time.Second)
