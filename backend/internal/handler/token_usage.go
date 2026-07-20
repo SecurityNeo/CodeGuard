@@ -126,7 +126,8 @@ func (h *TokenUsageHandler) GetOverview(c *gin.Context) {
 		AvgDurationMs    float64 `json:"avg_duration_ms"`
 	}
 	var r result
-	row := q.Select(`
+	// Session 隔离：GORM Row() 内部复用 Statement 会污染 builder，独立 Session 避免影响 q
+	row := q.Session(&gorm.Session{}).Select(`
 		COALESCE(SUM(l.total_tokens), 0)        AS total_tokens,
 		COALESCE(SUM(l.prompt_tokens), 0)       AS prompt_tokens,
 		COALESCE(SUM(l.completion_tokens), 0)   AS completion_tokens,
@@ -419,7 +420,8 @@ func (h *TokenUsageHandler) GetByTask(c *gin.Context) {
 		FailedCount      int64   `json:"failed_count"`
 	}
 	var s summary
-	row := base.Select(`COUNT(*)                                          AS call_count,
+	// Session 隔离：GORM Row() 内部复用 Statement 会污染 builder，导致 base 后续查询重复 JOIN
+	row := base.Session(&gorm.Session{}).Select(`COUNT(*)                                          AS call_count,
 		COALESCE(SUM(l.prompt_tokens), 0)                        AS prompt_tokens,
 		COALESCE(SUM(l.completion_tokens), 0)                    AS completion_tokens,
 		COALESCE(SUM(l.total_tokens), 0)                         AS total_tokens,
