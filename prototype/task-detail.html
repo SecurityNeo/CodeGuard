@@ -319,21 +319,19 @@
                         </div>
                     </div>
                     <div class="data-table-wrap" style="max-height: 480px; overflow-y: auto;">
-                        <table class="data-table w-full">
+                        <table class="data-table w-full text-sm">
                             <thead>
                                 <tr>
-                                    <th>时间</th>
-                                    <th>模型</th>
-                                    <th>调用方</th>
-                                    <th style="text-align:right;">输入</th>
-                                    <th style="text-align:right;">输出</th>
-                                    <th style="text-align:right;">总计</th>
-                                    <th style="text-align:right;">耗时</th>
-                                    <th>状态</th>
+                                    <th style="width:88px;">时间</th>
+                                    <th style="width:30%;">模型</th>
+                                    <th style="width:130px;">调用方</th>
+                                    <th style="text-align:right;width:130px;">输入 / 输出</th>
+                                    <th style="text-align:right;width:90px;">总计</th>
+                                    <th style="text-align:right;width:130px;">状态 / 耗时</th>
                                 </tr>
                             </thead>
                             <tbody id="taskTokenCallsTableBody">
-                                <tr><td colspan="8" class="text-center text-gray-400 py-8">加载中...</td></tr>
+                                <tr><td colspan="6" class="text-center text-gray-400 py-8">加载中...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -594,15 +592,15 @@ async function loadTaskTokenUsage(force) {
     if (taskTokenUsageLoaded && !force) return;
 
     const tbody = document.getElementById('taskTokenCallsTableBody');
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-8">加载中...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">加载中...</td></tr>';
     try {
         const resp = await apiFetch(`${API_BASE}/token-usage/by-task?task_id=${encodeURIComponent(id)}`);
         if (!resp.ok) {
             // 区分错误与空数据：404/403 视为权限或不存在，其他 HTTP 错误显示具体状态码
             if (resp.status === 404) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-8">该任务暂无 token 用量记录（功能上线前任务或失败任务）</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">该任务暂无 token 用量记录（功能上线前任务或失败任务）</td></tr>';
             } else {
-                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-red-400 py-8">加载失败（HTTP ${resp.status}）</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-red-400 py-8">加载失败（HTTP ${resp.status}）</td></tr>`;
                 // 重置 KPI 卡片，避免展示过期数据
                 ['taskTokenCalls','taskTokenPrompt','taskTokenCompletion','taskTokenTotal','taskTokenAvgDuration']
                     .forEach(id => document.getElementById(id).textContent = '-');
@@ -620,18 +618,23 @@ async function loadTaskTokenUsage(force) {
         document.getElementById('taskTokenAvgDuration').textContent = ((s.avg_duration_ms || 0) / 1000).toFixed(1) + 's';
 
         if (calls.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-8">该任务无 token 用量记录</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">该任务无 token 用量记录</td></tr>';
         } else {
             tbody.innerHTML = calls.map(c => `
-                <tr>
-                    <td>${(c.created_at || '').slice(0, 19).replace('T', ' ')}</td>
-                    <td>${escapeHtml(c.model_name || '-')}</td>
-                    <td>${escapeHtml(c.caller || '-')}</td>
-                    <td style="text-align:right;">${formatNumber(c.prompt_tokens)}</td>
-                    <td style="text-align:right;">${formatNumber(c.completion_tokens)}</td>
-                    <td style="text-align:right;font-weight:600;">${formatNumber(c.total_tokens)}</td>
-                    <td style="text-align:right;">${((c.duration_ms || 0) / 1000).toFixed(1)}s</td>
-                    <td><span class="px-2 py-1 rounded text-xs ${c.status === 'success' ? 'badge-success' : 'badge-failed'}">${c.status === 'success' ? '✅ 成功' : '❌ 失败'}</span></td>
+                <tr class="text-sm">
+                    <td class="font-mono text-gray-600">${formatTime(c.created_at)}</td>
+                    <td><span class="text-gray-700" title="${escapeHtml(c.model_name || '-')}">${escapeHtml(truncate(c.model_name, 28))}</span></td>
+                    <td>${renderCallerBadge(c.caller)}</td>
+                    <td style="text-align:right;" class="font-mono">
+                        <span class="text-blue-600" title="输入">${formatNumber(c.prompt_tokens)}</span>
+                        <span class="text-gray-300 mx-0.5">/</span>
+                        <span class="text-green-600" title="输出">${formatNumber(c.completion_tokens)}</span>
+                    </td>
+                    <td style="text-align:right;font-weight:600;font-family:monospace;" class="text-orange-600">${formatNumber(c.total_tokens)}</td>
+                    <td style="text-align:right;">
+                        <span class="px-2 py-0.5 rounded text-xs ${c.status === 'success' ? 'badge-success' : 'badge-failed'}">${c.status === 'success' ? '✅ 成功' : '❌ 失败'}</span>
+                        <span class="text-gray-400 text-xs ml-1">${((c.duration_ms || 0) / 1000).toFixed(1)}s</span>
+                    </td>
                 </tr>
             `).join('');
         }
@@ -643,7 +646,7 @@ async function loadTaskTokenUsage(force) {
         // 使用 textContent 避免 XSS（e.message 可能含恶意内容）
         const tr = document.createElement('tr');
         const td = document.createElement('td');
-        td.colSpan = 8;
+        td.colSpan = 6;
         td.className = 'text-center text-red-400 py-8';
         td.textContent = '加载失败: ' + e.message;
         tr.appendChild(td);
@@ -658,6 +661,36 @@ function formatNumber(num) {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
     return num.toString();
+}
+
+function formatTime(iso) {
+    if (!iso) return '-';
+    // 同一任务内只看时分秒；跨天时显示 MM-DD HH:MM:SS
+    const d = new Date(iso.replace(' ', 'T'));
+    if (isNaN(d)) return iso.slice(0, 19).replace('T', ' ');
+    const today = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const hh = pad(d.getHours()), mm = pad(d.getMinutes()), ss = pad(d.getSeconds());
+    if (d.toDateString() === today.toDateString()) return `${hh}:${mm}:${ss}`;
+    return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hh}:${mm}:${ss}`;
+}
+
+function truncate(s, n) {
+    if (!s) return '';
+    return s.length > n ? s.slice(0, n) + '…' : s;
+}
+
+// 调用方中文化映射 + 颜色 badge
+const CALLER_LABELS = {
+    runAIReview:              { text: 'AI 评审',         cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+    runAIReviewStructured:    { text: 'AI 评审（结构化）', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+    runAIReviewFallback:      { text: 'AI 评审（分批）',   cls: 'bg-purple-50 text-purple-700 border-purple-200' },
+    retry:                    { text: '解析重试',         cls: 'bg-orange-50 text-orange-700 border-orange-200' },
+    callLLMAPI:               { text: 'LLM 调用',         cls: 'bg-gray-100 text-gray-600 border-gray-200' },
+};
+function renderCallerBadge(caller) {
+    const info = CALLER_LABELS[caller] || { text: caller || '-', cls: 'bg-gray-50 text-gray-500 border-gray-200' };
+    return `<span class="inline-block px-2 py-0.5 rounded text-xs border ${info.cls}" title="${escapeHtml(caller || '')}">${escapeHtml(info.text)}</span>`;
 }
 
 function escapeHtml(text) {
