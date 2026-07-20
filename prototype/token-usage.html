@@ -155,22 +155,16 @@
                 </div>
             </div>
 
-            <!-- 图表第 2 行：项目排行 + 作者排行 -->
+            <!-- 图表第 2 行：项目排行 + 用户排行 -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="chart-card bg-white rounded-xl p-6 border">
                     <h3 class="text-lg font-bold text-gray-800 mb-4">项目 Token 用量 TOP 10</h3>
                     <div id="projectChart" style="height: 360px;"></div>
                 </div>
                 <div class="chart-card bg-white rounded-xl p-6 border">
-                    <h3 class="text-lg font-bold text-gray-800 mb-4">作者 Token 用量 TOP 10</h3>
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">用户 Token 用量 TOP 10</h3>
                     <div id="authorChart" style="height: 360px;"></div>
                 </div>
-            </div>
-
-            <!-- 调用类型分布 -->
-            <div class="chart-card bg-white rounded-xl p-6 border">
-                <h3 class="text-lg font-bold text-gray-800 mb-4">调用类型分布</h3>
-                <div id="callTypeChart" style="height: 220px;"></div>
             </div>
 
             <!-- 调用明细表 -->
@@ -292,7 +286,7 @@
         // 用 Promise.allSettled + 各函数自己抛错，反映真实失败数
         const results = await Promise.allSettled([
             loadOverview(), loadTrend(), loadByModel(),
-            loadByProject(), loadByAuthor(), loadByCallType(), loadCalls(1)
+            loadByProject(), loadByAuthor(), loadCalls(1)
         ]);
         const failed = results.filter(r => r.status === 'rejected').length;
         document.getElementById('lastUpdate').textContent = failed === 0
@@ -388,7 +382,7 @@
 
     async function loadByAuthor() {
         const res = await apiFetch(`${API_BASE}/token-usage/by-author?range=${getRange()}&page=1&page_size=10`);
-        if (!res.ok) throw new Error('作者接口 HTTP ' + res.status);
+        if (!res.ok) throw new Error('用户接口 HTTP ' + res.status);
         const json = await res.json();
         const data = json.data || [];
         if (data.length === 0) { showChartEmpty('authorChart', 'author'); return; }
@@ -414,31 +408,6 @@
                 type: 'bar',
                 data: sorted.map(d => d.value),
                 itemStyle: { color: color, borderRadius: [0, 4, 4, 0] },
-                label: { show: true, position: 'right', formatter: p => formatNumber(p.value) }
-            }]
-        });
-    }
-
-    async function loadByCallType() {
-        const res = await apiFetch(`${API_BASE}/token-usage/by-call-type?range=${getRange()}`);
-        if (!res.ok) throw new Error('调用类型接口 HTTP ' + res.status);
-        const json = await res.json();
-        const data = json.data || [];
-        if (data.length === 0) { showChartEmpty('callTypeChart', 'callType'); return; }
-        const names = data.map(d => d.call_type || 'unknown');
-        const values = data.map(d => d.total_tokens || 0);
-
-        if (charts.callType) charts.callType.dispose();
-        charts.callType = echarts.init(document.getElementById('callTypeChart'));
-        charts.callType.setOption({
-            tooltip: { trigger: 'axis' },
-            grid: { left: 100, right: 30, top: 10, bottom: 30 },
-            xAxis: { type: 'value', axisLabel: { formatter: v => formatNumber(v) } },
-            yAxis: { type: 'category', data: names },
-            series: [{
-                type: 'bar',
-                data: values,
-                itemStyle: { color: '#f59e0b', borderRadius: [0, 4, 4, 0] },
                 label: { show: true, position: 'right', formatter: p => formatNumber(p.value) }
             }]
         });
