@@ -479,8 +479,7 @@ func (h *TokenUsageHandler) GetByTask(c *gin.Context) {
 		return
 	}
 
-	// calls 列表加 LIMIT 防止单任务关联大量调用时 OOM；超出截断并通过 truncated 字段提示前端
-	const maxCallsPerTask = 500
+	// calls 列表分页，按 created_at DESC 最近优先展示
 	type call struct {
 		ID               uint      `json:"id"`
 		ModelName        string    `json:"model_name"`
@@ -494,9 +493,13 @@ func (h *TokenUsageHandler) GetByTask(c *gin.Context) {
 		ErrorMsg         string    `json:"error_msg"`
 		CreatedAt        time.Time `json:"created_at"`
 	}
+	page, pageSize := parsePagination(c, 20, 100)
+	offset := (page - 1) * pageSize
+
 	var calls []call
-	if err := base.Order("l.created_at ASC, l.id ASC").
-		Limit(maxCallsPerTask + 1). // 多取一条用于判断是否截断
+	if err := base.Order("l.created_at DESC, l.id DESC").
+		Limit(pageSize).
+		Offset(offset).
 		Select(`l.id, l.model_name, l.caller, l.call_type,
 			l.prompt_tokens, l.completion_tokens, l.total_tokens,
 			l.duration_ms, l.status, l.error_msg, l.created_at`).
@@ -504,17 +507,17 @@ func (h *TokenUsageHandler) GetByTask(c *gin.Context) {
 		respondDBError(c, "by-task calls", err)
 		return
 	}
-	truncated := false
-	if len(calls) > maxCallsPerTask {
-		calls = calls[:maxCallsPerTask]
-		truncated = true
-	}
+
+	// has_more 判断是否还有下一页；避免前端算分页边界
+	hasMore := int64(offset+len(calls)) < s.CallCount
 
 	c.JSON(200, gin.H{
 		"summary":   s,
 		"calls":     calls,
-		"truncated": truncated,
-		"limit":     maxCallsPerTask,
+		"total":     s.CallCount,
+		"page":      page,
+		"page_size": pageSize,
+		"has_more":  hasMore,
 	})
 }
 

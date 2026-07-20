@@ -363,6 +363,7 @@
                     </div>
                     </div>
                     <div class="mt-3 text-xs text-gray-400" id="taskTokenHint"></div>
+                    <div id="taskTokenPagination" class="mt-2 flex items-center justify-end gap-2 text-xs"></div>
                 </div>
 
                 <!-- Tab 1: 代码变更 -->
@@ -623,21 +624,27 @@ function renderTaskMeta(t) {
 }
 
 // ========== Token 用量 ==========
-let taskTokenUsageLoaded = false;
+// 翻页状态：每次 force 重置到第 1 页；非 force 切 tab 不重新加载（保留上次分页位置）
+const taskTokenState = { page: 1, pageSize: 20, total: 0, hasMore: false, loaded: false };
+
 async function loadTaskTokenUsage(force) {
     const id = new URLSearchParams(window.location.search).get('id');
     if (!id) return;
-    // 已加载过且不强制刷新则跳过（避免每次切 tab 重复请求）
-    if (taskTokenUsageLoaded && !force) return;
+    // 已加载过且不强制刷新则跳过（避免每次切 tab 重复请求，保留上次分页位置）
+    if (taskTokenState.loaded && !force) return;
+    // 强制刷新 → 重置分页到第 1 页
+    if (force) taskTokenState.page = 1;
 
     const tbody = document.getElementById('taskTokenCallsTableBody');
     tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">加载中...</td></tr>';
     try {
-        const resp = await apiFetch(`${API_BASE}/token-usage/by-task?task_id=${encodeURIComponent(id)}`);
+        const { page, pageSize } = taskTokenState;
+        const resp = await apiFetch(`${API_BASE}/token-usage/by-task?task_id=${encodeURIComponent(id)}&page=${page}&page_size=${pageSize}`);
         if (!resp.ok) {
             // 区分错误与空数据：404/403 视为权限或不存在，其他 HTTP 错误显示具体状态码
             if (resp.status === 404) {
                 tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8">该任务暂无 token 用量记录（功能上线前任务或失败任务）</td></tr>';
+                renderTaskTokenPagination();
             } else {
                 tbody.innerHTML = `<tr><td colspan="6" class="text-center text-red-400 py-8">加载失败（HTTP ${resp.status}）</td></tr>`;
                 // 重置 KPI 卡片，避免展示过期数据
@@ -649,6 +656,8 @@ async function loadTaskTokenUsage(force) {
         const json = await resp.json();
         const s = json.summary || {};
         const calls = json.calls || [];
+        taskTokenState.total = json.total || s.call_count || 0;
+        taskTokenState.hasMore = !!json.has_more;
 
         document.getElementById('taskTokenCalls').textContent = formatNumber(s.call_count || 0);
         document.getElementById('taskTokenPrompt').textContent = formatNumber(s.prompt_tokens || 0);
@@ -679,7 +688,8 @@ async function loadTaskTokenUsage(force) {
         }
         document.getElementById('taskTokenHint').textContent =
             `合计 ${s.call_count || 0} 次调用，总计 ${formatNumber(s.total_tokens || 0)} tokens（输入 ${formatNumber(s.prompt_tokens || 0)} + 输出 ${formatNumber(s.completion_tokens || 0)}）`;
-        taskTokenUsageLoaded = true;
+        renderTaskTokenPagination();
+        taskTokenState.loaded = true;
     } catch (e) {
         console.error('loadTaskTokenUsage failed', e);
         // 使用 textContent 避免 XSS（e.message 可能含恶意内容）
@@ -693,6 +703,31 @@ async function loadTaskTokenUsage(force) {
         ['taskTokenCalls','taskTokenPrompt','taskTokenCompletion','taskTokenTotal','taskTokenAvgDuration']
             .forEach(id => document.getElementById(id).textContent = '-');
     }
+}
+
+// 渲染翻页控件：仅当 total > pageSize 时展示
+function renderTaskTokenPagination() {
+    const container = document.getElementById('taskTokenPagination');
+    const { page, pageSize, total, hasMore } = taskTokenState;
+    if (!total || total <= pageSize) {
+        container.replaceChildren();
+        return;
+    }
+    const start = (page - 1) * pageSize + 1;
+    const end = Math.min(page * pageSize, total);
+    container.innerHTML = `
+        <span class="text-gray-400">第 ${start}–${end} 条 / 共 ${total} 条</span>
+        <button type="button" class="px-3 py-1 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            ${page <= 1 ? 'disabled' : ''} onclick="changeTaskTokenPage(${page - 1})">上一页</button>
+        <button type="button" class="px-3 py-1 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            ${hasMore ? '' : 'disabled'} onclick="changeTaskTokenPage(${page + 1})">下一页</button>
+    `;
+}
+
+async function changeTaskTokenPage(newPage) {
+    if (newPage < 1) return;
+    taskTokenState.page = newPage;
+    await loadTaskTokenUsage();
 }
 
 function formatNumber(num) {
