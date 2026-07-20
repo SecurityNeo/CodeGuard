@@ -155,8 +155,9 @@ func (h *TokenUsageHandler) GetTrend(c *gin.Context) {
 	gran := c.DefaultQuery("granularity", "day")
 	q := scopedQuery(c, model.CallTypeScore)
 
-	// gran 仅接受白名单值；写死两条 SQL 避免任何动态拼接
-	const daySQL = `DATE(l.created_at) AS bucket,
+	// gran 仅接受白名单值；写死两条 SQL 避免任何动态拼接。
+	// 统一 bucket 为字符串（DATE_FORMAT 返回 VARCHAR，Scan 到 time.Time 会被驱动以 []uint8 拒绝）。
+	const daySQL = `DATE_FORMAT(l.created_at, '%Y-%m-%d') AS bucket,
 		COALESCE(SUM(l.prompt_tokens), 0)     AS prompt_tokens,
 		COALESCE(SUM(l.completion_tokens), 0) AS completion_tokens,
 		COALESCE(SUM(l.total_tokens), 0)      AS total_tokens`
@@ -171,10 +172,10 @@ func (h *TokenUsageHandler) GetTrend(c *gin.Context) {
 	}
 
 	var rows []struct {
-		Bucket           time.Time `json:"-"`
-		PromptTokens     int64     `json:"prompt_tokens"`
-		CompletionTokens int64     `json:"completion_tokens"`
-		TotalTokens      int64     `json:"total_tokens"`
+		Bucket           string `json:"-"`
+		PromptTokens     int64  `json:"prompt_tokens"`
+		CompletionTokens int64  `json:"completion_tokens"`
+		TotalTokens      int64  `json:"total_tokens"`
 	}
 	if err := q.Select(selectSQL).
 		Group("bucket").
@@ -187,10 +188,10 @@ func (h *TokenUsageHandler) GetTrend(c *gin.Context) {
 	out := make([]gin.H, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, gin.H{
-			"date":             r.Bucket.Format("2006-01-02 15:04:05"),
-			"prompt_tokens":    r.PromptTokens,
+			"date":              r.Bucket,
+			"prompt_tokens":     r.PromptTokens,
 			"completion_tokens": r.CompletionTokens,
-			"total_tokens":     r.TotalTokens,
+			"total_tokens":      r.TotalTokens,
 		})
 	}
 	c.JSON(200, gin.H{"data": out})
