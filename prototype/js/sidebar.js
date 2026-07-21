@@ -1,7 +1,8 @@
 // js/sidebar.js
-// 通用动态侧边栏渲染
+// 通用动态侧边栏渲染 v2
+// 配合 css/theme.css 使用 .cg-* 类
 
-(function() {
+(function () {
     'use strict';
 
     // 折叠组状态持久化
@@ -10,9 +11,13 @@
     function getExpandedGroups() {
         try {
             return JSON.parse(localStorage.getItem(EXPANDED_KEY) || '[]');
-        } catch(e) {
+        } catch (e) {
             return [];
         }
+    }
+
+    function persistExpanded(arr) {
+        try { localStorage.setItem(EXPANDED_KEY, JSON.stringify(arr)); } catch (e) {}
     }
 
     function toggleGroup(groupId) {
@@ -23,70 +28,88 @@
         } else {
             expanded.push(groupId);
         }
-        localStorage.setItem(EXPANDED_KEY, JSON.stringify(expanded));
-        renderSidebar(activePageId);
+        persistExpanded(expanded);
+        renderSidebar(window.activePageId);
     }
 
-    // 全局activePageId
     window.activePageId = null;
+    window.toggleGroup = toggleGroup;
 
-    window.renderSidebar = function(activeId) {
-        activePageId = activeId;
+    // 主题切换：在 light / dark / system 三态间循环
+    window.toggleTheme = function () {
+        if (!window.ThemeManager) return;
+        const order = ['light', 'dark', 'system'];
+        const cur = window.ThemeManager.getPref();
+        const next = order[(order.indexOf(cur) + 1) % order.length];
+        window.ThemeManager.setPref(next);
+        // 重新渲染 sidebar（更新图标 + 可能影响视觉权重）
+        if (window.activePageId) renderSidebar(window.activePageId);
+    };
+
+    window.renderSidebar = function (activeId) {
+        window.activePageId = activeId;
         const sidebar = document.getElementById('sidebar');
         if (!sidebar) return;
 
-        const userInfo = JSON.parse(localStorage.getItem('user_info') || '{}');
+        const userInfo = (() => {
+            try { return JSON.parse(localStorage.getItem('user_info') || '{}'); }
+            catch (e) { return {}; }
+        })();
         const userRole = userInfo.role || 'admin';
+        // 直接使用持久化的 expanded 列表，不再每次 renderSidebar 时强制展开当前 active 的组
+        // —— 否则用户手动折叠后会被立即重新展开，看起来"无法折叠"
         const expandedGroups = getExpandedGroups();
 
-        // 自动展开包含当前页面的组
-        MENU_CONFIG.forEach(menu => {
-            if (menu.children) {
-                const hasActive = menu.children.some(child => child.id === activeId);
-                if (hasActive && !expandedGroups.includes(menu.id)) {
-                    expandedGroups.push(menu.id);
-                    localStorage.setItem(EXPANDED_KEY, JSON.stringify(expandedGroups));
-                }
-            }
-        });
+        const currentPath = window.location.pathname.split('/').pop() || '';
+        const currentSearch = window.location.search || '';
 
+        // ===== Logo 区 =====
         let html = `
-        <div class="p-6">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-robot text-xl"></i>
+        <div class="cg-sidebar-logo p-6 border-b" style="border-color: var(--cg-sidebar-border);">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="background: linear-gradient(135deg, var(--cg-brand-primary), var(--cg-brand-secondary)); width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25); flex-shrink: 0;">
+                    <i class="fas fa-shield-halved" style="color: white; font-size: 16px;"></i>
                 </div>
-                <div><h1 class="font-bold text-lg">CodeGuard</h1><p class="text-xs text-gray-400">代码智能门禁</p></div>
+                <div style="flex: 1; min-width: 0;">
+                    <h1 style="font-size: 16px; font-weight: 700; color: var(--cg-sidebar-text-active); letter-spacing: -0.01em; line-height: 1.2;">CodeGuard</h1>
+                    <p style="font-size: 11px; color: var(--cg-text-tertiary); margin-top: 2px;">代码智能门禁</p>
+                </div>
             </div>
         </div>
-        <nav class="flex-1 px-3 py-4 space-y-1">
+        <nav style="flex: 1; padding: 12px 8px; overflow-y: auto;">
         `;
 
+        // ===== 菜单项 =====
         MENU_CONFIG.forEach(menu => {
             if (!isMenuVisible(menu.role, userRole)) return;
 
-            if (menu.children) {
+            if (menu.children && menu.children.length > 0) {
                 // 折叠组
                 const isExpanded = expandedGroups.includes(menu.id);
-                const hasActiveChild = menu.children.some(child => child.id === activeId);
-                const groupActiveClass = hasActiveChild ? 'bg-white/10 border-l-[3px] border-blue-500' : '';
+                const hasActiveChild = menu.children.some(child =>
+                    child.id === activeId || isMenuItemActive(child.href, currentPath, currentSearch)
+                );
 
                 html += `
-                <div class="space-y-1">
-                    <div class="flex items-center justify-between px-4 py-3 rounded-lg text-sm select-none cursor-pointer ${groupActiveClass}" onclick="toggleGroup('${menu.id}')">
-                        <div class="flex items-center gap-3">
-                            <i class="fas ${menu.icon} w-5"></i><span>${menu.name}</span>
+                <div class="cg-sidebar-group">
+                    <div class="cg-sidebar-group-toggle ${isExpanded ? 'expanded' : ''}" onclick="toggleGroup('${menu.id}')">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <i class="fas ${menu.icon}"></i>
+                            <span>${menu.name}</span>
                         </div>
-                        <i class="fas fa-chevron-down text-xs transition-transform ${isExpanded ? 'rotate-180' : ''}" id="group-icon-${menu.id}"></i>
+                        <i class="fas fa-chevron-right arrow"></i>
                     </div>
-                    <div class="${isExpanded ? '' : 'hidden'} pl-10 space-y-1">
+                    <div class="cg-sidebar-group-children ${isExpanded ? 'expanded' : ''}">
                 `;
 
                 menu.children.forEach(child => {
-                    const isActive = child.id === activeId;
+                    if (!isMenuVisible(child.role, userRole)) return;
+                    const isActive = child.id === activeId ||
+                        isMenuItemActive(child.href, currentPath, currentSearch);
                     html += `
-                    <a href="${child.href}" class="sidebar-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm ${isActive ? 'active text-white' : 'text-gray-400 hover:text-white'}">
-                        <i class="fas ${child.icon} w-4"></i><span>${child.name}</span>
+                    <a href="${child.href}" class="cg-sidebar-child ${isActive ? 'active' : ''}">
+                        <i class="fas ${child.icon}"></i>
+                        <span>${child.name}</span>
                     </a>
                     `;
                 });
@@ -94,51 +117,98 @@
                 html += `</div></div>`;
             } else {
                 // 普通菜单项
-                const isActive = menu.id === activeId;
+                const isActive = menu.id === activeId ||
+                    isMenuItemActive(menu.href, currentPath, currentSearch);
                 html += `
-                <a href="${menu.href}" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-sm ${isActive ? 'active' : ''}">
-                    <i class="fas ${menu.icon} w-5"></i><span>${menu.name}</span>
+                <a href="${menu.href}" class="cg-sidebar-item ${isActive ? 'active' : ''}">
+                    <i class="fas ${menu.icon}"></i>
+                    <span>${menu.name}</span>
                 </a>
                 `;
             }
         });
 
+        html += `</nav>`;
+
+        // ===== 用户区 =====
+        const displayName = userInfo.display_name || userInfo.username || '用户';
+        const roleLabel = userRole === 'admin' ? '管理员' : '开发者';
         html += `
-        </nav>
-        <div class="p-4 border-t border-slate-700">
-            <div class="flex items-center gap-3 cursor-pointer" onclick="toggleUserMenu()">
-                <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
-                    <i class="fas fa-user text-sm"></i>
+        <div style="padding: 12px; border-top: 1px solid var(--cg-sidebar-border);">
+            <div onclick="toggleUserMenu()" style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; cursor: pointer; transition: background var(--cg-transition);" onmouseover="this.style.background='var(--cg-sidebar-item-hover)'" onmouseout="this.style.background='transparent'">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #4f46e5, #06b6d4); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 13px;">
+                    ${escapeHtml(displayName.charAt(0).toUpperCase())}
                 </div>
-                <div class="text-sm flex-1">
-                    <div class="font-medium" id="currentUser">${userInfo.display_name || userInfo.username || '用户'}</div>
-                    <div class="text-xs text-gray-400" id="currentRole">${userRole === 'admin' ? '管理后台' : '开发者'}</div>
+                <div style="flex: 1; min-width: 0;">
+                    <div id="currentUser" style="font-size: 13px; font-weight: 500; color: var(--cg-sidebar-text-active); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(displayName)}</div>
+                    <div id="currentRole" style="font-size: 11px; color: var(--cg-text-tertiary);">${roleLabel}</div>
                 </div>
-                <i class="fas fa-chevron-down text-xs text-gray-400"></i>
+                <i class="fas fa-ellipsis-vertical" style="font-size: 12px; color: var(--cg-text-tertiary);"></i>
             </div>
-            <div id="userMenu" class="hidden mt-2 bg-slate-800 rounded-lg py-1">
+            <div id="userMenu" class="hidden" style="margin-top: 8px; background: var(--cg-bg-surface); border-radius: 8px; padding: 4px; border: 1px solid var(--cg-border-default); box-shadow: var(--cg-shadow-md);">
                 ${userRole === 'admin' ? `
-                <button onclick="showChangePasswordModal()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
-                    <i class="fas fa-key w-5"></i>修改密码
+                <button onclick="showChangePasswordModal()" style="display: flex; align-items: center; gap: 12px; width: 100%; background: transparent; border: none; padding: 8px 12px; font-size: 13px; color: var(--cg-text-primary); border-radius: 6px; cursor: pointer; transition: background var(--cg-transition);" onmouseover="this.style.background='var(--cg-bg-elevated)'" onmouseout="this.style.background='transparent'">
+                    <i class="fas fa-key" style="width: 18px; text-align: center; color: var(--cg-text-secondary);"></i>
+                    <span>修改密码</span>
                 </button>
                 ` : ''}
-                <button onclick="logout()" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors">
-                    <i class="fas fa-sign-out-alt w-5"></i>退出登录
+                <button onclick="logout()" style="display: flex; align-items: center; gap: 12px; width: 100%; background: transparent; border: none; padding: 8px 12px; font-size: 13px; color: var(--cg-text-primary); border-radius: 6px; cursor: pointer; transition: background var(--cg-transition);" onmouseover="this.style.background='var(--cg-bg-elevated)'" onmouseout="this.style.background='transparent'">
+                    <i class="fas fa-sign-out-alt" style="width: 18px; text-align: center; color: var(--cg-text-secondary);"></i>
+                    <span>退出登录</span>
                 </button>
             </div>
         </div>
         `;
 
         sidebar.innerHTML = html;
+        // 给外层 aside 容器加 cg-sidebar 类，让 theme.css 的样式生效
+        sidebar.classList.add('cg-sidebar');
+        sidebar.classList.remove('bg-slate-900', 'text-white');
     };
 
-    // 暴露toggleGroup到全局
-    window.toggleGroup = toggleGroup;
+    function escapeHtml(s) {
+        if (s == null) return '';
+        const div = document.createElement('div');
+        div.textContent = String(s);
+        return div.innerHTML;
+    }
 
-    // 默认在DOMReady时渲染（页面可覆盖activeId）
-    document.addEventListener('DOMContentLoaded', function() {
-        if (window.activePageId) {
-            renderSidebar(window.activePageId);
+    // 默认在 DOMReady 时渲染：
+    // 1. 优先使用页面显式设置的 window.activePageId
+    // 2. 否则从 URL 自动推断当前菜单项 id
+    document.addEventListener('DOMContentLoaded', function () {
+        // 先检测当前激活的菜单 id（无论是显式设置还是从 URL 推断）
+        let activeId = window.activePageId || null;
+        if (!activeId) {
+            const path = window.location.pathname.split('/').pop() || '';
+            const search = window.location.search || '';
+            for (const m of MENU_CONFIG) {
+                if (m.children) {
+                    for (const c of m.children) {
+                        if (isMenuItemActive(c.href, path, search)) { activeId = c.id; break; }
+                    }
+                } else if (isMenuItemActive(m.href, path, search)) {
+                    activeId = m.id;
+                }
+                if (activeId) break;
+            }
         }
+
+        // 首次进入：自动展开包含当前 active 的组（仅这一次，不会被 renderSidebar 反复触发）
+        if (activeId) {
+            const expanded = getExpandedGroups();
+            let changed = false;
+            for (const m of MENU_CONFIG) {
+                if (m.children && m.children.some(c => c.id === activeId)) {
+                    if (!expanded.includes(m.id)) {
+                        expanded.push(m.id);
+                        changed = true;
+                    }
+                }
+            }
+            if (changed) persistExpanded(expanded);
+        }
+
+        renderSidebar(activeId);
     });
 })();
