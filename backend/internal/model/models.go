@@ -178,7 +178,7 @@ type ReviewIssue struct {
 	ID                 uint       `gorm:"primaryKey" json:"id"`
 	TaskID             uint       `gorm:"index" json:"task_id"`
 	RuleID             *uint      `gorm:"index" json:"rule_id"`                                    // NULL=AI自主发现
-	RuleCode           string     `gorm:"size:64" json:"rule_code"`
+	RuleCode           string     `gorm:"size:64;index:idx_rule_code_created,priority:1" json:"rule_code"`
 	Category           string     `gorm:"size:32" json:"category"`
 	Severity           string     `gorm:"size:16" json:"severity"`
 	DeductScore        int        `gorm:"default:0;column:deduct_score" json:"deduct_score"`        // 该 Issue 扣多少分
@@ -194,7 +194,8 @@ type ReviewIssue struct {
 	RejectReason       string     `gorm:"type:text;column:reject_reason" json:"reject_reason"`      // 拒绝/不采纳原因
 	GitlabDiscussionID string     `gorm:"size:64;column:gitlab_discussion_id" json:"gitlab_discussion_id"`
 	IsResolved         bool       `gorm:"default:false;column:is_resolved" json:"is_resolved"`
-	CreatedAt          time.Time  `json:"created_at"`
+	CreatedAt          time.Time  `gorm:"index:idx_rule_code_created,priority:2" json:"created_at"`
+	DeletedAt          gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // --- TaskReviewComment 任务人工复核意见 ---
@@ -267,7 +268,7 @@ type ResourcePool struct {
 	LastCheckAt      *time.Time `json:"last_check_at"`
 	StatusChangedAt  *time.Time `json:"status_changed_at"`
 	LastAlertAt      *time.Time `json:"last_alert_at"`
-	CheckError       string     `gorm:"size:512" json:"check_error"`
+	CheckError       string     `gorm:"type:text" json:"check_error"`
 	ActiveJobs       int        `gorm:"default:0" json:"active_jobs"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
@@ -292,7 +293,7 @@ type LLMModel struct {
 	CachedPricePerMTokens float64    `gorm:"default:0;column:cached_price_per_mtokens" json:"cached_price_per_mtokens"` // 缓存命中价格 USD / 百万 token
 	CheckIntervalSec      int        `gorm:"default:5" json:"check_interval_sec"`
 	Status                string     `gorm:"size:20;default:'active'" json:"status"`
-	CheckError            string     `gorm:"size:512" json:"check_error"`
+	CheckError            string     `gorm:"type:text" json:"check_error"`
 	LastCheckAt           *time.Time `json:"last_check_at"`
 	StatusChangedAt       *time.Time `json:"status_changed_at"`
 	LastAlertAt           *time.Time `json:"last_alert_at"`

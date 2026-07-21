@@ -113,7 +113,7 @@ func (s *PoolService) HealthCheckAll() {
 		}
 		updates := map[string]interface{}{
 			"status":      status,
-			"check_error": errMsg,
+			"check_error": truncateCheckError(errMsg),
 		}
 		if connected && version != "" {
 			updates["opencode_version"] = version
@@ -179,7 +179,7 @@ func (s *PoolService) runPoolHealthChecks() {
 
 		updates := map[string]interface{}{
 			"status":      newStatus,
-			"check_error": errMsg,
+			"check_error": truncateCheckError(errMsg),
 		}
 		if connected && version != "" {
 			updates["opencode_version"] = version

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/ai-optimizer/backend/internal/model"
 	"github.com/ai-optimizer/backend/pkg/llm"
@@ -334,7 +335,7 @@ func (s *ModelService) runModelHealthChecks() {
 
 		updates := map[string]interface{}{
 			"status":      newStatus,
-			"check_error": errMsg,
+			"check_error": truncateCheckError(errMsg),
 		}
 		statusChanged := prevStatus != newStatus
 		if statusChanged {
@@ -526,4 +527,16 @@ func NormalizeProvider(p string) string {
 	default:
 		return "vllm"
 	}
+}
+
+// truncateCheckError 防御性截断 check_error 字符串。
+// 数据库列已改为 TEXT（最大 64KB），但 LiteLLM/OpenCode 错误链偶尔会带 SSL 堆栈等冗长内容。
+// 截断到 4000 字符既保证完整可读，又避免极端情况溢出（也保留截断标记便于排查）。
+func truncateCheckError(s string) string {
+	const maxLen = 4000
+	if utf8.RuneCountInString(s) <= maxLen {
+		return s
+	}
+	runes := []rune(s)
+	return string(runes[:maxLen]) + "...(已截断)"
 }
