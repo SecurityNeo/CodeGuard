@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+    <script src="js/theme.js?v=1"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>登录 - AI Code Guard</title>
     <link rel="stylesheet" href="/static/fontawesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="css/theme.css?v=1">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
@@ -377,6 +379,27 @@
             }
             return false;
         }
+
+        // OAuth 回调处理：URL 带有 ?token=xxx 时保存后跳转首页（覆盖 auth.js 在 login.html 的 early return）
+        (function handleOAuthCallback() {
+            const params = new URLSearchParams(window.location.search);
+            const token = params.get('token');
+            if (!token) return;
+            localStorage.setItem('auth_token', token);
+            // 清理 URL 中的 token
+            window.history.replaceState({}, document.title, window.location.pathname);
+            // 用 token 拉取用户信息后再跳转，确保 user_info 已就位
+            fetch(`${API_BASE}/users/me`, { headers: { 'Authorization': 'Bearer ' + token } })
+                .then(res => res.ok ? res.json() : null)
+                .then(data => {
+                    if (data && data.data) {
+                        const merged = Object.assign({}, data.data, { token });
+                        localStorage.setItem('user_info', JSON.stringify(merged));
+                    }
+                    window.location.href = '/';
+                })
+                .catch(() => { window.location.href = '/'; });
+        })();
 
         checkAuth();
     </script>

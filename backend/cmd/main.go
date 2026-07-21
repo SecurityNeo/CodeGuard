@@ -156,6 +156,7 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 		frontendPath = "/data/ai-bug-fix/prototype"
 	}
 	r.Static("/js", frontendPath+"/js")
+	r.Static("/css", frontendPath+"/css")
 	r.Static("/vendor", frontendPath+"/vendor")
 	r.Static("/static", frontendPath+"/static")
 
@@ -202,7 +203,12 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 		c.File(frontendPath + "/statistics.html")
 	})
 	r.GET("/index.html", func(c *gin.Context) {
-		c.Redirect(http.StatusMovedPermanently, "/")
+		// 301 重定向需显式保留 query 参数，避免 GitLab OAuth 回调的 ?token=xxx 被丢弃
+		target := "/"
+		if raw := c.Request.URL.RawQuery; raw != "" {
+			target += "?" + raw
+		}
+		c.Redirect(http.StatusMovedPermanently, target)
 	})
 	r.GET("/mail.html", func(c *gin.Context) {
 		c.File(frontendPath + "/mail.html")
@@ -218,6 +224,9 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 	})
 	r.GET("/token-usage.html", func(c *gin.Context) {
 		c.File(frontendPath + "/token-usage.html")
+	})
+	r.GET("/rule-stats.html", func(c *gin.Context) {
+		c.File(frontendPath + "/rule-stats.html")
 	})
 
 	// 健康检查
@@ -273,6 +282,15 @@ func setupRouter(cfg *config.Config) *gin.Engine {
 			tokenUsage.GET("/by-call-type", th.GetByCallType)
 			tokenUsage.GET("/calls", th.ListCalls)
 			tokenUsage.GET("/by-task", th.GetByTask)
+		}
+
+		// 规则命中统计
+		rsh := handler.NewRuleStatsHandler()
+		ruleStats := common.Group("/rule-stats")
+		{
+			ruleStats.GET("/overview", rsh.Overview)
+			ruleStats.GET("/by-rule/:code", rsh.ByRule)
+			ruleStats.GET("/recent-issues", rsh.RecentIssues)
 		}
 
 		// 任务管理（只读 + 日志/消息/事件 + 用户可操作的写操作）
