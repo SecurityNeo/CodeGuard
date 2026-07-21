@@ -11,7 +11,9 @@ import (
 )
 
 // PersistStructuredReview 将结构化评审结果幂等持久化到数据库
-// 每次调用会先清理该任务的历史 Issue，再写入最新结果，确保 Retry 后数据一致
+// 每次调用会先清理该任务的历史 Issue，再写入最新结果，确保 Retry 后数据一致。
+// 注意：ReviewIssue 已加 gorm.DeletedAt 字段，这里的 Delete 实际执行 soft delete
+//（UPDATE deleted_at = NOW()），保证历史命中数据可用于规则命中统计。
 func PersistStructuredReview(taskID uint, result *llm.AIReviewResult) error {
 	return model.DB.Transaction(func(tx *gorm.DB) error {
 		// 1. 更新 Task 表
@@ -27,9 +29,10 @@ func PersistStructuredReview(taskID uint, result *llm.AIReviewResult) error {
 			return fmt.Errorf("update task structured review failed: %w", err)
 		}
 
-		// 2. 清理旧 Issue（幂等关键：每次重试前先删除历史记录）
+		// 2. 清理旧 Issue（soft delete，幂等关键：每次重试前先 soft delete 历史记录）
+		//    ReviewIssue.DeletedAt 字段使 gorm 自动执行 UPDATE 而非 DELETE。
 		if err := tx.Where("task_id = ?", taskID).Delete(&model.ReviewIssue{}).Error; err != nil {
-			return fmt.Errorf("delete old review issues failed: %w", err)
+			return fmt.Errorf("soft delete old review issues failed: %w", err)
 		}
 
 		// 3. 预加载本次 Issue 引用的 ReviewRule，避免逐条 First 触发 GORM "record not found" Warn 日志

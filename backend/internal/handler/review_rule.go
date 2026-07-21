@@ -2,6 +2,7 @@ package handler
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/ai-optimizer/backend/internal/model"
 	"github.com/gin-gonic/gin"
@@ -61,9 +62,42 @@ func (h *ReviewRuleHandler) List(c *gin.Context) {
 		return
 	}
 
+	// 补充近 7 天命中次数（单次 GROUP BY 注入，避免 N+1）。
+	// 使用默认 scope，过滤掉软删除的 issues：
+	// persistor.go 在任务重试时会 soft delete 旧 issues 再 insert 新的，
+	// 默认 scope 保证"近 7 天命中"反映当前可见的 issues 数量。
+	hitMap := map[string]int64{}
+	if len(rules) > 0 {
+		sevenDaysAgo := time.Now().AddDate(0, 0, -7)
+		type hitRow struct {
+			RuleCode string `gorm:"column:rule_code"`
+			Cnt      int64  `gorm:"column:cnt"`
+		}
+		var rows []hitRow
+		if err := model.DB.Table("review_issues").
+			Select("rule_code, COUNT(*) AS cnt").
+			Where("rule_code != '' AND created_at >= ?", sevenDaysAgo).
+			Group("rule_code").
+			Scan(&rows).Error; err != nil {
+			zap.L().Warn("load hit_count_7d failed", zap.Error(err))
+		}
+		for _, r := range rows {
+			hitMap[r.RuleCode] = r.Cnt
+		}
+	}
+
+	type ruleWithHit struct {
+		model.ReviewRule
+		HitCount7d int64 `json:"hit_count_7d"`
+	}
+	out := make([]ruleWithHit, len(rules))
+	for i, r := range rules {
+		out[i] = ruleWithHit{ReviewRule: r, HitCount7d: hitMap[r.Code]}
+	}
+
 	c.JSON(200, gin.H{
 		"code":      0,
-		"data":      rules,
+		"data":      out,
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,

@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <script src="js/theme.js?v=1"></script>
+    <style>html{background-color:#1e293b;}</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>规则命中统计 - CodeGuard</title>
+    <script defer src="/vendor/echarts.min.js"></script>
+    <script src="js/auth.js?v=5"></script>
+    <script src="js/menu-config.js?v=2"></script>
+    <script src="js/sidebar.js?v=2"></script>
+    <link rel="stylesheet" href="/static/fontawesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="css/theme.css?v=1">
+    <script defer src="/static/js/tailwindcss.min.js"></script>
+    <style>
+        .chart-card { transition: all 0.3s ease; overflow: hidden; }
+        .chart-card:hover { box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
+        .kpi-card { transition: transform 0.2s, box-shadow 0.2s; }
+        .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
+        .toast { position: fixed; top: 20px; right: 20px; z-index: 9999; animation: slideIn 0.3s ease; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .data-table tr:hover { background: #f8f9ff; cursor: pointer; }
+        .data-table th {
+            padding: 10px 14px;
+            font-weight: 600;
+            color: #555;
+            border-bottom: 2px solid #e0e0e0;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-align: left;
+            background: white;
+        }
+        .data-table td { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; color: #333; font-size: 13px; }
+        .data-table-wrap { max-height: 480px; overflow-y: auto; }
+        .badge-severity-critical { background: #ffebee; color: #c62828; }
+        .badge-severity-high { background: #fff3e0; color: #ef6c00; }
+        .badge-severity-medium { background: #fff8e1; color: #f57f17; }
+        .badge-severity-low { background: #e3f2fd; color: #1565c0; }
+        .badge-severity-info { background: #f5f5f5; color: #616161; }
+        .badge-category { background: #ede7f6; color: #5e35b1; }
+        .badge-status-accepted { background: #e8f5e9; color: #2e7d32; }
+        .badge-status-rejected { background: #ffebee; color: #c62828; }
+        .badge-status-pending { background: #fff8e1; color: #f57f17; }
+        /* 钻取抽屉 */
+        .drawer { transition: transform 0.3s ease; transform: translateX(100%); }
+        .drawer.open { transform: translateX(0); }
+        .drawer-backdrop { background: rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
+        .drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+<div id="page-transition" style="position:fixed;top:0;left:0;right:0;bottom:0;background:#1e293b;z-index:99999;transition:opacity .25s ease;"></div>
+<script>
+(function(){
+  function hide(){var el=document.getElementById('page-transition');if(el){el.style.opacity='0';setTimeout(function(){el.remove();},250);}}
+  if(document.readyState==='complete'){hide();}else{window.addEventListener('load',hide);}
+})();
+</script>
+<div id="toastContainer"></div>
+<div class="flex h-screen">
+    <aside id="sidebar" class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
+        <nav style="padding: 20px; text-align: center; color: var(--cg-text-tertiary); font-size: 13px;">加载中...</nav>
+    </aside>
+
+    <main class="flex-1 overflow-y-auto">
+        <header class="bg-white border-b px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+            <div>
+                <h2 class="text-xl font-bold text-gray-800"><i class="fas fa-chart-bar text-purple-500 mr-2"></i>规则命中统计</h2>
+                <p class="text-sm text-gray-500 mt-1">基于 AI 评审产出的 Issue 聚合，辅助识别常出问题</p>
+            </div>
+            <button onclick="loadOverview()" class="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg text-sm hover:bg-blue-100">
+                <i class="fas fa-sync-alt mr-1"></i>刷新
+            </button>
+        </header>
+
+        <div class="p-8 space-y-6">
+            <!-- 时间筛选 -->
+            <div class="bg-white rounded-xl p-4 border flex items-center gap-4 flex-wrap">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-gray-500">时间范围：</span>
+                    <select id="rangeFilter" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" onchange="loadOverview()">
+                        <option value="today">今日</option>
+                        <option value="7d" selected>近 7 天</option>
+                        <option value="30d">近 30 天</option>
+                        <option value="90d">近 90 天</option>
+                        <option value="all">全部</option>
+                    </select>
+                </div>
+                <div class="ml-auto text-sm text-gray-400" id="lastUpdate">-</div>
+            </div>
+
+            <!-- 4 个 KPI -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="kpi-card bg-white rounded-xl p-6 border flex items-center gap-5">
+                    <div class="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center text-2xl">🎯</div>
+                    <div>
+                        <div class="text-3xl font-bold text-gray-800" id="kpiHitRules">-</div>
+                        <div class="text-sm text-gray-500 mt-1">命中规则数</div>
+                    </div>
+                </div>
+                <div class="kpi-card bg-white rounded-xl p-6 border flex items-center gap-5">
+                    <div class="w-14 h-14 bg-orange-50 rounded-2xl flex items-center justify-center text-2xl">💥</div>
+                    <div>
+                        <div class="text-3xl font-bold text-gray-800" id="kpiTotalHits">-</div>
+                        <div class="text-sm text-gray-500 mt-1">总命中次数</div>
+                    </div>
+                </div>
+                <div class="kpi-card bg-white rounded-xl p-6 border flex items-center gap-5">
+                    <div class="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-2xl">👥</div>
+                    <div>
+                        <div class="text-3xl font-bold text-gray-800" id="kpiAuthors">-</div>
+                        <div class="text-sm text-gray-500 mt-1">涉及开发者</div>
+                    </div>
+                </div>
+                <div class="kpi-card bg-white rounded-xl p-6 border">
+                    <div class="flex items-center gap-5 mb-3">
+                        <div class="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center text-2xl">📊</div>
+                        <div>
+                            <div class="text-3xl font-bold text-gray-800" id="kpiFixRate">-</div>
+                            <div class="text-sm text-gray-500 mt-1">修复率（占总命中）</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4 text-xs pt-2 border-t border-gray-100">
+                        <div class="flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-red-400"></span>
+                            <span class="text-gray-500">误报率</span>
+                            <span class="font-mono text-red-500 font-semibold" id="kpiRejectRate">-</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                            <span class="text-gray-500">待处理</span>
+                            <span class="font-mono text-amber-600 font-semibold" id="kpiPendingRate">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 命中趋势 -->
+            <div class="chart-card bg-white rounded-xl p-6 border">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">命中趋势</h3>
+                <div id="trendChart" style="height: 320px;"></div>
+            </div>
+
+            <!-- 命中 TOP 10 + 分类分布 -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="chart-card bg-white rounded-xl p-6 border lg:col-span-2">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">规则命中 TOP 10</h3>
+                    <div id="topRulesChart" style="height: 400px;"></div>
+                </div>
+                <div class="chart-card bg-white rounded-xl p-6 border">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">按分类分布</h3>
+                    <div id="categoryChart" style="height: 400px;"></div>
+                </div>
+            </div>
+
+            <!-- 严重级别分布 + TOP 10 表格 -->
+            <div class="chart-card bg-white rounded-xl p-6 border">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-gray-800">规则命中详情 TOP 10</h3>
+                    <span class="text-xs text-gray-400">点击行查看单规则详情</span>
+                </div>
+                <div class="data-table-wrap">
+                    <table class="data-table w-full">
+                        <thead>
+                            <tr>
+                                <th style="width:50px;">#</th>
+                                <th>规则</th>
+                                <th style="width:120px;">分类</th>
+                                <th style="width:90px;">严重级别</th>
+                                <th style="text-align:right;width:90px;">命中</th>
+                                <th style="text-align:right;width:80px;">项目</th>
+                                <th style="text-align:right;width:80px;">作者</th>
+                                <th style="text-align:right;width:90px;">修复率</th>
+                            </tr>
+                        </thead>
+                        <tbody id="topRulesTableBody">
+                            <tr><td colspan="8" class="text-center text-gray-400 py-8">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- 钻取抽屉：单规则详情 -->
+<div id="drawerBackdrop" class="drawer-backdrop fixed inset-0 z-40" onclick="closeDrawer()"></div>
+<div id="ruleDetailDrawer" class="drawer fixed top-0 right-0 bottom-0 w-full max-w-3xl bg-white shadow-2xl z-50 overflow-y-auto">
+    <div class="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between z-10">
+        <div>
+            <h3 class="text-lg font-bold text-gray-800" id="drawerRuleName">规则详情</h3>
+            <p class="text-xs text-gray-500 mt-1" id="drawerRuleCode">-</p>
+        </div>
+        <button onclick="closeDrawer()" class="text-gray-400 hover:text-gray-600">
+            <i class="fas fa-times text-xl"></i>
+        </button>
+    </div>
+    <div class="p-6 space-y-6">
+        <!-- 规则元信息 -->
+        <div id="drawerRuleMeta" class="flex flex-wrap gap-3 text-xs"></div>
+
+        <!-- KPI -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-orange-50 rounded-lg p-3 border border-orange-100">
+                <div class="text-xs text-orange-600">总命中</div>
+                <div class="text-2xl font-bold text-gray-800" id="drawerKpiTotal">-</div>
+            </div>
+            <div class="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                <div class="text-xs text-blue-600">涉及项目</div>
+                <div class="text-2xl font-bold text-gray-800" id="drawerKpiProjects">-</div>
+            </div>
+            <div class="bg-purple-50 rounded-lg p-3 border border-purple-100">
+                <div class="text-xs text-purple-600">涉及作者</div>
+                <div class="text-2xl font-bold text-gray-800" id="drawerKpiAuthors">-</div>
+            </div>
+            <div class="bg-green-50 rounded-lg p-3 border border-green-100">
+                <div class="text-xs text-green-600">修复率</div>
+                <div class="text-2xl font-bold text-gray-800" id="drawerKpiFixRate">-</div>
+            </div>
+        </div>
+
+        <!-- 趋势 -->
+        <div>
+            <h4 class="text-sm font-semibold text-gray-700 mb-3">命中趋势</h4>
+            <div id="drawerTrendChart" style="height: 220px;"></div>
+        </div>
+
+        <!-- 涉及项目 + 涉及作者 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">涉及项目 TOP 5</h4>
+                <div id="drawerProjects"></div>
+            </div>
+            <div>
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">涉及作者 TOP 5</h4>
+                <div id="drawerAuthors"></div>
+            </div>
+        </div>
+
+        <!-- 最近命中 -->
+        <div>
+            <div class="flex items-center justify-between mb-3">
+                <h4 class="text-sm font-semibold text-gray-700">最近命中</h4>
+                <span class="text-xs text-gray-400" id="drawerIssuesHint">-</span>
+            </div>
+            <div id="drawerIssues"></div>
+            <div class="flex items-center justify-between mt-3 text-xs text-gray-500" id="drawerPagination"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const API_BASE = '/api/v1';
+let charts = {};
+let drawerPage = 1;
+const drawerPageSize = 10;
+let drawerCurrentRule = null;
+
+function showToast(message, type = 'success') {
+    const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+    const icons = { success: 'fa-check', error: 'fa-times', info: 'fa-info' };
+    const toast = document.createElement('div');
+    toast.className = `toast ${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3`;
+    toast.innerHTML = `<i class="fas ${icons[type]}"></i><span>${escapeHtml(message)}</span>`;
+    document.getElementById('toastContainer').appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function escapeHtml(text) {
+    if (text == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+function formatNumber(num) {
+    if (num == null) return '-';
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+}
+
+function getRange() {
+    const el = document.getElementById('rangeFilter');
+    return el ? el.value : '7d';
+}
+
+function severityBadge(sev, sevName) {
+    const s = (sev || '').toLowerCase();
+    // sevName 由后端返回（中文）；优先用 sevName，未知值 fallback 显示原始 sev
+    const label = sevName || sev || '-';
+    return `<span class="badge-severity-${s} text-xs px-2 py-0.5 rounded font-medium">${escapeHtml(label)}</span>`;
+}
+
+function categoryBadge(catName, catCode) {
+    // 优先显示中文名（后端 category_name），保留 code 用于 tooltip
+    const name = catName || catCode || '-';
+    return `<span class="badge-category text-xs px-2 py-0.5 rounded" title="${escapeHtml(catCode || '')}">${escapeHtml(name)}</span>`;
+}
+
+async function loadOverview() {
+    const range = getRange();
+    try {
+        const res = await apiFetch(`${API_BASE}/rule-stats/overview?range=${range}`);
+        if (!res.ok) {
+            showToast(`加载失败（HTTP ${res.status}）`, 'error');
+            return;
+        }
+        const json = await res.json();
+        const d = json.data || {};
+        const k = d.kpi || {};
+
+        document.getElementById('kpiHitRules').textContent = formatNumber(k.hit_rules_count || 0);
+        document.getElementById('kpiTotalHits').textContent = formatNumber(k.total_hits || 0);
+        document.getElementById('kpiAuthors').textContent = formatNumber(k.unique_authors || 0);
+        document.getElementById('kpiFixRate').textContent = k.fix_rate || '0%';
+        document.getElementById('kpiRejectRate').textContent = k.reject_rate || '0%';
+        document.getElementById('kpiPendingRate').textContent = k.pending_rate || '0%';
+
+        renderTrendChart(d.trend || [], d.granularity);
+        renderTopRulesChart(d.top_rules || []);
+        renderCategoryChart(d.by_category || []);
+
+        // TOP 10 表格
+        renderTopRulesTable(d.top_rules || []);
+
+        document.getElementById('lastUpdate').textContent = '更新于 ' + new Date().toLocaleTimeString();
+
+        // 抽屉打开时同步刷新详情（避免 range 切换后抽屉数据陈旧）
+        if (drawerCurrentRule) {
+            loadRuleDetail();
+        }
+    } catch (e) {
+        console.error('loadOverview failed', e);
+        showToast('加载失败: ' + e.message, 'error');
+    }
+}
+
+function renderTrendChart(trend, gran) {
+    const dom = document.getElementById('trendChart');
+    if (charts.trend) charts.trend.dispose();
+    charts.trend = echarts.init(dom);
+    charts.trend.setOption({
+        tooltip: { trigger: 'axis' },
+        grid: { left: 50, right: 30, top: 30, bottom: 40 },
+        xAxis: {
+            type: 'category',
+            data: trend.map(t => {
+                const d = t.date || '';
+                if (gran === 'hour') return d.slice(11, 16); // HH:MM
+                return d.slice(5); // MM-DD
+            }),
+            axisLabel: { fontSize: 11 }
+        },
+        yAxis: { type: 'value', axisLabel: { fontSize: 11, formatter: v => formatNumber(v) } },
+        series: [{
+            name: '命中次数',
+            type: 'line',
+            smooth: true,
+            data: trend.map(t => t.hit_count),
+            itemStyle: { color: '#8b5cf6' },
+            areaStyle: { opacity: 0.15 }
+        }]
+    });
+}
+
+function renderTopRulesChart(rules) {
+    const dom = document.getElementById('topRulesChart');
+    if (charts.topRules) charts.topRules.dispose();
+    charts.topRules = echarts.init(dom);
+    const sorted = [...rules].reverse();
+    charts.topRules.setOption({
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        // Y 轴 width:240 给长规则名更宽显示；grid.right:70 给 position:'right' 数据值标签留溢出空间
+        grid: { left: 250, right: 70, top: 10, bottom: 30, containLabel: false },
+        xAxis: {
+            type: 'value',
+            axisLabel: { formatter: v => formatNumber(v) }
+        },
+        yAxis: {
+            type: 'category',
+            data: sorted.map(r => r.rule_name || r.rule_code),
+            // 中文 truncate 末位加 ...；width 越大能显示越长规则名
+            axisLabel: { fontSize: 11, width: 230, overflow: 'truncate', ellipsis: '…' }
+        },
+        series: [{
+            type: 'bar',
+            data: sorted.map(r => r.hit_count),
+            itemStyle: { color: '#8b5cf6', borderRadius: [0, 4, 4, 0] },
+            // distance 让数字距条形末端 4px，避免紧贴条形
+            label: { show: true, position: 'right', distance: 4, fontSize: 11, color: '#374151' }
+        }]
+    });
+    charts.topRules.on('click', params => {
+        const r = sorted[params.dataIndex];
+        if (r) openRuleDrawer(r.rule_code);
+    });
+}
+
+function renderCategoryChart(rows) {
+    const dom = document.getElementById('categoryChart');
+    if (charts.category) charts.category.dispose();
+    charts.category = echarts.init(dom);
+    charts.category.setOption({
+        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        legend: { bottom: 0, textStyle: { fontSize: 11 } },
+        series: [{
+            type: 'pie',
+            radius: ['40%', '70%'],
+            center: ['50%', '45%'],
+            data: rows.map(r => ({ name: r.category_name || r.category, value: r.count })),
+            label: { fontSize: 11 }
+        }]
+    });
+}
+
+function renderTopRulesTable(rules) {
+    const tbody = document.getElementById('topRulesTableBody');
+    if (!rules || rules.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-400 py-8">该时间范围内无命中记录</td></tr>';
+        return;
+    }
+    tbody.innerHTML = rules.map((r, i) => `
+        <tr onclick="openRuleDrawer('${escapeHtml(r.rule_code)}')">
+            <td class="text-gray-500">${i + 1}</td>
+            <td>
+                <div class="font-medium text-gray-800">${escapeHtml(r.rule_name || r.rule_code)}</div>
+                <div class="text-xs text-gray-400 font-mono">${escapeHtml(r.rule_code)}</div>
+            </td>
+            <td>${categoryBadge(r.category_name, r.category)}</td>
+            <td>${severityBadge(r.severity, r.severity_name)}</td>
+            <td style="text-align:right;font-weight:600;font-family:monospace;">${formatNumber(r.hit_count)}</td>
+            <td style="text-align:right;color:#666;">${r.project_count}</td>
+            <td style="text-align:right;color:#666;">${r.author_count}</td>
+            <td style="text-align:right;color:#2e7d32;font-weight:600;">${escapeHtml(r.fix_rate)}</td>
+        </tr>
+    `).join('');
+}
+
+function openRuleDrawer(ruleCode) {
+    drawerCurrentRule = ruleCode;
+    drawerPage = 1;
+    drawerIssuesCache = null; // 切换规则时清空，防止旧规则的 total 影响新规则的翻页判断
+    document.getElementById('drawerRuleCode').textContent = ruleCode;
+    document.getElementById('drawerRuleName').textContent = '加载中...';
+    document.getElementById('drawerBackdrop').classList.add('open');
+    document.getElementById('ruleDetailDrawer').classList.add('open');
+    loadRuleDetail();
+}
+
+function closeDrawer() {
+    document.getElementById('drawerBackdrop').classList.remove('open');
+    document.getElementById('ruleDetailDrawer').classList.remove('open');
+    drawerCurrentRule = null;
+}
+
+async function loadRuleDetail() {
+    if (!drawerCurrentRule) return;
+    const range = getRange();
+    try {
+        const res = await apiFetch(`${API_BASE}/rule-stats/by-rule/${encodeURIComponent(drawerCurrentRule)}?range=${range}`);
+        if (!res.ok) {
+            showToast(`加载失败（HTTP ${res.status}）`, 'error');
+            return;
+        }
+        const json = await res.json();
+        const d = json.data || {};
+        const rule = d.rule || {};
+        const k = d.kpi || {};
+
+        document.getElementById('drawerRuleName').textContent = rule.name || rule.code;
+
+        // 规则元信息
+        const meta = document.getElementById('drawerRuleMeta');
+        meta.innerHTML = [
+            rule.category ? categoryBadge(rule.category_name, rule.category) : '',
+            rule.severity ? severityBadge(rule.severity, rule.severity_name) : '',
+            rule.is_built_in ? `<span class="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-600">内置规则</span>` : `<span class="text-xs px-2 py-0.5 rounded bg-purple-50 text-purple-600">自定义规则</span>`,
+            rule.is_enabled ? `<span class="text-xs px-2 py-0.5 rounded bg-green-50 text-green-600">启用</span>` : `<span class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500">已停用</span>`,
+        ].join('');
+
+        // KPI
+        document.getElementById('drawerKpiTotal').textContent = formatNumber(k.total_hits);
+        document.getElementById('drawerKpiProjects').textContent = formatNumber(k.project_count);
+        document.getElementById('drawerKpiAuthors').textContent = formatNumber(k.author_count);
+        const fixRateText = `${k.fix_rate}<span class="text-xs text-red-500 ml-2">误报 ${k.reject_rate}</span>`;
+        document.getElementById('drawerKpiFixRate').innerHTML = fixRateText;
+
+        // 趋势
+        renderDrawerTrend(d.trend || [], d.granularity);
+
+        // 项目 + 作者
+        renderDrawerProjects(d.top_projects || []);
+        renderDrawerAuthors(d.top_authors || []);
+
+        // 最近命中
+        loadDrawerIssues();
+    } catch (e) {
+        console.error('loadRuleDetail failed', e);
+        showToast('加载规则详情失败: ' + e.message, 'error');
+    }
+}
+
+function renderDrawerTrend(trend, gran) {
+    const dom = document.getElementById('drawerTrendChart');
+    if (charts.drawerTrend) charts.drawerTrend.dispose();
+    charts.drawerTrend = echarts.init(dom);
+    charts.drawerTrend.setOption({
+        tooltip: { trigger: 'axis' },
+        grid: { left: 40, right: 20, top: 20, bottom: 30 },
+        xAxis: {
+            type: 'category',
+            data: trend.map(t => {
+                const d = t.date || '';
+                if (gran === 'hour') return d.slice(11, 16);
+                return d.slice(5);
+            }),
+            axisLabel: { fontSize: 10 }
+        },
+        yAxis: { type: 'value', axisLabel: { fontSize: 10 } },
+        series: [{
+            type: 'line',
+            smooth: true,
+            data: trend.map(t => t.hit_count),
+            itemStyle: { color: '#8b5cf6' },
+            areaStyle: { opacity: 0.15 }
+        }]
+    });
+}
+
+function renderDrawerProjects(projects) {
+    const dom = document.getElementById('drawerProjects');
+    if (!projects.length) {
+        dom.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">暂无数据</div>';
+        return;
+    }
+    dom.innerHTML = projects.map(p => `
+        <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+            <span class="text-sm text-gray-700 truncate flex-1" title='${escapeHtml(p.project_name)}'>${escapeHtml(p.project_name)}</span>
+            <span class="text-sm font-mono text-orange-600 ml-2">${p.hit_count}</span>
+        </div>
+    `).join('');
+}
+
+function renderDrawerAuthors(authors) {
+    const dom = document.getElementById('drawerAuthors');
+    if (!authors.length) {
+        dom.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">暂无数据</div>';
+        return;
+    }
+    dom.innerHTML = authors.map(a => `
+        <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+            <span class="text-sm text-gray-700 truncate flex-1">${escapeHtml(a.author)}</span>
+            <span class="text-sm font-mono text-orange-600 ml-2">${a.hit_count}</span>
+        </div>
+    `).join('');
+}
+
+let drawerIssuesCache = null;
+
+async function loadDrawerIssues() {
+    if (!drawerCurrentRule) return;
+    const range = getRange();
+    try {
+        const res = await apiFetch(`${API_BASE}/rule-stats/recent-issues?rule_code=${encodeURIComponent(drawerCurrentRule)}&range=${range}&page=${drawerPage}&page_size=${drawerPageSize}`);
+        if (!res.ok) {
+            showToast(`加载命中明细失败（HTTP ${res.status}）`, 'error');
+            return;
+        }
+        const json = await res.json();
+        drawerIssuesCache = json;
+        renderDrawerIssues(json.data || [], json.total || 0);
+    } catch (e) {
+        console.error('loadDrawerIssues failed', e);
+    }
+}
+
+function renderDrawerIssues(issues, total) {
+    const dom = document.getElementById('drawerIssues');
+    if (!issues.length) {
+        dom.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">暂无命中记录</div>';
+        document.getElementById('drawerIssuesHint').textContent = '';
+        document.getElementById('drawerPagination').innerHTML = '';
+        return;
+    }
+    document.getElementById('drawerIssuesHint').textContent = `共 ${total} 条命中`;
+
+    dom.innerHTML = issues.map(it => {
+        const fileLoc = it.file
+            ? `<span class="font-mono text-xs text-blue-600">${escapeHtml(it.file)}${it.line_start ? ':' + it.line_start : ''}</span>`
+            : '<span class="text-xs text-gray-400">-</span>';
+        const statusBadge = it.status === 'accepted'
+            ? '<span class="badge-status-accepted text-xs px-2 py-0.5 rounded">已接纳</span>'
+            : it.status === 'rejected'
+                ? '<span class="badge-status-rejected text-xs px-2 py-0.5 rounded">已拒绝</span>'
+                : '<span class="badge-status-pending text-xs px-2 py-0.5 rounded">待处理</span>';
+        const projectMr = it.project_name
+            ? `<span class="text-xs text-gray-500">${escapeHtml(it.project_name)} · MR#${it.mr_merge_id || '-'} · ${escapeHtml(it.mr_author || '-')}</span>`
+            : '';
+        const dateText = it.created_at ? new Date(it.created_at).toLocaleString() : '';
+        const suggestion = it.suggestion
+            ? `<div class="mt-2 p-2 bg-blue-50 rounded text-xs text-gray-700"><b>修复建议：</b>${escapeHtml(it.suggestion)}</div>`
+            : '';
+        // 代码片段：截断到 800 字符避免超长污染卡片；保留前导空白 + 等宽字体显示
+        let snippet = '';
+        if (it.code_snippet) {
+            const snip = String(it.code_snippet).slice(0, 800);
+            const truncated = it.code_snippet.length > 800;
+            snippet = `<pre class="mt-2 p-2 bg-slate-900 text-slate-100 rounded text-[11px] font-mono overflow-x-auto whitespace-pre">${escapeHtml(snip)}${truncated ? '\n...' : ''}</pre>`;
+        }
+        return `
+        <div class="border border-gray-200 rounded-lg p-3 mb-2 hover:border-blue-300 transition-colors">
+            <div class="flex items-start justify-between gap-2 mb-2">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1 flex-wrap">
+                        ${severityBadge(it.severity, it.severity_name)}
+                        ${statusBadge}
+                        ${fileLoc}
+                    </div>
+                    <div class="text-sm text-gray-800">${escapeHtml(it.message || '')}</div>
+                </div>
+                <a href="task-detail.html?id=${it.task_id}" target="_blank" class="text-xs text-blue-600 hover:text-blue-800 whitespace-nowrap">
+                    查看 <i class="fas fa-external-link-alt text-[10px]"></i>
+                </a>
+            </div>
+            ${snippet}
+            <div class="flex items-center justify-between text-xs text-gray-400 mt-2">
+                ${projectMr}
+                <span>${dateText}</span>
+            </div>
+            ${suggestion}
+        </div>
+        `;
+    }).join('');
+
+    // 分页
+    const pagination = document.getElementById('drawerPagination');
+    const totalPages = Math.ceil(total / drawerPageSize);
+    pagination.innerHTML = `
+        <span>第 ${(drawerPage - 1) * drawerPageSize + 1}-${Math.min(drawerPage * drawerPageSize, total)} 条 / 共 ${total} 条</span>
+        <div class="flex gap-2">
+            <button onclick="changeDrawerPage(${drawerPage - 1})" class="px-2 py-1 border rounded disabled:opacity-40" ${drawerPage <= 1 ? 'disabled' : ''}>上一页</button>
+            <button onclick="changeDrawerPage(${drawerPage + 1})" class="px-2 py-1 border rounded disabled:opacity-40" ${drawerPage >= totalPages ? 'disabled' : ''}>下一页</button>
+        </div>
+    `;
+}
+
+async function changeDrawerPage(p) {
+    if (p < 1 || !drawerIssuesCache) return;
+    const totalPages = Math.ceil((drawerIssuesCache.total || 0) / drawerPageSize);
+    if (p > totalPages) return;
+    drawerPage = p;
+    await loadDrawerIssues();
+}
+
+window.addEventListener('resize', () => {
+    Object.values(charts).forEach(c => c && c.resize());
+});
+
+// 初始化
+document.addEventListener('DOMContentLoaded', () => {
+    // 支持 ?rule=XXX 自动打开抽屉（从 review-rules.html 跳转过来）
+    const params = new URLSearchParams(window.location.search);
+    const preselectRule = params.get('rule');
+    const preselectRange = params.get('range');
+    if (preselectRange && ['today', '7d', '30d', '90d', 'all'].includes(preselectRange)) {
+        const sel = document.getElementById('rangeFilter');
+        if (sel) sel.value = preselectRange;
+    }
+    loadOverview().then(() => {
+        if (preselectRule) openRuleDrawer(preselectRule);
+    });
+});
+</script>
+</body>
+</html>
