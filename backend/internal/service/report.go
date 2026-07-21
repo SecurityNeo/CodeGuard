@@ -117,6 +117,18 @@ type sysStatus struct {
 	PoolHealth        string
 	ModelHealth       string
 	AvgReviewTime     string
+	RuleTotalCount    int64
+}
+
+// tokenUsageData Token 用量统计（用于周报月报，简化版：仅概览，无 TOP 排行）
+type tokenUsageData struct {
+	HasData          bool    // 控制整章节是否渲染 KV 表（0 时显示占位）
+	TotalTokens      int64
+	PromptTokens     int64
+	CompletionTokens int64
+	CallCount        int64
+	AvgDurationSec   float64
+	SuccessRateText  string // 预格式化 "99.8%"；call_count=0 时为 "N/A"
 }
 
 func buildPeriod(reportType string) periodInfo {
@@ -479,6 +491,46 @@ func queryStateDist(start, end time.Time) stateDist {
 	return s
 }
 
+// queryTokenUsage 查询本周期 LLM 调用消耗概览。
+// 数据源：llm_call_logs，过滤 call_type='score'，与 token-usage.html 保持一致。
+// 周报月报是 admin 视角，不做用户级过滤。
+func queryTokenUsage(start, end time.Time) tokenUsageData {
+	var stats struct {
+		TotalTokens      int64   `gorm:"column:total_tokens"`
+		PromptTokens     int64   `gorm:"column:prompt_tokens"`
+		CompletionTokens int64   `gorm:"column:completion_tokens"`
+		CallCount        int64   `gorm:"column:call_count"`
+		FailedCount      int64   `gorm:"column:failed_count"`
+		AvgDurationMs    float64 `gorm:"column:avg_duration_ms"`
+	}
+	model.DB.Model(&model.LLMCallLog{}).
+		Select(`COALESCE(SUM(total_tokens), 0)            AS total_tokens,
+			COALESCE(SUM(prompt_tokens), 0)               AS prompt_tokens,
+			COALESCE(SUM(completion_tokens), 0)           AS completion_tokens,
+			COUNT(*)                                      AS call_count,
+			COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) AS failed_count,
+			COALESCE(AVG(duration_ms), 0)                 AS avg_duration_ms`).
+		Where("call_type = ?", model.CallTypeScore).
+		Where("created_at >= ? AND created_at < ?", start, end).
+		Scan(&stats)
+
+	t := tokenUsageData{
+		TotalTokens:      stats.TotalTokens,
+		PromptTokens:     stats.PromptTokens,
+		CompletionTokens: stats.CompletionTokens,
+		CallCount:        stats.CallCount,
+		AvgDurationSec:   stats.AvgDurationMs / 1000.0,
+	}
+	t.HasData = stats.CallCount > 0
+	if stats.CallCount > 0 {
+		successCount := stats.CallCount - stats.FailedCount
+		t.SuccessRateText = fmt.Sprintf("%.1f%%", float64(successCount*100)/float64(stats.CallCount))
+	} else {
+		t.SuccessRateText = "N/A"
+	}
+	return t
+}
+
 func querySysStatus() sysStatus {
 	// 审查成功率（基于 task 表）
 	var taskStats struct {
@@ -528,11 +580,16 @@ func querySysStatus() sysStatus {
 		Scan(&modelStats)
 	modelHealth := fmt.Sprintf("%d/%d", modelStats.Healthy, modelStats.Total)
 
+	// 评审规则总数（当前快照，仅展示数量；不做分类/级别拆分，避免区块过载）
+	var ruleTotal int64
+	model.DB.Model(&model.ReviewRule{}).Count(&ruleTotal)
+
 	return sysStatus{
 		ReviewSuccessRate: successRate,
 		PoolHealth:        poolHealth,
 		ModelHealth:       modelHealth,
 		AvgReviewTime:     avgReview,
+		RuleTotalCount:    ruleTotal,
 	}
 }
 
@@ -548,6 +605,7 @@ func (s *ReportService) GenerateHTML(reportType string) (string, error) {
 	dist := queryScoreDist(p.Start, p.End)
 	devChanges := queryDevChanges(p.Start, p.End)
 	sys := querySysStatus()
+	tokenUsage := queryTokenUsage(p.Start, p.End)
 
 	// 获取本周/本月总MR数用于百分比计算
 	if dist.Total == 0 {
@@ -587,6 +645,7 @@ func (s *ReportService) GenerateHTML(reportType string) (string, error) {
 		"LowQualityList":      lowQuality,
 		"DevChanges":          devChanges,
 		"SysStatus":           sys,
+		"TokenUsage":          tokenUsage,
 		"Now":                 time.Now().Format("2006-01-02 15:04"),
 	}
 
@@ -914,6 +973,36 @@ const reportTemplate = `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitiona
 </td></tr></table>
 
 <br><br>
+<!-- AI 评审 Token 用量（简化版：仅概览，无 TOP 排行；风格复用系统状态区 KV 表） -->
+<table cellpadding="0" cellspacing="0" border="0" width="852"><tr><td>
+<font face="Arial,Helvetica,sans-serif" size="3" color="#1a1a2e"><b>&#128202; AI 评审 Token 用量</b></font>
+<br><br>
+{{if .TokenUsage.HasData}}
+<font face="Arial,Helvetica,sans-serif" size="1" color="#666666">{{.PeriodName}} LLM 调用消耗概览</font>
+<br>
+<table cellpadding="0" cellspacing="0" border="0" width="852">
+<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">总 Token</font></td>
+    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{numberFormat .TokenUsage.TotalTokens}}</b></font></td></tr>
+<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">调用次数</font></td>
+    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{.TokenUsage.CallCount}} 次</b></font></td></tr>
+<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">输入 token</font></td>
+    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{numberFormat .TokenUsage.PromptTokens}}</b></font></td></tr>
+<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">输出 token</font></td>
+    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{numberFormat .TokenUsage.CompletionTokens}}</b></font></td></tr>
+<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">平均耗时</font></td>
+    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{printf "%.1f" .TokenUsage.AvgDurationSec}} 秒</b></font></td></tr>
+<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">调用成功率</font></td>
+    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{.TokenUsage.SuccessRateText}}</b></font></td></tr>
+</table>
+{{else}}
+<table cellpadding="0" cellspacing="0" border="0" width="852">
+<tr><td align="center" style="padding:20px;border-top:1px solid #f0f0f5;">
+<font face="Arial,Helvetica,sans-serif" size="2" color="#999999">{{.PeriodName}}暂无 LLM 调用记录</font>
+</td></tr></table>
+{{end}}
+</td></tr></table>
+
+<br><br>
 <!-- Developer Rankings -->
 <table cellpadding="0" cellspacing="0" border="0" width="852"><tr><td>
 <font face="Arial,Helvetica,sans-serif" size="3" color="#1a1a2e"><b>&#127942; 开发者排行榜TOP5</b></font>
@@ -1028,6 +1117,8 @@ const reportTemplate = `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitiona
 <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#4caf50"><b>&#9989; 正常</b></font><font face="Arial,Helvetica,sans-serif" size="2" color="#666666"> ({{.SysStatus.ModelHealth}})</font></td></tr>
 <tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">平均审查耗时</font></td>
 <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{.SysStatus.AvgReviewTime}}</b></font></td></tr>
+<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">评审规则总数</font></td>
+<td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{.SysStatus.RuleTotalCount}} 条</b></font></td></tr>
 </table>
 </td></tr></table>
 
