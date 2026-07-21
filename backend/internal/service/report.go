@@ -973,36 +973,6 @@ const reportTemplate = `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitiona
 </td></tr></table>
 
 <br><br>
-<!-- AI 评审 Token 用量（简化版：仅概览，无 TOP 排行；风格复用系统状态区 KV 表） -->
-<table cellpadding="0" cellspacing="0" border="0" width="852"><tr><td>
-<font face="Arial,Helvetica,sans-serif" size="3" color="#1a1a2e"><b>&#128202; AI 评审 Token 用量</b></font>
-<br><br>
-{{if .TokenUsage.HasData}}
-<font face="Arial,Helvetica,sans-serif" size="1" color="#666666">{{.PeriodName}} LLM 调用消耗概览</font>
-<br>
-<table cellpadding="0" cellspacing="0" border="0" width="852">
-<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">总 Token</font></td>
-    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{numberFormat .TokenUsage.TotalTokens}}</b></font></td></tr>
-<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">调用次数</font></td>
-    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{.TokenUsage.CallCount}} 次</b></font></td></tr>
-<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">输入 token</font></td>
-    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{numberFormat .TokenUsage.PromptTokens}}</b></font></td></tr>
-<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">输出 token</font></td>
-    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{numberFormat .TokenUsage.CompletionTokens}}</b></font></td></tr>
-<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">平均耗时</font></td>
-    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{printf "%.1f" .TokenUsage.AvgDurationSec}} 秒</b></font></td></tr>
-<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">调用成功率</font></td>
-    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{.TokenUsage.SuccessRateText}}</b></font></td></tr>
-</table>
-{{else}}
-<table cellpadding="0" cellspacing="0" border="0" width="852">
-<tr><td align="center" style="padding:20px;border-top:1px solid #f0f0f5;">
-<font face="Arial,Helvetica,sans-serif" size="2" color="#999999">{{.PeriodName}}暂无 LLM 调用记录</font>
-</td></tr></table>
-{{end}}
-</td></tr></table>
-
-<br><br>
 <!-- Developer Rankings -->
 <table cellpadding="0" cellspacing="0" border="0" width="852"><tr><td>
 <font face="Arial,Helvetica,sans-serif" size="3" color="#1a1a2e"><b>&#127942; 开发者排行榜TOP5</b></font>
@@ -1103,6 +1073,36 @@ const reportTemplate = `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitiona
 </td></tr></table>
 <br>
 {{end}}
+
+<br><br>
+<!-- AI 评审 Token 用量（简化版：仅概览，无 TOP 排行；风格复用系统状态区 KV 表） -->
+<table cellpadding="0" cellspacing="0" border="0" width="852"><tr><td>
+<font face="Arial,Helvetica,sans-serif" size="3" color="#1a1a2e"><b>&#128202; AI 评审 Token 用量</b></font>
+<br><br>
+{{if .TokenUsage.HasData}}
+<font face="Arial,Helvetica,sans-serif" size="1" color="#666666">{{.PeriodName}} LLM 调用消耗概览</font>
+<br>
+<table cellpadding="0" cellspacing="0" border="0" width="852">
+<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">总 Token</font></td>
+    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{numberFormat .TokenUsage.TotalTokens}}</b></font></td></tr>
+<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">调用次数</font></td>
+    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{.TokenUsage.CallCount}} 次</b></font></td></tr>
+<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">输入 token</font></td>
+    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{numberFormat .TokenUsage.PromptTokens}}</b></font></td></tr>
+<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">输出 token</font></td>
+    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{numberFormat .TokenUsage.CompletionTokens}}</b></font></td></tr>
+<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">平均耗时</font></td>
+    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{printf "%.1f" .TokenUsage.AvgDurationSec}} 秒</b></font></td></tr>
+<tr><td style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#666666">调用成功率</font></td>
+    <td align="right" style="padding:8px 10px;border-top:1px solid #f0f0f5;"><font face="Arial,Helvetica,sans-serif" size="2" color="#333333"><b>{{.TokenUsage.SuccessRateText}}</b></font></td></tr>
+</table>
+{{else}}
+<table cellpadding="0" cellspacing="0" border="0" width="852">
+<tr><td align="center" style="padding:20px;border-top:1px solid #f0f0f5;">
+<font face="Arial,Helvetica,sans-serif" size="2" color="#999999">{{.PeriodName}}暂无 LLM 调用记录</font>
+</td></tr></table>
+{{end}}
+</td></tr></table>
 
 <!-- System Status -->
 <table cellpadding="0" cellspacing="0" border="0" width="852"><tr><td>
