@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+    <script src="js/theme.js?v=1"></script>
     <style>html{background-color:#f3f4f6;}</style>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,6 +10,7 @@
     <script src="js/menu-config.js?v=2"></script>
     <script src="js/sidebar.js?v=2"></script>
     <link rel="stylesheet" href="/static/fontawesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="css/theme.css?v=1">
     <script src="/static/js/marked.min.js"></script>
     <link rel="stylesheet" href="/static/css/highlight-github-dark.min.css">
     <script src="/static/js/highlight.min.js"></script>
@@ -184,114 +186,72 @@
 <div class="flex h-screen">
     <!-- 侧边栏 -->
     <aside id="sidebar" class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
-      <div class="p-6">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-            <i class="fas fa-robot text-xl"></i>
-          </div>
-          <div><h1 class="font-bold text-lg">CodeGuard</h1><p class="text-xs text-gray-400">代码智能门禁</p></div>
-        </div>
-      </div>
-      <nav class="flex-1 px-3 py-4 space-y-1"></nav>
-      <div class="p-4 border-t border-slate-700">
-        <div class="flex items-center gap-3">
-          <div class="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
-            <i class="fas fa-user text-sm"></i>
-          </div>
-          <div class="text-sm flex-1">
-            <div class="font-medium" id="currentUser">加载中…</div>
-            <div class="text-xs text-gray-400">开发者</div>
-          </div>
-        </div>
-      </div>
+        <nav style="padding: 20px; text-align: center; color: var(--cg-text-tertiary); font-size: 13px;">加载中...</nav>
     </aside>
 
     <!-- 主内容 -->
     <main class="flex-1 overflow-y-auto">
         <div class="w-full px-8 py-6">
     <!-- 顶部操作栏 -->
-    <div class="flex items-center justify-between gap-3 mb-5">
+    <div class="flex items-center justify-between gap-3 mb-4">
         <div class="flex items-center gap-3">
             <button onclick="history.back()" class="px-3 py-2 bg-white border rounded-lg text-sm hover:bg-gray-50 text-gray-600 transition-colors">
                 <i class="fas fa-arrow-left mr-1"></i>返回
             </button>
             <h2 class="text-xl font-bold text-gray-800">任务详情</h2>
+            <span id="detailTaskId" class="text-gray-400 text-sm font-mono">#-</span>
         </div>
         <div class="flex items-center gap-2">
             <span id="detailTaskTypeBadge" class="task-type-badge review">AI评审</span>
             <span id="detailStatusBadge" class="status-badge status-success">成功</span>
-            <span id="detailTaskId" class="text-gray-400 text-sm font-mono">#-</span>
         </div>
     </div>
 
-    <!-- 元信息卡片 -->
-    <div class="bg-white rounded-xl border shadow-sm mb-6 overflow-hidden">
-        <div class="grid grid-cols-2 md:grid-cols-4 divide-x divide-gray-100">
-            <!-- 项目信息 -->
-            <div class="p-4">
-                <div class="mb-4">
-                    <div class="text-xs text-gray-400 mb-1">项目名称</div>
-                    <div id="detailProject" class="text-sm font-semibold text-gray-900 truncate" title="-">-</div>
-                </div>
-                <div class="mb-4">
-                    <div class="text-xs text-gray-400 mb-1">分支</div>
-                    <div id="detailBranch" class="text-sm text-gray-700 truncate" title="-">-</div>
-                </div>
-                <div>
-                    <div class="text-xs text-gray-400 mb-1">MR</div>
-                    <div id="detailMR" class="text-sm">-</div>
+    <!-- 主信息卡片：项目 + MR + 分支 + 量化数据 -->
+    <div class="bg-white rounded-xl border shadow-sm mb-4 overflow-hidden">
+        <div class="p-5">
+            <div class="flex items-start gap-3 mb-3">
+                <i class="fas fa-folder-open text-blue-500 text-lg mt-0.5"></i>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span id="detailProject" class="text-base font-bold text-gray-900 truncate" title="-">-</span>
+                        <span id="detailMR" class="text-sm">-</span>
+                        <span id="detailScoreBadge" class="hidden inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold" title="综合评分"></span>
+                        <span id="detailTaskTypeBadge2" class="hidden"></span>
+                    </div>
+                    <div id="detailDiffInfo" class="text-sm text-gray-600 mt-1 truncate"></div>
                 </div>
             </div>
-            <!-- 作者与触发 -->
-            <div class="p-4">
-                <div class="mb-4">
-                    <div class="text-xs text-gray-400 mb-1">作者</div>
-                    <div id="detailAuthor" class="text-sm text-gray-700 flex items-center gap-1">
-                        <i class="fas fa-user-circle text-gray-400 text-xs"></i>-
-                    </div>
-                </div>
-                <div class="mb-4">
-                    <div class="text-xs text-gray-400 mb-1">触发方式</div>
-                    <div id="detailTriggerType" class="text-sm">-</div>
-                </div>
-                <div>
-                    <div class="text-xs text-gray-400 mb-1">触发来源</div>
-                    <div id="detailTriggerSource" class="text-sm text-gray-700">-</div>
-                </div>
+            <div class="flex items-center gap-2 text-xs text-gray-500 pl-7">
+                <i class="fas fa-code-branch text-gray-400"></i>
+                <span id="detailBranch" class="font-mono truncate" title="-">-</span>
+                <span class="text-gray-300 mx-1">·</span>
+                <i class="fas fa-user-circle text-gray-400"></i>
+                <span id="detailAuthor">-</span>
+                <span class="text-gray-300 mx-1">·</span>
+                <i class="fas fa-clock text-gray-400"></i>
+                <span id="detailCreatedAt">-</span>
+                <span class="text-gray-300 mx-1">·</span>
+                <span id="detailTriggerType" class="text-gray-500">-</span>
             </div>
-            <!-- 评分与时长 -->
-            <div class="p-4">
-                <div class="mb-4" id="detailScoreWrap">
-                    <div class="text-xs text-gray-400 mb-1">综合评分</div>
-                    <div id="detailScore" class="text-lg font-bold text-blue-600">-</div>
+            <!-- 量化数据行：执行时长 + 代码变更，与上方辅助信息用分隔线区分 -->
+            <div class="flex items-center gap-3 mt-3 pl-7 pt-3 border-t border-gray-100 text-sm flex-wrap">
+                <div class="flex items-center gap-1.5 text-gray-600" title="执行时长">
+                    <i class="fas fa-stopwatch text-purple-500"></i>
+                    <span id="detailDuration" class="font-semibold text-gray-800">-</span>
                 </div>
-                <div class="mb-4">
-                    <div class="text-xs text-gray-400 mb-1">执行时长</div>
-                    <div id="detailDuration" class="text-sm text-gray-700">-</div>
+                <span class="text-gray-200">|</span>
+                <div class="flex items-center gap-1.5 text-gray-600" title="变更文件数">
+                    <i class="fas fa-file-code text-slate-400"></i>
+                    <span id="detailFiles" class="font-semibold text-gray-800">-</span>
+                    <span class="text-xs text-gray-400">文件</span>
                 </div>
-                <div>
-                    <div class="text-xs text-gray-400 mb-1">创建时间</div>
-                    <div id="detailCreatedAt" class="text-sm text-gray-700">-</div>
+                <span class="text-gray-200">|</span>
+                <div class="flex items-baseline font-bold" title="新增 / 删除行数">
+                    <span id="detailAdditions" class="text-green-600">-</span>
+                    <span class="text-gray-300 mx-1.5">/</span>
+                    <span id="detailDeletions" class="text-red-600">-</span>
                 </div>
-            </div>
-            <!-- 变更统计 -->
-            <div class="p-4 bg-gray-50">
-                <div class="text-xs text-gray-400 mb-3">变更统计</div>
-                <div class="grid grid-cols-3 gap-2 text-center">
-                    <div>
-                        <div id="detailFiles" class="text-xl font-bold text-gray-800">-</div>
-                        <div class="text-xs text-gray-500">文件</div>
-                    </div>
-                    <div>
-                        <div id="detailAdditions" class="text-xl font-bold text-green-600">-</div>
-                        <div class="text-xs text-green-500">新增</div>
-                    </div>
-                    <div>
-                        <div id="detailDeletions" class="text-xl font-bold text-red-600">-</div>
-                        <div class="text-xs text-red-500">删除</div>
-                    </div>
-                </div>
-                <div class="mt-3 text-xs text-gray-500" id="detailDiffInfo"></div>
             </div>
         </div>
     </div>
@@ -505,6 +465,10 @@ let diffFileMap = {};
 let currentDiffFile = null;
 let chatEventSource = null;
 let chatHasSession = false;
+// Tab 按需加载标记：首次切换到对应 Tab 时拉取数据，避免进入页面时调用所有接口
+// report: 评审报告（review 任务）  chat: AI对话（chat 任务）
+// token: Token 用量（在 tabBtnToken 的 onClick 中处理）
+let tabLoaded = { report: false, chat: false };
 const taskId = new URLSearchParams(window.location.search).get('id');
 
 async function loadReviewCategories() {
@@ -519,11 +483,29 @@ async function loadReviewCategories() {
 function switchTab(tab) {
     document.querySelectorAll('.tab-nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
-    // 切换到对话/报告 tab 后，如果是 chat 任务滚动对话到底部
-    if (tab === 'report' && currentTask?.task_type === 'chat') {
-        const chatMessages = document.getElementById('chatMessages');
-        if (chatMessages) {
-            setTimeout(() => { chatMessages.scrollTop = chatMessages.scrollHeight; }, 50);
+
+    // 按需加载：仅在 Tab 首次激活时拉取对应数据，避免进入页面就调用所有接口
+    if (!currentTask) return;
+
+    if (tab === 'report') {
+        if (currentTask.task_type === 'review') {
+            // 评审报告（structured-review + rules）首次切换时加载
+            if (!tabLoaded.report && currentTask.status === 'success') {
+                tabLoaded.report = true;
+                loadStructuredReview(currentTask.id);
+            }
+        } else if (currentTask.task_type === 'chat') {
+            // chat 消息 + SSE 连接首次切换时建立
+            if (!tabLoaded.chat) {
+                tabLoaded.chat = true;
+                loadChatMessages();
+            } else {
+                // 已加载过则只滚动到底部，避免重复请求
+                const chatMessages = document.getElementById('chatMessages');
+                if (chatMessages) {
+                    setTimeout(() => { chatMessages.scrollTop = chatMessages.scrollHeight; }, 50);
+                }
+            }
         }
     }
 }
@@ -537,21 +519,23 @@ async function loadTask() {
         const res = await apiFetch(`${API_BASE}/tasks/${taskId}`);
         const data = await res.json();
         currentTask = data.data;
-        await loadDiffFiles(currentTask);
-        renderTaskMeta(currentTask);
 
+        // 顶部元信息 / Tab 控制：立即渲染（不依赖 diff 数据）
+        renderTaskMeta(currentTask);
         if (currentTask.task_type === 'review') {
-            if (currentTask.status === 'success') {
-                await loadStructuredReview(currentTask.id);
-            }
+            // review 任务：原始 AI Response 是 currentTask.ai_response 的同步渲染，无需额外请求
+            // 评审报告（structured-review）和评审规则（/rules）按需在切换到"评审报告" Tab 时加载
             renderRawRequest(currentTask);
         } else if (currentTask.task_type === 'chat') {
-            // chat 任务：隐藏原始请求 Tab，加载对话
+            // chat 任务：隐藏原始请求 Tab；chat 消息和 SSE 连接按需在切换到"AI对话" Tab 时加载
             document.getElementById('tabBtnRaw').style.display = 'none';
             document.getElementById('reportReviewArea').classList.add('hidden');
             document.getElementById('reportChatArea').classList.remove('hidden');
-            await loadChatMessages();
         }
+
+        // diff 异步加载（可能很慢），不阻塞上面的渲染
+        // loadDiffFiles 内部已对 diffFileTree 设置"加载中"占位，加载完成后会自动渲染
+        loadDiffFiles(currentTask);
     } catch (e) {
         console.error('加载任务失败:', e);
         alert('加载任务失败: ' + e.message);
@@ -567,43 +551,75 @@ function renderTaskMeta(t) {
     statusEl.textContent = getStatusText(t.status);
     statusEl.className = 'status-badge status-' + t.status;
 
-    // 第一列：项目信息
-    document.getElementById('detailProject').textContent = t.project?.name || '-';
-    document.getElementById('detailProject').title = t.project?.name || '-';
-    document.getElementById('detailBranch').textContent = (t.source_branch || '-') + ' \u2192 ' + (t.target_branch || '-');
-    document.getElementById('detailBranch').title = document.getElementById('detailBranch').textContent;
-    document.getElementById('detailMR').innerHTML = t.mr_iid ? `<a href="${t.mr_url}" target="_blank" class="text-blue-600 hover:underline font-medium">!${t.mr_iid}</a>` : '-';
+    // 主信息卡片：项目 + MR + 标题
+    const projectName = t.project?.name || '-';
+    document.getElementById('detailProject').textContent = projectName;
+    document.getElementById('detailProject').title = projectName;
+    document.getElementById('detailMR').innerHTML = t.mr_iid
+        ? `<a href="${escapeHtml(t.mr_url || '#')}" target="_blank" class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-600 text-xs font-mono hover:bg-blue-100 transition-colors" title="在 GitLab 中打开"><i class="fab fa-gitlab"></i>!${t.mr_iid}</a>`
+        : '';
+    const mrTitle = t.mr_title || '-';
+    const diffInfoEl = document.getElementById('detailDiffInfo');
+    diffInfoEl.textContent = mrTitle;
+    diffInfoEl.title = mrTitle;
 
-    // 第二列：作者与触发
-    document.getElementById('detailAuthor').innerHTML = `<i class="fas fa-user-circle text-gray-400 text-xs mr-1"></i>${t.author || '-'}`;
-    const triggerTypeLabels = { manual: '手动触发', webhook: 'Webhook触发', retry: '重试触发' };
-    document.getElementById('detailTriggerType').textContent = triggerTypeLabels[t.trigger_type] || t.trigger_type;
-    document.getElementById('detailTriggerSource').textContent = t.trigger_source || '-';
-
-    // 第三列：评分、时长、创建时间
+    // 综合评分徽章（MR 链接后，仅 review 任务）
+    const scoreBadge = document.getElementById('detailScoreBadge');
     if (t.task_type === 'review') {
-        const scoreHtml = t.score_value > 0
-            ? `${t.score_value}<span class="text-sm font-normal text-gray-400 ml-1">分</span>`
-            : '-';
-        document.getElementById('detailScore').innerHTML = scoreHtml;
-        document.getElementById('detailScoreWrap').classList.remove('hidden');
+        const score = Number(t.score_value) || 0;
+        if (score > 0) {
+            // 分数等级：>=85 优秀(绿) / 70-84 良好(蓝) / 60-69 一般(橙) / <60 较差(红)
+            let levelCls, levelText;
+            if (score >= 85) { levelCls = 'bg-green-100 text-green-700 border border-green-200'; levelText = '优秀'; }
+            else if (score >= 70) { levelCls = 'bg-blue-100 text-blue-700 border border-blue-200'; levelText = '良好'; }
+            else if (score >= 60) { levelCls = 'bg-amber-100 text-amber-700 border border-amber-200'; levelText = '一般'; }
+            else { levelCls = 'bg-red-100 text-red-700 border border-red-200'; levelText = '较差'; }
+            scoreBadge.className = 'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ' + levelCls;
+            scoreBadge.innerHTML = `<i class="fas fa-star"></i>${score} <span class="font-normal opacity-80">${levelText}</span>`;
+            scoreBadge.title = `综合评分：${score}（${levelText}）`;
+            scoreBadge.classList.remove('hidden');
+        } else {
+            scoreBadge.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500';
+            scoreBadge.innerHTML = '<i class="fas fa-star"></i>未评分';
+            scoreBadge.title = '本次任务未产出综合评分';
+            scoreBadge.classList.remove('hidden');
+        }
     } else {
-        document.getElementById('detailScoreWrap').classList.add('hidden');
+        scoreBadge.classList.add('hidden');
     }
-    document.getElementById('detailDuration').textContent = formatDuration(t.duration_sec);
-    document.getElementById('detailCreatedAt').textContent = formatDateTime(t.created_at);
 
-    // 第四列：变更统计
+    // 辅助信息行：分支 + 作者 + 时间 + 触发方式
+    const branchText = (t.source_branch || '-') + ' → ' + (t.target_branch || '-');
+    document.getElementById('detailBranch').textContent = branchText;
+    document.getElementById('detailBranch').title = branchText;
+    document.getElementById('detailAuthor').textContent = t.author || '-';
+    document.getElementById('detailCreatedAt').textContent = formatDateTime(t.created_at);
+    const triggerTypeLabels = { manual: '手动触发', webhook: 'Webhook触发', retry: '重试触发' };
+    document.getElementById('detailTriggerType').textContent = triggerTypeLabels[t.trigger_type] || t.trigger_type || '-';
+
+    // 执行时长
+    document.getElementById('detailDuration').textContent = formatDuration(t.duration_sec);
+
+    // 变更统计：优先从 currentTask.diff_files_json 同步解析（保证进入页面立即有数据）
+    // diffFiles 数组异步加载后，loadDiffFiles 末尾会再调一次本函数刷新
     let totalFiles = 0, totalAdd = 0, totalDel = 0;
     if (diffFiles && diffFiles.length > 0) {
         totalFiles = diffFiles.length;
         totalAdd = diffFiles.reduce((sum, f) => sum + (f.additions || 0), 0);
         totalDel = diffFiles.reduce((sum, f) => sum + (f.deletions || 0), 0);
+    } else if (t.diff_files_json && t.diff_files_json !== '[]' && t.diff_files_json !== '{}') {
+        try {
+            const cached = JSON.parse(t.diff_files_json);
+            if (Array.isArray(cached) && cached.length > 0) {
+                totalFiles = cached.length;
+                totalAdd = cached.reduce((sum, f) => sum + (f.additions || 0), 0);
+                totalDel = cached.reduce((sum, f) => sum + (f.deletions || 0), 0);
+            }
+        } catch (e) { /* 解析失败忽略，保留 0 */ }
     }
-    document.getElementById('detailFiles').textContent = totalFiles;
-    document.getElementById('detailAdditions').textContent = totalAdd;
-    document.getElementById('detailDeletions').textContent = totalDel;
-    document.getElementById('detailDiffInfo').textContent = t.mr_title || '';
+    document.getElementById('detailFiles').textContent = totalFiles || '-';
+    document.getElementById('detailAdditions').textContent = totalAdd > 0 ? '+' + totalAdd : '-';
+    document.getElementById('detailDeletions').textContent = totalDel > 0 ? '-' + totalDel : '-';
 
     // 失败原因面板：失败/超时/停止 且 error_msg 非空时显示
     const errorPanel = document.getElementById('detailErrorPanel');
@@ -787,6 +803,8 @@ async function loadDiffFiles(task) {
         } catch (e) { diffFiles = []; }
     }
     renderDiffFileTree();
+    // 异步加载完成后刷新顶部 KPI（文件数/新增/删除），保证数据准确
+    if (currentTask) renderTaskMeta(currentTask);
 }
 
 function renderDiffFileTree() {
@@ -1182,22 +1200,14 @@ async function loadChatMessages() {
     const contentEl = document.getElementById('chatMessages');
     contentEl.innerHTML = '<div class="text-center text-gray-400 py-8"><i class="fas fa-spinner fa-spin mr-2"></i>加载对话中...</div>';
 
-    // 检查 session
-    try {
-        const taskRes = await apiFetch(`${API_BASE}/tasks/${taskId}`);
-        const taskData = await taskRes.json();
-        const task = taskData.data;
-        if (task?.opencode_session_id) {
-            chatHasSession = true;
-            const metaEl = document.getElementById('chatSessionMeta');
-            metaEl.classList.remove('hidden');
-            metaEl.textContent = `Session: ${task.opencode_session_id}`;
-        } else {
-            contentEl.innerHTML = '<div class="text-center text-gray-400 py-8">该任务没有关联的 session 记录</div>';
-            return;
-        }
-    } catch (e) {
-        contentEl.innerHTML = `<div class="text-center text-red-400 py-8">获取任务信息失败: ${e.message}</div>`;
+    // 复用 loadTask() 已拿到的 currentTask，避免重复请求 /tasks/:id
+    if (currentTask?.opencode_session_id) {
+        chatHasSession = true;
+        const metaEl = document.getElementById('chatSessionMeta');
+        metaEl.classList.remove('hidden');
+        metaEl.textContent = `Session: ${currentTask.opencode_session_id}`;
+    } else {
+        contentEl.innerHTML = '<div class="text-center text-gray-400 py-8">该任务没有关联的 session 记录</div>';
         return;
     }
 
