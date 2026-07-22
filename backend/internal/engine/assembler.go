@@ -255,11 +255,12 @@ func groupIssuesBySeverity(issues []IssueContext) map[string][]IssueContext {
 	return grouped
 }
 
-// dimensionLabel 维度名称映射
+// dimensionLabel 维度名称映射（GitLab 推送报告用）
+// 内置 5 个维度硬编码中文；自定义维度直接返回原名
 func dimensionLabel(name string) string {
 	labels := map[string]string{
 		"security":        "安全性",
-		"code_quality":    "代码质量",
+		"performance":     "性能",
 		"readability":     "可读性",
 		"maintainability": "可维护性",
 		"test_coverage":   "测试覆盖",

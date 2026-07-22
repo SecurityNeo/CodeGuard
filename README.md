@@ -48,6 +48,10 @@
 | 📝 | **项目模板管理** | 支持为不同项目配置差异化 AI 评审提示词模板 |
 | 🔍 | **结构化 Issue 评审** | 按规则拆分代码审查结果，支持逐条/批量采纳与拒绝，拒绝需填写原因 |
 | 📋 | **评审规则库** | 内置通用/Go/Python/前端/Java 多语言规则库，项目级启用/禁用与严重程度覆盖 |
+| 📊 | **规则命中统计** | 独立的规则命中率、修复率、误报率统计页面；支持规则钻取、最近命中分页与代码片段查看 |
+| 💰 | **Token 用量监控** | 全量 LLM 调用 token 用量记录（输入/输出/缓存/成本），按模型/项目/作者/任务维度聚合分析 |
+| 🔁 | **LLM HTTP 重试** | 502/503/504 + 网络层瞬时错误自动指数退避重试；最大次数/初始延迟/退避倍率/最大延迟全部可配置 |
+
 
 ---
 
@@ -294,46 +298,6 @@ go run ./cmd/main.go
 | POST | `/api/v1/tasks/callback` | 任务回调 |
 | GET  | `/health` | 健康检查 |
 
-### 主要业务接口（需 JWT Bearer Token）
-
-| 模块 | 路径前缀 | 核心能力 |
-|------|----------|----------|
-| Dashboard | `/api/v1/dashboard/*` | 统计指标、趋势、雷达图数据 |
-| Project | `/api/v1/projects` | 项目管理、任务列表、自动同步 |
-| Task | `/api/v1/tasks` | 任务 CRUD、执行、重试、停止、SSE 事件流、AI 对话、人工复核意见 |
-| Pool | `/api/v1/pools` | 资源池 CRUD、连通性测试、默认池切换 |
-| Model | `/api/v1/models` | LLM 模型 CRUD、API 健康检查、默认模型设置 |
-| Notifier | `/api/v1/notifiers` | 企业微信机器人配置、测试、开关 |
-| Member | `/api/v1/member-mappings` | Git 用户与 IM 账号映射 |
-| Report | `/api/v1/reports/*` | SMTP 配置、接收人管理、报告预览与发送 |
-| System | `/api/v1/system/*` | 系统配置、操作日志 |
-| MR Log | `/api/v1/mr-review-logs` | MR 审查记录、统计、项目/作者筛选、状态标记 |
-| Template | `/api/v1/templates` | 项目模板 CRUD、克隆 |
-| User | `/api/v1/users` | 用户管理（管理员） |
-
-> 完整路由定义请参见 `backend/cmd/main.go` 中的 `setupRouter` 函数。
-
----
-
-## 🎨 前端页面
-
-| 页面 | 路径 | 说明 |
-|------|------|------|
-| 统计看板 | `/` | 默认首页，KPI 总览 |
-| 任务管理 | `/tasks.html` | 任务列表、状态监控、人工复核 |
-| 项目管理 | `/projects.html` | 项目列表、GitLab 同步配置 |
-| 项目详情 | `/project-detail.html` | 项目下任务列表、MR 详情 |
-| 大模型管理 | `/models.html` | LLM 模型配置、主备切换 |
-| 资源池管理 | `/pools.html` | OpenCode 资源池配置 |
-| 资源池详情 | `/pool-detail.html` | 资源池技能查看 |
-| 企业微信通知 | `/notifiers.html` | 机器人配置、模板编辑 |
-| 成员映射 | `/member-mappings.html` | Git 用户与 IM 账号映射 |
-| 系统设置 | `/settings.html` | 系统参数配置、操作日志 |
-| 项目模板 | `/templates.html` | AI 评审提示词模板管理 |
-| MR 统计 | `/mr-stats.html` | MR 聚合统计 |
-| 审查统计 | `/statistics.html` | MR 审查记录统计 |
-| 邮件报告 | `/mail.html` / `/report.html` | 邮件报告配置与发送 |
-| 登录 | `/login.html` | 账号/密码 + GitLab OAuth 登录 |
 
 ---
 
@@ -358,12 +322,13 @@ docker build -t codeguard:latest .
 | 项目 | 实现 |
 |------|------|
 | 密码存储 | bcrypt 哈希 |
-| 敏感配置 | AES-256-CBC 加密存储（数据库中密文保存） |
+| 敏感配置 | AES-256-GCM 加密存储（数据库中密文保存） |
 | 接口鉴权 | JWT Bearer Token（含有效期） |
 | Webhook 校验 | GitLab Secret Token 校验 |
-| GitLab OAuth | 支持 OAuth2 登录，自动创建/绑定用户 |
+| GitLab OAuth | 支持 OAuth2 登录，自动创建/绑定用户；OAuth callback token 跨 301 重定向保留 |
 | 操作审计 | 全量操作日志记录（请求 IP、操作人、结果） |
 | 数据过滤 | 普通用户只能查看自己的任务和 MR 记录 |
+| LLM 调用记录 | 完整记录每次 LLM 调用的 prompt/completion/cached tokens、耗时、错误信息，便于审计与成本核算 |
 
 ---
 

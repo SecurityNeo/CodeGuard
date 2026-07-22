@@ -90,6 +90,49 @@ func granularityForRange(start, end time.Time, rangeKey string) string {
 	return "day"
 }
 
+// fillTrendBuckets 在 SQL 查询结果的基础上，补齐缺失的桶（缺失字段值 = 0）。
+// hour：固定生成今天 00:00 ~ 23:00 共 24 个桶（不受 start/end 影响），让图表点位稳定。
+// day：从 start 所在日期 到 end 所在日期，每天一个桶。
+// 与 token_usage.generateTrendBuckets 行为一致，确保 today → 24 个整点，7d/30d/... → 连续日期不缺位。
+// valueField 指定 gin.H 中需要补 0 的字段名（如 "hit_count"）。
+func fillTrendBuckets(data []gin.H, gran string, start, end time.Time, valueField string) []gin.H {
+	// 已存在的桶索引
+	existing := make(map[string]int64, len(data))
+	for _, d := range data {
+		if key, ok := d["date"].(string); ok {
+			if v, ok := d[valueField].(int64); ok {
+				existing[key] = v
+			}
+		}
+	}
+	// 生成期望桶列表
+	loc := start.Location()
+	expected := make([]string, 0, 24)
+	if gran == "hour" {
+		base := time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, loc)
+		for i := 0; i < 24; i++ {
+			expected = append(expected, base.Add(time.Duration(i)*time.Hour).Format("2006-01-02 15:04:05"))
+		}
+	} else {
+		endDay := time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, loc)
+		cur := time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, loc)
+		for !cur.After(endDay) {
+			expected = append(expected, cur.Format("2006-01-02"))
+			cur = cur.AddDate(0, 0, 1)
+		}
+	}
+	// 按期望桶输出，缺失补 0
+	out := make([]gin.H, 0, len(expected))
+	for _, b := range expected {
+		v, ok := existing[b]
+		if !ok {
+			v = 0
+		}
+		out = append(out, gin.H{"date": b, valueField: v})
+	}
+	return out
+}
+
 // ruleStatsBaseQuery 构造规则统计的基础查询。
 // 关键点：使用默认 scope，过滤掉 soft-deleted 的 ReviewIssue。
 // 背景：persistor.go:30-31 在任务重试时 soft delete 旧 issues 再 insert 新的。
@@ -197,6 +240,8 @@ func (h *RuleStatsHandler) Overview(c *gin.Context) {
 	for _, r := range trendRows {
 		trend = append(trend, gin.H{"date": r.Bucket, "hit_count": r.HitN})
 	}
+	// 补齐缺失桶：保证 hour 粒度返回 24 个点，day 粒度返回连续日期
+	trend = fillTrendBuckets(trend, gran, start, end, "hit_count")
 
 	// 3. 规则命中 TOP 10
 	type topRuleRow struct {
@@ -420,6 +465,8 @@ func (h *RuleStatsHandler) ByRule(c *gin.Context) {
 	for _, r := range trendRows {
 		trend = append(trend, gin.H{"date": r.Bucket, "hit_count": r.N})
 	}
+	// 补齐缺失桶
+	trend = fillTrendBuckets(trend, gran, start, end, "hit_count")
 
 	// 4. 涉及项目 TOP 5（tasks 表只存 project_id，需 JOIN projects 拿 name）
 	type projRow struct {

@@ -297,23 +297,20 @@ func groupRulesByCategory(rules []model.ReviewRule) map[string][]model.ReviewRul
 }
 
 // categoryDisplay 维度名称中文映射（查看 ReviewCategory 表获取最终源）
+// 内置 5 个维度硬编码中文；自定义维度直接返回原名
 func categoryDisplay(category string) string {
-	// 数据库持久化为权威来源；硬编码用于 builder 内部降级显示
 	m := map[string]string{
 		"security":        "安全性",
 		"performance":     "性能",
-		"code_quality":    "代码质量",
 		"readability":     "可读性",
 		"maintainability": "可维护性",
 		"test_coverage":   "测试覆盖",
-		"dockerfile":      "DockerFile",
-		"common":          "通用",
 	}
 	if v, ok := m[category]; ok {
 		return v
 	}
-	// 自定义维度：首字母大写，下划线转空格
-	return strings.Title(strings.ReplaceAll(category, "_", " "))
+	// 自定义维度：直接返回原名
+	return category
 }
 
 // severityDisplay 严重级别中文显示

@@ -1,7 +1,7 @@
 # CodeGuard - 功能清单
 
-> 版本: v4.4
-> 更新日期: 2026-07-16
+> 版本: v4.5
+> 更新日期: 2026-07-21
 > 适用范围: Go 后端 + Web 前端全栈开发
 
 ---
@@ -23,11 +23,14 @@
 13. [邮件通知](#13-邮件通知)
 14. [报告管理](#14-报告管理)
 15. [系统管理](#15-系统管理)
-16. [数据模型定义](#16-数据模型定义)
-17. [核心业务流程](#17-核心业务流程)
-18. [接口清单](#18-接口清单)
-19. [技术栈](#19-技术栈)
-20. [附录：认证与鉴权](#20-附录认证与鉴权)
+16. [数据洞察：Token 用量监控](#16-数据洞察token-用量监控)
+17. [数据洞察：规则命中统计](#17-数据洞察规则命中统计)
+18. [前端体验：主题与导航](#18-前端体验主题与导航)
+19. [数据模型定义](#19-数据模型定义)
+20. [核心业务流程](#20-核心业务流程)
+21. [接口清单](#21-接口清单)
+22. [技术栈](#22-技术栈)
+23. [附录：认证与鉴权](#23-附录认证与鉴权)
 
 ---
 
@@ -66,6 +69,15 @@ CodeGuard（代码智能门禁）是一个通过 GitLab Webhook 触发 AI 代码
 - **规则批量操作**: 项目详情页支持按分类/严重程度/语言筛选、批量启用/禁用、自定义每页条数
 - **GitLab 评论模板**: AI 审核模版支持自定义 `text/template` 格式，实时预览渲染效果
 - **SMTP 协议兼容**: 自定义 SMTP 客户端支持 AUTH LOGIN + STARTTLS，DATA 后完整读取响应码
+- **Token 用量全链路监控**: 全量 LLM 调用按行记录（prompt/completion/cached tokens + 耗时 + 状态），后台异步落库；首页 + 独立监控页 + 周月报多视角展示
+- **Token 用量多维聚合**: 按时间（today/7d/30d，含当天小时粒度）、模型、项目、作者、任务聚合；调用明细支持分页、最近优先
+- **规则命中统计**: 独立的规则命中率、修复率、误报率、待处理率统计页面；支持单规则钻取（含趋势、项目/作者 TOP、最近命中分页 + 代码片段）
+- **LLM HTTP 指数退避重试**: 502/503/504 + 网络层瞬时错误 + JSON 解析失败自动指数退避重试；最大次数/初始延迟/退避倍率/最大延迟全部 Web 可配置且立即生效
+- **系统参数热加载**: `max_diff_files` / `max_tokens_per_batch` / LLM 重试参数等全部支持 Web 配置后立即生效（TTL 5min + cron 1min 主动刷新）
+- **任务详情新布局**: 主信息卡 + 量化数据（时长/文件数/+N/-N）整合到一张卡片；综合评分徽章移至 MR 链接后（颜色编码：优/良/中/差）；Tab 按需加载（diff/报告/对话/Token）
+- **暗色/亮色主题系统**: 三态主题切换（light/dark/system）；CSS 变量设计系统；localStorage 持久化；跟随系统偏好；自定义事件 `themechange` 跨页广播
+- **菜单角色差异化**: 6 个折叠组（首页/任务/数据洞察/AI评审/通知/系统）按 admin/user 角色差异化；活跃组自动展开；折叠状态持久化
+- **check_error 字段自适应**: 字段从 VARCHAR(512) 升级为 TEXT；service 层防御性截断到 4000 rune，避免 LiteLLM 错误链过长导致写入失败
 
 ---
 
@@ -409,13 +421,37 @@ CodeGuard（代码智能门禁）是一个通过 GitLab Webhook 触发 AI 代码
 | 成功评论前缀 | 任务成功时在 MR 下评论：`深度代码审查任务【{taskID}】执行完成，审查报告：` | ✅ |
 | AI 响应提取增强 | 提取 OpenCode 响应中 `reasoning` 类型的文本内容 | ✅ |
 | 任务重试扩展 | `success` 状态任务也可重试（不仅 failed/timeout） | ✅ |
-| **人工复核重试** | 重试时支持选择历史复核意见注入；倒序排列、默认全选、可折叠卡片、 最新高亮 | ✅ |
+| **人工复核重试** | 重试时支持选择历史复核意见注入；倒序排列、默认全选、可折叠卡片、 最新高亮 | ✅ |
 | **项目级并发调度** | 深度评审（`chat`）同项目串行；AI 评审（`review`）与深度评审并发，互不阻塞 | ✅ |
 | **队列唤醒机制** | AI 评审成功/失败/停止/超时后自动唤起同项目 pending 深度评审，避免饿死 | ✅ |
 | **模型使用记录** | review 任务完成后记录实际使用的 LLM 模型 ID（含主备切换场景） | ✅ |
 | **主备链路追踪** | 任务列表/详情展示模型角色徽章（`[主]` 紫色 / `[备用N]` 橙色） | ✅ |
+| **LLM HTTP 重试** | 502/503/504 + 网络层瞬时错误 + JSON 解析失败触发指数退避重试 | ✅ |
+| **主备全失败聚合错误** | 任务 ErrorMsg 保留每个模型尝试的具体错误细节 | ✅ |
 
-### 7.3 结构化评审结果（任务详情）
+### 7.3 任务详情页布局（v4.5 重构）
+
+#### 顶部主信息卡
+
+| 元素 | 说明 |
+|------|------|
+| 项目名 + MR 链接 | 项目名 + GitLab 徽章链接到 MR |
+| **综合评分徽章** | 仅 review 任务；分数等级颜色编码（≥85 优秀绿 / 70-84 良好蓝 / 60-69 一般橙 / <60 较差红 / 0 未评分灰） |
+| MR 标题 | 完整 MR 标题（`title` 属性支持悬浮查看） |
+| 辅助信息行 | 分支 + 作者 + 创建时间 + 触发方式（单行紧凑布局） |
+| **量化数据行**（分隔线下） | 执行时长 + 变更文件数 + `+N / -N` 行数（紧凑一行展示） |
+
+#### Tab 按需加载
+
+| Tab | 数据来源 | 加载时机 |
+|------|----------|----------|
+| 代码变更 | `/tasks/:id/diff` | 进入页面时（异步加载，不阻塞顶部渲染） |
+| 评审报告 | `/tasks/:id/structured-review` | 首次切换到评审报告 Tab |
+| AI 对话 | `/tasks/:id/messages` + SSE `/tasks/:id/events` | 首次切换到 AI 对话 Tab |
+| AI Response | 任务对象的 `ai_response` 字段（同步） | 同步渲染 |
+| Token 用量 | `/token-usage/by-task` | 首次切换到 Token Tab（仅 review 任务） |
+
+### 7.4 结构化评审结果（任务详情）
 
 review 类型任务执行完成后，AI 评审结果按规则拆分为结构化 Issue 列表，支持逐条处理。
 
@@ -449,6 +485,19 @@ review 类型任务执行完成后，AI 评审结果按规则拆分为结构化 
 | 原因必填 | 拒绝时必须填写原因 | ✅ |
 | 展开详情自动显示 | 点击拒绝按钮时自动展开详情区域，避免输入框被遮挡 | ✅ |
 | 后端日志记录 | Issue 状态变更写入操作日志，格式：`任务ID：N，Issue ID：M 状态变更为 rejected` | ✅ |
+
+### 7.5 任务详情 Token 用量
+
+review 类型任务详情页提供独立的 Token 用量 Tab。
+
+| 功能 | 说明 |
+|------|------|
+| 5 个 KPI 卡 | 调用次数 / 输入 Tokens / 输出 Tokens / 总 Tokens / 平均耗时 |
+| 调用明细列表 | 时间 / 模型 / 调用方（中文）/ 输入·输出 / 总计 / 状态·耗时（紧凑 6 列布局） |
+| 调用方中文化 | `LLMService` / `PrimaryFallback` / `JSONRetry` 等英文 enum → 中文 |
+| 分页 | 强制刷新重置第 1 页；非强制切 tab 保留上次分页位置 |
+| 最近优先 | 默认按 `created_at DESC, id DESC` 排序 |
+| 后端缺失任务兼容 | 失败/超时/功能上线前任务显示空状态提示 |
 
 ---
 
@@ -875,6 +924,21 @@ SSE `part_updated` 事件触发工具卡片实时更新，支持以下工具：
 | **GitLab OAuth Redirect URI** | "" | OAuth callback URI | ✅ |
 | **GitLab OAuth Auto Create User** | true | Automatically create user on first OAuth login | ✅ |
 | **GitLab OAuth Skip Verify** | false | Skip TLS certificate verification for GitLab | ✅ |
+| **Max Diff Files** | 50 | 单次 review 任务允许的最大 diff 文件数 | ✅ |
+| **Max Tokens Per Batch** | 100000 | 单批 prompt 的 token 上限（超过自动分批） | ✅ |
+| **JSON Retry Max Attempts** | 3 | AI 输出 JSON 解析失败时的最大重试次数 | ✅ |
+| **JSON Retry Initial Delay Sec** | 2 | JSON 重试初始延迟（秒） | ✅ |
+| **JSON Retry Backoff Multiplier** | 2.0 | JSON 重试退避倍率 | ✅ |
+| **JSON Retry Max Delay Sec** | 30 | JSON 重试最大延迟（秒） | ✅ |
+| **JSON Retry Fallback Strategy** | regex | JSON 重试全部失败时的兜底策略（regex/manual） | ✅ |
+| **LLM Retry Max Attempts** | 3 | LLM HTTP 调用重试最大次数（针对 502/503/504 + 网络层） | ✅ |
+| **LLM Retry Initial Delay Ms** | 1000 | LLM HTTP 重试初始延迟（毫秒） | ✅ |
+| **LLM Retry Backoff Multiplier** | 2.0 | LLM HTTP 重试退避倍率 | ✅ |
+| **LLM Retry Max Delay Ms** | 30000 | LLM HTTP 重试最大延迟（毫秒） | ✅ |
+| **Default Dimension Weights** | `{}` | JSON：评审维度默认权重（安全/质量/可读性/可维护性 等） | ✅ |
+| **Default GitLab Comment Template** | text/template | GitLab 评论渲染的默认模板 | ✅ |
+
+> **热加载**：Web 端保存上述配置项后立即生效（TTL 5min + cron 1min 主动刷新）。无需重启服务。
 
 ### 15.3 System Info
 
@@ -899,12 +963,179 @@ SSE `part_updated` 事件触发工具卡片实时更新，支持以下工具：
 | Task Timeout Check | Every 10 sec | Detect and terminate timed-out tasks | ✅ |
 | MR Status Sync | Every N sec (config `mr_sync_interval_sec`, default 60, ≤0 disables) | Poll GitLab API to refresh opened MR state | ✅ |
 | Report Generation | Per weekly/monthly config (Cron expression) | Generate and send email reports | ✅ |
+| System Config Cache Refresh | Every 1 min | 主动刷新系统配置缓存，确保热加载生效 | ✅ |
 
 ---
 
-## 16. Data Model Definitions
+## 16. 数据洞察：Token 用量监控
 
-### 16.1 User (User)
+`token-usage.html` 是完整的 Token 用量监控页面（仅 admin 可见）。系统通过 `LLMCallLog` 表对每次 LLM 调用按行记录，含 prompt/completion/cached tokens、耗时、状态、错误信息等完整审计字段。
+
+### 19.1 8 宫格 KPI 卡片
+
+| 指标 | 说明 |
+|------|------|
+| 总调用次数 | 筛选范围内的 LLM 调用总次数 |
+| 总 Tokens | prompt + completion + cached 之和（短格式如 23.7K） |
+| 输入 Tokens | 总 prompt tokens |
+| 输出 Tokens | 总 completion tokens |
+| 缓存 Tokens | 总 cached tokens（命中 prompt cache 的部分） |
+| 平均耗时 | 平均每次调用的 duration_ms |
+| 成功率 | success / total 百分比 |
+| 当前任务 | 关联任务数（去重） |
+
+### 19.2 多维趋势图
+
+| 图表 | 说明 |
+|------|------|
+| 用量趋势（折线图） | 按时间粒度展示总 tokens；today 按小时（24 桶），7d/30d 按天 |
+| 模型分布（环形图） | 按 `model_name` 维度聚合调用次数占比 |
+| 调用方分布 | 按 `caller` 字段（LLMService / PrimaryFallback / JSONRetry 等）中文化展示 |
+
+### 19.3 Top 排行
+
+| 维度 | 说明 |
+|------|------|
+| 项目 TOP 10 | 按 token 用量倒序的项目排行 |
+| 模型 TOP 10 | 按 token 用量倒序的模型排行 |
+| 用户 TOP 10 | 按 token 用量倒序的作者排行 |
+
+### 19.4 调用明细
+
+| 功能 | 说明 |
+|------|------|
+| 分页 | 支持 20/50/100 条/页选择 + 页码跳转 |
+| 筛选 | 模型 / 项目 / 作者 / 状态 / 时间范围组合筛选 |
+| 排序 | 默认按 `created_at DESC, id DESC` |
+| 字段 | 时间 / 模型 / 调用方（中文）/ 输入·输出 / 总计 / 状态·耗时（紧凑 6 列） |
+| **任务详情集成** | 单任务详情页 Token Tab 复用同一接口（`/token-usage/by-task`），支持任务维度筛选 |
+
+### 19.5 首页摘要
+
+`statistics.html` 首页对 admin 用户展示 Token 用量摘要块（4 个 KPI + 趋势小图），不展示完整监控页。
+
+### 19.6 异步记录机制
+
+| 维度 | 设计 |
+|------|------|
+| 拦截点 | `service/llm.go` 的 `callLLMAPI` 用 `defer` 异步落库，不阻塞主调用 |
+| Channel | buffered channel (cap 1000)，2 worker goroutine 消费 |
+| 批量写入 | 每 100 条 / 1s / 失败重试 3 次指数退避 |
+| 字段最小集 | task_id / call_type / model_id / model_name / tokens / duration_ms / status / error_msg / cost_cents |
+| Cost 计算 | 按模型的 `input_price_per_mtokens` / `output_price_per_mtokens` / `cached_price_per_mtokens` 计算成本（分 cents） |
+
+---
+
+## 17. 数据洞察：规则命中统计
+
+`rule-stats.html` 是规则命中统计页面（admin/user 均可见）。基于 `ReviewIssue` 表（含 soft delete + 复合索引 `(rule_code, created_at)`）聚合规则命中率、修复率、误报率等核心指标。
+
+### 20.1 4 个 KPI 卡
+
+| 指标 | 说明 |
+|------|------|
+| 命中规则 | 筛选范围内命中 issue 的不同 rule_code 数 |
+| 总命中 | 所有 issue 数（含 pending/accepted/rejected） |
+| 涉及开发者 | 命中的不同作者数（去重） |
+| 修复率（+误报率+待处理率） | 修复率 = accepted / total；误报率 = rejected / total；待处理率 = pending / total；三者之和 = 100% |
+
+### 20.2 趋势 + 分布
+
+| 图表 | 说明 |
+|------|------|
+| 命中趋势（折线图） | 按时间粒度展示命中数；today 按小时（24 桶），其他按天 |
+| TOP 10 规则（横向条形图） | 按命中数倒序的 TOP 10 规则 |
+| 分类分布（饼图） | 按 `category` 字段聚合占比（中文分类名） |
+| 严重级别分布（饼图） | 按 `severity` 字段聚合（critical/high/medium/low/info → 严重/高/中/低/提示） |
+
+### 20.3 TOP 10 规则表格
+
+| 列 | 说明 |
+|------|------|
+| 排名 | 1-10 |
+| 规则名称 + 代码 | 中文名 + rule_code |
+| 分类 | 来自 `review_categories` JOIN（中文） |
+| 严重级别 | critical/high/medium/low/info 颜色徽章 |
+| 命中数 | 总命中 issue 数 |
+| 修复率 | accepted / 命中数 百分比 |
+| 操作 | 钻取按钮 → 进入单规则详情 |
+
+### 20.4 单规则钻取（URL 参数 `?rule=XXX&range=YYY`）
+
+| 模块 | 说明 |
+|------|------|
+| 规则元信息 | 规则名称、代码、分类、严重级别、描述 |
+| 单规则 KPI | 总命中 / 修复 / 误报 / 待处理 |
+| 单规则趋势 | 折线图展示时间维度命中数 |
+| 项目 TOP 5 | 命中该规则的 TOP 5 项目 |
+| 作者 TOP 5 | 命中该规则的 TOP 5 作者 |
+| 最近命中分页 | 最近命中 issue 列表 + 代码片段（`<pre>` 截断 800 字符） |
+
+### 20.5 时间范围
+
+| 范围 | 说明 |
+|------|------|
+| today | 按小时（24 桶） |
+| 7d | 按天（7 桶） |
+| 30d | 按天（30 桶） |
+| 90d | 按天（90 桶） |
+| 全部 | 按天（历史全部） |
+
+### 20.6 规则库联动
+
+`review-rules.html` 规则卡片显示"近 7 天命中 N"，链接指向 `rule-stats.html?rule=XXX&range=7d` 自动打开对应规则的钻取抽屉。
+
+---
+
+## 18. 前端体验：主题与导航
+
+### 21.1 主题系统
+
+| 功能 | 说明 |
+|------|------|
+| 三态切换 | light（亮）/ dark（暗）/ system（跟随系统）循环切换 |
+| 默认状态 | system（首次进入跟随 OS `prefers-color-scheme`） |
+| 持久化 | `localStorage['cg.theme']` 保存用户偏好 |
+| 跨页广播 | `themechange` CustomEvent 在同一浏览器 tab 间实时同步 |
+| 防 FOUC | `<head>` 顶部注入 `theme.js?v=1`，在 CSS 加载前应用主题 |
+| API | `window.ThemeManager.get()/set()/toggle()/on('change', cb)` |
+
+### 21.2 CSS 变量设计系统
+
+| 变量类别 | 变量 |
+|----------|------|
+| 背景 | `--cg-bg-base` / `--cg-bg-surface` / `--cg-bg-elevated` / `--cg-bg-hover` / `--cg-bg-overlay` |
+| 文字 | `--cg-text-primary` / `--cg-text-secondary` / `--cg-text-tertiary` / `--cg-text-disabled` |
+| 品牌色 | `--cg-brand-primary` (indigo-600/400) / `--cg-brand-secondary` (cyan) / `--cg-brand-accent` (amber) |
+| 侧边栏 | `--cg-sidebar-bg` (渐变) / `--cg-sidebar-text` / `--cg-sidebar-item-hover` / `--cg-sidebar-item-active` |
+| 阴影 / 圆角 / 过渡 | `--cg-shadow-sm/md/lg` / `--cg-radius-sm/md/lg/xl` / `--cg-transition` (200ms cubic-bezier) |
+
+### 21.3 菜单架构（6 折叠组 admin/user 差异化）
+
+| 顶层 | admin 子项 | user 子项 |
+|------|------------|-----------|
+| 首页 | 统计看板 | 统计看板 |
+| 任务列表 | 任务列表 | 任务列表 |
+| **数据洞察** | MR 提交统计 / 规则命中统计 / **Token 用量** | MR 提交统计 / 规则命中统计 |
+| **AI 评审** | 评审规则 | （隐藏） |
+| **通知管理** | 企业微信 / 邮件报告 / 成员映射 / 报告管理 | （隐藏） |
+| **系统管理** | 项目管理 / 项目模板 / 资源池 / 大模型 / 系统设置 | （隐藏） |
+
+### 21.4 菜单交互细节
+
+| 功能 | 说明 |
+|------|------|
+| 自动 URL 检测 | `activePageId` 从 `window.location.pathname` 自动识别，无需每页配置 |
+| 自动展开活跃组 | DOMContentLoaded 一次性自动展开包含当前活跃项的组 |
+| 折叠状态持久化 | 用户手动折叠/展开状态存入 localStorage |
+| 子页面匹配 | `isMenuItemActive(href, path, search)` 支持 `settings.html?tab=xxx` 匹配 |
+| 角色过滤 | 子项通过 `role: ['admin']` / `role: ['admin', 'user']` 字段控制可见性 |
+
+---
+
+## 19. 数据模型定义
+
+### 19.1 User (User)
 
 ```go
 type User struct {
@@ -917,7 +1148,7 @@ type User struct {
 }
 ```
 
-### 16.2 Token (Token)
+### 19.2 Token (Token)
 
 ```go
 type Token struct {
@@ -930,31 +1161,39 @@ type Token struct {
 }
 ```
 
-### 16.3 Project (Project)
+### 19.3 Project (Project)
 
 ```go
 type Project struct {
-    ID              uint           `gorm:"primaryKey" json:"id"`
-    Name            string         `gorm:"size:255;not null" json:"name"`
-    ProjectPath     string         `gorm:"size:255;uniqueIndex" json:"project_path"`  // GitLab repo path
-    GitLabProjectID int            `gorm:"column:gitlab_project_id" json:"gitlab_project_id"`
-    TemplateID      uint           `gorm:"index" json:"template_id"`                  // Associated template ID
-    PoolID          uint           `gorm:"index" json:"pool_id"`                      // Associated pool ID
-    DefaultModelID  *uint          `gorm:"index" json:"default_model_id"`             // Default model ID (NULL = global primary/backup)
-    AIEnabled       bool           `gorm:"default:false" json:"ai_enabled"`           // AI enabled
-    Source          string         `gorm:"size:20;default:'manual'" json:"source"`    // manual/...
-    AccessToken     string         `gorm:"size:500" json:"access_token"`              // GitLab AccessToken
-    CreatedAt       time.Time      `json:"created_at"`
-    UpdatedAt       time.Time      `json:"updated_at"`
-    DeletedAt       gorm.DeletedAt `gorm:"index" json:"deleted_at"`
+    ID              uint            `gorm:"primaryKey" json:"id"`
+    Name            string          `gorm:"size:255;not null" json:"name"`
+    ProjectPath     string          `gorm:"size:255;uniqueIndex" json:"project_path"`     // GitLab repo path
+    GitLabProjectID int             `gorm:"column:gitlab_project_id" json:"gitlab_project_id"`
+    TemplateID      uint            `gorm:"index" json:"template_id"`                     // Associated template ID
+    PoolID          uint            `gorm:"index" json:"pool_id"`                         // Associated pool ID
+    DefaultModelID  *uint           `gorm:"index" json:"default_model_id"`                // NULL = 未指定（不触发 review 任务）
+    AIEnabled       bool            `gorm:"default:false" json:"ai_enabled"`              // AI enabled
+    Source          string          `gorm:"size:20;default:'manual'" json:"source"`       // manual/...
+    Language        string          `gorm:"size:32;default:'golang'" json:"language"`      // 项目主要编程语言
+    AccessToken     string          `gorm:"size:500" json:"access_token"`                 // GitLab AccessToken
+    LastSyncAt      *time.Time      `json:"last_sync_at"`                                 // 上次 GitLab 同步时间
+    SyncStatus      string          `gorm:"size:20;default:'success'" json:"sync_status"` // success/failed
+    SyncError       string          `gorm:"size:512" json:"sync_error"`                   // 同步失败时的错误
+    CreatedAt       time.Time       `json:"created_at"`
+    UpdatedAt       time.Time       `json:"updated_at"`
+    DeletedAt       gorm.DeletedAt  `gorm:"index" json:"deleted_at"`
     Template        ProjectTemplate `gorm:"foreignKey:TemplateID;references:ID" json:"template,omitempty"`
     Pool            ResourcePool    `gorm:"foreignKey:PoolID;references:ID" json:"pool,omitempty"`
     Model           LLMModel        `gorm:"foreignKey:DefaultModelID;references:ID" json:"model,omitempty"`
     Tasks           []Task          `gorm:"foreignKey:ProjectID" json:"tasks,omitempty"`
+
+    // 关联统计（非表字段，仅 API 展示使用）
+    EnabledRuleCount int `gorm:"-" json:"enabled_rule_count,omitempty"`
+    TotalRuleCount   int `gorm:"-" json:"total_rule_count,omitempty"`
 }
 ```
 
-### 16.4 Task (Task)
+### 19.4 Task (Task)
 
 ```go
 type TaskStatus string
@@ -1003,7 +1242,7 @@ type Task struct {
 }
 ```
 
-### 16.5 Project Template (ProjectTemplate)
+### 19.5 Project Template (ProjectTemplate)
 
 ```go
 type ProjectTemplate struct {
@@ -1016,7 +1255,7 @@ type ProjectTemplate struct {
 }
 ```
 
-### 16.6 Resource Pool (ResourcePool)
+### 19.6 Resource Pool (ResourcePool)
 
 ```go
 type PoolStatus string
@@ -1042,14 +1281,14 @@ type ResourcePool struct {
     LastCheckAt      *time.Time `json:"last_check_at"`
     StatusChangedAt  *time.Time `json:"status_changed_at"`
     LastAlertAt      *time.Time `json:"last_alert_at"`
-    CheckError       string     `gorm:"size:512" json:"check_error"`
+    CheckError       string     `gorm:"type:text" json:"check_error"` // LiteLLM 错误链可能很长，升级为 TEXT；service 层防御性截断 4000 rune
     ActiveJobs       int        `gorm:"default:0" json:"active_jobs"`
     CreatedAt        time.Time  `json:"created_at"`
     UpdatedAt        time.Time  `json:"updated_at"`
 }
 ```
 
-### 16.7 LLM Model (LLMModel)
+### 19.7 LLM Model (LLMModel)
 
 ```go
 type LLMModel struct {
@@ -1066,18 +1305,24 @@ type LLMModel struct {
     BackupOrder      int        `gorm:"default:0" json:"backup_order"`
     CheckIntervalSec int        `gorm:"default:5" json:"check_interval_sec"`
     Status           string     `gorm:"size:20;default:'active'" json:"status"`
-    CheckError       string     `gorm:"size:512" json:"check_error"`
+    CheckError       string     `gorm:"type:text" json:"check_error"` // LiteLLM 错误链可能很长，升级为 TEXT；service 层防御性截断 4000 rune
     LastCheckAt      *time.Time `json:"last_check_at"`
     StatusChangedAt  *time.Time `json:"status_changed_at"`
     LastAlertAt      *time.Time `json:"last_alert_at"`
     LastTestAt       *time.Time `json:"last_test_at"`
     LastTestStatus   string     `gorm:"size:20;default:''" json:"last_test_status"`
-    CreatedAt        time.Time  `json:"created_at"`
-    UpdatedAt        time.Time  `json:"updated_at"`
+
+    // 价格字段（USD / 百万 token；0 = 未知/不计入成本），用于 Token 用量监控的成本估算
+    InputPricePerMTokens  float64 `gorm:"default:0;column:input_price_per_mtokens" json:"input_price_per_mtokens"`
+    OutputPricePerMTokens float64 `gorm:"default:0;column:output_price_per_mtokens" json:"output_price_per_mtokens"`
+    CachedPricePerMTokens float64 `gorm:"default:0;column:cached_price_per_mtokens" json:"cached_price_per_mtokens"`
+
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
 }
 ```
 
-### 16.8 WeCom Notifier (WeComNotifier)
+### 19.8 WeCom Notifier (WeComNotifier)
 
 ```go
 type WeComNotifier struct {
@@ -1094,7 +1339,7 @@ type WeComNotifier struct {
 }
 ```
 
-### 16.9 Operation Log (OperationLog)
+### 19.9 Operation Log (OperationLog)
 
 ```go
 type OperationLog struct {
@@ -1109,13 +1354,13 @@ type OperationLog struct {
 }
 ```
 
-### 16.10 System Config (SystemConfig)
+### 19.10 System Config (SystemConfig)
 
 ```go
 type SystemConfig struct {
     ID                      uint      `gorm:"primaryKey"`
     GitlabToken             string    `gorm:"size:255"`
-    TaskTimeoutMin          int       `gorm:"default:30"`
+    TaskTimeoutMin          int       `gorm:"default:120"`
     SyncIntervalSec         int       `gorm:"default:60"`
     MRSyncIntervalSec       int       `gorm:"default:60"`
     MaxParallelTask         int       `gorm:"default:20"`
@@ -1126,16 +1371,44 @@ type SystemConfig struct {
     ScoreThreshold          int       `gorm:"default:60"`
     ReviewTemplate          string    `gorm:"type:text"`
     DiffTruncationThreshold int       `gorm:"default:5000"`
+    MaxDiffFiles            int       `gorm:"default:50;column:max_diff_files"`              // 单次 review 任务最大 diff 文件数
+    MaxTokensPerBatch       int       `gorm:"default:100000;column:max_tokens_per_batch"`    // 单批 prompt 的 token 上限
     AlertDurationSec        int       `gorm:"default:300"`
     AlertCooldownSec        int       `gorm:"default:3600"`
     AlertNotifierID         uint      `gorm:"default:0"`
     AlertMentionUserIDs     string    `gorm:"size:512"`
-    CreatedAt               time.Time
-    UpdatedAt               time.Time
+
+    // JSON 结构化输出重试配置
+    JSONRetryMaxAttempts       int     `gorm:"default:3;column:json_retry_max_attempts" json:"json_retry_max_attempts"`
+    JSONRetryInitialDelaySec   int     `gorm:"default:2;column:json_retry_initial_delay_sec" json:"json_retry_initial_delay_sec"`
+    JSONRetryBackoffMultiplier float64 `gorm:"default:2.0;column:json_retry_backoff_multiplier" json:"json_retry_backoff_multiplier"`
+    JSONRetryMaxDelaySec       int     `gorm:"default:30;column:json_retry_max_delay_sec" json:"json_retry_max_delay_sec"`
+    JSONRetryFallbackStrategy  string  `gorm:"size:20;default:'regex';column:json_retry_fallback_strategy" json:"json_retry_fallback_strategy"`
+
+    // LLM HTTP 调用重试配置（针对 502/503/504 与网络层瞬时错误）
+    LLMRetryMaxAttempts       int     `gorm:"default:3;column:llm_retry_max_attempts" json:"llm_retry_max_attempts"`
+    LLMRetryInitialDelayMs    int     `gorm:"default:1000;column:llm_retry_initial_delay_ms" json:"llm_retry_initial_delay_ms"`
+    LLMRetryBackoffMultiplier float64 `gorm:"default:2.0;column:llm_retry_backoff_multiplier" json:"llm_retry_backoff_multiplier"`
+    LLMRetryMaxDelayMs        int     `gorm:"default:30000;column:llm_retry_max_delay_ms" json:"llm_retry_max_delay_ms"`
+
+    DefaultDimensionWeights      string `gorm:"type:json;column:default_dimension_weights" json:"default_dimension_weights"`
+    DefaultGitLabCommentTemplate string `gorm:"type:text;column:default_gitlab_comment_template" json:"default_gitlab_comment_template"`
+
+    // GitLab OAuth 配置（从环境变量迁移到数据库动态配置）
+    GitLabOAuthEnabled        bool   `gorm:"default:false;column:gitlab_oauth_enabled" json:"gitlab_oauth_enabled"`
+    GitLabBaseURL             string `gorm:"size:255;column:gitlab_base_url" json:"gitlab_base_url"`
+    GitLabOAuthClientID       string `gorm:"size:255;column:gitlab_oauth_client_id" json:"gitlab_oauth_client_id"`
+    GitLabOAuthClientSecret   string `gorm:"size:255;column:gitlab_oauth_client_secret" json:"gitlab_oauth_client_secret"`
+    GitLabOAuthRedirectURI    string `gorm:"size:512;column:gitlab_oauth_redirect_uri" json:"gitlab_oauth_redirect_uri"`
+    GitLabOAuthAutoCreateUser bool   `gorm:"default:true;column:gitlab_oauth_auto_create_user" json:"gitlab_oauth_auto_create_user"`
+    GitLabOAuthSkipVerify     bool   `gorm:"default:false;column:gitlab_oauth_skip_verify" json:"gitlab_oauth_skip_verify"`
+
+    CreatedAt time.Time
+    UpdatedAt time.Time
 }
 ```
 
-### 16.11 MR Review Log (MergeRequestReviewLog) (this app DB)
+### 19.11 MR Review Log (MergeRequestReviewLog) (this app DB)
 
 ```go
 type MergeRequestReviewLog struct {
@@ -1160,7 +1433,7 @@ type MergeRequestReviewLog struct {
 }
 ```
 
-### 16.12 SMTP Config (SMTPConfig)
+### 19.12 SMTP Config (SMTPConfig)
 
 ```go
 type SMTPConfig struct {
@@ -1174,7 +1447,7 @@ type SMTPConfig struct {
 }
 ```
 
-### 16.13 Report Config (ReportConfig)
+### 19.13 Report Config (ReportConfig)
 
 ```go
 type ReportConfig struct {
@@ -1192,7 +1465,7 @@ type ReportConfig struct {
 }
 ```
 
-### 16.15 Report Recipient (ReportRecipient)
+### 19.15 Report Recipient (ReportRecipient)
 
 ```go
 type ReportRecipient struct {
@@ -1206,7 +1479,7 @@ type ReportRecipient struct {
 }
 ```
 
-### 16.16 Review Rule (ReviewRule)
+### 19.16 Review Rule (ReviewRule)
 
 全局评审规则库，多语言内置规则。
 
@@ -1228,7 +1501,7 @@ type ReviewRule struct {
 }
 ```
 
-### 16.17 Project Review Config (ProjectReviewConfig)
+### 19.17 Project Review Config (ProjectReviewConfig)
 
 项目级规则配置，覆盖全局规则状态与严重程度。
 
@@ -1244,7 +1517,7 @@ type ProjectReviewConfig struct {
 }
 ```
 
-### 16.18 Task Review Rule (TaskReviewRule)
+### 19.18 Task Review Rule (TaskReviewRule)
 
 任务执行时实际使用的评审规则快照（包含截断记录）。
 
@@ -1264,7 +1537,7 @@ type TaskReviewRule struct {
 }
 ```
 
-### 16.19 Structured Review Result (Task 扩展字段)
+### 19.19 Structured Review Result (Task 扩展字段)
 
 任务表扩展字段，存储结构化评审结果。
 
@@ -1274,14 +1547,95 @@ type Task struct {
     // ... 原有字段 ...
     StructuredReviewJSON string `gorm:"type:longtext" json:"structured_review_json"` // 结构化评审结果JSON
     ReviewMarkdown       string `gorm:"type:longtext" json:"review_markdown"`        // 渲染后的Markdown
+    DiffFilesJSON        string `gorm:"type:longtext" json:"diff_files_json"`        // diff 文件列表 JSON（含 additions/deletions）
+    TriggerType          string `gorm:"size:20;default:'webhook'" json:"trigger_type"`
 }
 ```
 
+### 19.20 Review Category (评审分类字典)
+
+评审分类字典表（rule-stats 通过 LEFT JOIN 拿到中文分类名）。
+
+```go
+type ReviewCategory struct {
+    ID        uint      `gorm:"primaryKey" json:"id"`
+    Code      string    `gorm:"uniqueIndex;size:32" json:"code"`
+    Name      string    `gorm:"size:100" json:"name"`           // 中文分类名（如：安全/性能/可读性）
+    IsBuiltIn bool      `gorm:"default:false" json:"is_built_in"`
+    SortOrder int       `gorm:"default:0" json:"sort_order"`
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
+}
+```
+
+### 19.21 Review Issue (评审 Issue 主表)
+
+AI 结构化评审产出的 Issue 主表，规则命中统计的数据源。
+
+```go
+type ReviewIssue struct {
+    ID                 uint            `gorm:"primaryKey" json:"id"`
+    TaskID             uint            `gorm:"index" json:"task_id"`
+    RuleID             *uint           `gorm:"index" json:"rule_id"`                              // NULL=AI 自主发现
+    RuleCode           string          `gorm:"size:64;index:idx_rule_code_created,priority:1" json:"rule_code"`
+    Category           string          `gorm:"size:32" json:"category"`                          // security/performance/...
+    Severity           string          `gorm:"size:16" json:"severity"`                          // critical/high/medium/low/info
+    DeductScore        int             `gorm:"default:0;column:deduct_score" json:"deduct_score"` // 该 Issue 扣多少分
+    File               string          `gorm:"size:255" json:"file"`
+    LineStart          int             `gorm:"default:0" json:"line_start"`
+    LineEnd            int             `gorm:"default:0" json:"line_end"`
+    CodeSnippet        string          `gorm:"type:text" json:"code_snippet"`
+    Message            string          `gorm:"type:text" json:"message"`
+    Suggestion         string          `gorm:"type:text" json:"suggestion"`
+    Status             string          `gorm:"size:20;default:'pending'" json:"status"`         // pending/accepted/rejected/dismissed
+    ResolvedBy         uint            `gorm:"index;default:0" json:"resolved_by"`              // 操作人ID
+    ResolvedAt         *time.Time      `json:"resolved_at"`
+    RejectReason       string          `gorm:"type:text;column:reject_reason" json:"reject_reason"`
+    GitlabDiscussionID string          `gorm:"size:64;column:gitlab_discussion_id" json:"gitlab_discussion_id"`
+    IsResolved         bool            `gorm:"default:false;column:is_resolved" json:"is_resolved"`
+    CreatedAt          time.Time       `gorm:"index:idx_rule_code_created,priority:2" json:"created_at"`
+    DeletedAt          gorm.DeletedAt  `gorm:"index" json:"-"`                                  // soft delete（统计用默认 scope）
+}
+```
+
+> **复合索引** `(rule_code, created_at)`：支撑规则命中统计的高频查询（按规则代码 + 时间范围聚合）。
+>
+> **soft delete 策略**：`gorm.DeletedAt` 启用后，`engine/persistor.go` 的 `Delete` 操作自动变为 soft delete（保留记录供审计与统计）；规则统计接口使用**默认 scope**（与任务详情列表一致），避免重试场景下软删记录与新记录重复统计。
+
+### 19.22 LLM Call Log (LLM 调用流水)
+
+全量 LLM 调用的按行审计日志，支撑 Token 用量监控与成本核算。
+
+```go
+type LLMCallLog struct {
+    ID               uint      `gorm:"primaryKey" json:"id"`
+    TaskID           *uint     `gorm:"index:idx_task_call_type,priority:1" json:"task_id,omitempty"`
+    ModelID          *uint     `gorm:"index:idx_model_created,priority:2" json:"model_id,omitempty"` // NULL=OpenCode
+    Provider         string    `gorm:"size:32;not null;default:'';index" json:"provider"`
+    ModelName        string    `gorm:"size:128;not null;default:'';index" json:"model_name"`         // model_id 缺失时的 fallback 展示
+    CallType         string    `gorm:"size:32;not null;default:'';index:idx_call_type_created,priority:2" json:"call_type"` // score/deep_review
+    Caller           string    `gorm:"size:64;not null;default:'';index" json:"caller"`             // LLMService/PrimaryFallback/JSONRetry
+    PromptTokens     int       `gorm:"not null;default:0" json:"prompt_tokens"`
+    CompletionTokens int       `gorm:"not null;default:0" json:"completion_tokens"`
+    CachedTokens     int       `gorm:"not null;default:0" json:"cached_tokens"`
+    TotalTokens      int       `gorm:"not null;default:0" json:"total_tokens"`
+    DurationMs       int       `gorm:"not null;default:0" json:"duration_ms"`
+    Status           string    `gorm:"size:16;not null;default:'success';index:idx_status_created,priority:1" json:"status"` // success/failed
+    ErrorMsg         string    `gorm:"type:text" json:"error_msg,omitempty"`
+    CostCents        int64     `gorm:"not null;default:0" json:"cost_cents"`                       // 按模型价格计算的成本（cents）
+    CreatedAt        time.Time `gorm:"index:idx_call_type_created,priority:1;index:idx_model_created,priority:1;index:idx_status_created,priority:2;not null" json:"created_at"`
+}
+```
+
+> **MVP 范围**：当前仅 `call_type=score`（AI review 调用）落库；`call_type=deep_review`（OpenCode 深度评审）在 schema 中预留。
+>
+> **复合索引**：覆盖 `task_id+call_type`、`model_id+created_at`、`status+created_at`、`call_type+created_at` 四种高频查询路径。
+
 ---
 
-## 17. Core Business Processes
+## 20. 核心业务流程
 
-### 17.1 GitLab Webhook Processing Flow
+### 20.1 GitLab Webhook Processing Flow
 
 ```
 GitLab sends "Note Hook" POST request
@@ -1323,7 +1677,7 @@ GitLab sends "Note Hook" POST request
 [Notify Layer] Post AI comment to MR
 ```
 
-### 17.2 AI Real-time Conversation Flow
+### 20.2 AI Real-time Conversation Flow
 
 ```
 User clicks [AI Conversation] button
@@ -1344,7 +1698,7 @@ SSE receives NDJSON events:
     - finish: AI response complete
 ```
 
-### 17.3 MR Status Sync Flow
+### 20.3 MR Status Sync Flow
 
 ```
 Background cron (per mr_sync_interval_sec, default 60s)
@@ -1359,7 +1713,7 @@ For each opened MR:
 Update SyncedAt = now()
 ```
 
-### 17.4 Task Timeout Flow
+### 20.4 Task Timeout Flow
 
 ```
 Cron (every 10 sec)
@@ -1374,7 +1728,7 @@ Update Task:
     - ErrorMsg = "Task timeout"
 ```
 
-### 17.5 Score Threshold Trigger Flow
+### 20.5 Score Threshold Trigger Flow
 
 ```
 MR change triggers AI review
@@ -1395,7 +1749,7 @@ Conditions:
     - Post result to MR
 ```
 
-### 17.6 Report Generation & Send Flow
+### 20.6 Report Generation & Send Flow
 
 ```
 Save ReportConfig
@@ -1416,7 +1770,7 @@ Write ReportLog
 If SendEnabled: send emails
 ```
 
-### 17.7 AI Review + LLM Primary/Backup Switching Flow
+### 20.7 AI Review + LLM Primary/Backup Switching Flow
 
 ```
 GitLab MR Webhook → ExecuteAIReviewTask
@@ -1439,7 +1793,7 @@ Any backup success → Record UsedModelID
 None success → Task failed
 ```
 
-### 17.8 Frontend Auth Intercept Flow
+### 20.8 Frontend Auth Intercept Flow
 
 ```
 Page load → js/auth.js
@@ -1454,9 +1808,9 @@ Override window.fetch:
 
 ---
 
-## 18. API List
+## 21. 接口清单
 
-### 18.1 Auth
+### 21.1 Auth
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
@@ -1467,7 +1821,7 @@ Override window.fetch:
 | GET | /api/v1/users/me | Current user info | ✅ |
 | PUT | /api/v1/users/password | Change password | ✅ |
 
-### 18.2 Statistics Dashboard (Home)
+### 21.2 Statistics Dashboard (Home)
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
@@ -1477,14 +1831,35 @@ Override window.fetch:
 | GET | /api/v1/dashboard/recent-projects | Recent active projects | ✅ |
 | GET | /api/v1/dashboard/recent-failures | Recent failures | ✅ |
 | GET | /api/v1/dashboard/task-distribution | Task distribution | ✅ |
+| GET | /api/v1/dashboard/token-summary | 首页 Token 用量摘要（admin only） | ✅ |
 
-### 18.3 MR Statistics
+### 21.3 Token Usage (admin only)
+
+| Method | Path | Description | Implemented |
+|------|------|------|----------|
+| GET | /api/v1/token-usage/overview | 总览 KPI（调用次数/总 tokens/平均耗时/成功率等） | ✅ |
+| GET | /api/v1/token-usage/trend | 用量趋势（today 按小时，其他按天） | ✅ |
+| GET | /api/v1/token-usage/by-model | 按模型聚合 | ✅ |
+| GET | /api/v1/token-usage/by-project | 按项目聚合 | ✅ |
+| GET | /api/v1/token-usage/by-author | 按作者聚合 | ✅ |
+| GET | /api/v1/token-usage/calls | 调用明细（分页 + 多维筛选） | ✅ |
+| GET | /api/v1/token-usage/by-task | 单任务 Token 用量（任务详情 Tab 使用） | ✅ |
+
+### 21.4 Rule Stats (规则命中统计)
+
+| Method | Path | Description | Implemented |
+|------|------|------|----------|
+| GET | /api/v1/rule-stats/overview | 总览 KPI（命中规则/总命中/涉及开发者/修复率+误报率+待处理率） | ✅ |
+| GET | /api/v1/rule-stats/by-rule/:code | 单规则钻取（元信息 + KPI + 趋势 + 项目/作者 TOP + 最近命中） | ✅ |
+| GET | /api/v1/rule-stats/recent-issues | 最近命中分页（含代码片段） | ✅ |
+
+### 21.5 MR Statistics
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
 | GET | /api/v1/mr-review-logs | List (paginated, filtered, aggregated stats) | ✅ |
 
-### 18.4 MR Review Log
+### 21.6 MR Review Log
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
@@ -1495,7 +1870,7 @@ Override window.fetch:
 | GET | /api/v1/mr-review-logs/projects | Project dropdown | ✅ |
 | GET | /api/v1/mr-review-logs/authors | Author dropdown | ✅ |
 
-### 18.5 Projects
+### 21.5 Projects
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
@@ -1507,7 +1882,7 @@ Override window.fetch:
 | GET | /api/v1/projects/:id/tasks | Project tasks | ✅ |
 | GET | /api/v1/projects/options | Project dropdown (public) | ✅ |
 
-### 18.6 Tasks
+### 21.6 Tasks
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
@@ -1523,14 +1898,14 @@ Override window.fetch:
 | GET | /api/v1/tasks/:id/review-comments | List review comments | ✅ |
 | DELETE | /api/v1/tasks/:id/session | Delete OpenCode session (admin) | ✅ |
 
-### 18.7 Webhook
+### 21.7 Webhook
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
 | POST | /api/v1/webhooks/gitlab | GitLab Webhook (Note + MR) | ✅ |
 | POST | /api/v1/tasks/callback | Task callback from OpenCode | ✅ |
 
-### 18.8 Templates
+### 21.8 Templates
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
@@ -1541,7 +1916,7 @@ Override window.fetch:
 | DELETE | /api/v1/templates/:id | Delete template | ✅ |
 | POST | /api/v1/templates/:id/clone | Clone template | ✅ |
 
-### 18.9 Pools
+### 21.9 Pools
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
@@ -1557,7 +1932,7 @@ Override window.fetch:
 | DELETE | /api/v1/pools/:id/default | Unset default | ✅ |
 | GET | /api/v1/pools/:id/skills | Get pool skills | ✅ |
 
-### 18.10 LLM Models
+### 21.10 LLM Models
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
@@ -1573,7 +1948,7 @@ Override window.fetch:
 | POST | /api/v1/models/test | Create and test model | ✅ |
 | POST | /api/v1/models/:id/check | API health check | ✅ |
 
-### 18.11 WeCom Notifier
+### 21.11 WeCom Notifier
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
@@ -1586,7 +1961,7 @@ Override window.fetch:
 | POST | /api/v1/notifiers/:id/test | Send test message | ✅ |
 | PUT | /api/v1/notifiers/:id/toggle | Enable/disable notifier | ✅ |
 
-### 18.12 Member Mappings
+### 21.12 Member Mappings
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
@@ -1598,7 +1973,7 @@ Override window.fetch:
 | GET | /api/v1/member-mappings/git-users | GitLab user list | ✅ |
 | GET | /api/v1/member-mappings/check | Check mapping status | ✅ |
 
-### 18.13 SMTP & Recipients
+### 21.13 SMTP & Recipients
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
@@ -1610,7 +1985,7 @@ Override window.fetch:
 | PUT | /api/v1/reports/recipients/:id | Edit recipient | ✅ |
 | DELETE | /api/v1/reports/recipients/:id | Delete recipient | ✅ |
 
-### 18.14 Report Management
+### 21.14 Report Management
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
@@ -1620,7 +1995,7 @@ Override window.fetch:
 | POST | /api/v1/reports/preview | Preview report | ✅ |
 | POST | /api/v1/reports/send | Manually send report | ✅ |
 
-### 18.15 Users (Admin)
+### 21.15 Users (Admin)
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
@@ -1630,7 +2005,7 @@ Override window.fetch:
 | DELETE | /api/v1/users/:id | Delete user | ✅ |
 | POST | /api/v1/users/:id/reset-password | Reset password | ✅ |
 
-### 18.16 System
+### 21.16 System
 
 | Method | Path | Description | Implemented |
 |------|------|------|----------|
@@ -1642,7 +2017,7 @@ Override window.fetch:
 
 ---
 
-## 19. Tech Stack
+## 22. 技术栈
 
 | Layer | Tech | Description |
 |------|------|------|
@@ -1662,7 +2037,7 @@ Override window.fetch:
 
 ---
 
-## 20. Appendix: Auth & Authorization
+## 23. 附录：认证与鉴权
 
 ### 20.1 Auth Flow
 

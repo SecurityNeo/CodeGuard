@@ -132,15 +132,17 @@
                 </div>
             </div>
 
-            <!-- 图表第 2 行：项目排行 + 用户排行 -->
+            <!-- 图表第 2 行：项目排行 + 用户排行（上方图例横向单行 + 下方柱状图，每个项目/用户一个颜色） -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="chart-card bg-white rounded-xl p-6 border">
                     <h3 class="text-lg font-bold text-gray-800 mb-4">项目 Token 用量 TOP 10</h3>
-                    <div id="projectChart" style="height: 360px;"></div>
+                    <div id="projectLegend" class="flex flex-wrap gap-x-3 gap-y-1 mb-4 text-xs"></div>
+                    <div id="projectChart" style="height: 320px;"></div>
                 </div>
                 <div class="chart-card bg-white rounded-xl p-6 border">
                     <h3 class="text-lg font-bold text-gray-800 mb-4">用户 Token 用量 TOP 10</h3>
-                    <div id="authorChart" style="height: 360px;"></div>
+                    <div id="authorLegend" class="flex flex-wrap gap-x-3 gap-y-1 mb-4 text-xs"></div>
+                    <div id="authorChart" style="height: 320px;"></div>
                 </div>
             </div>
 
@@ -274,7 +276,7 @@
     function showChartEmpty(domId, chartKey) {
         if (charts[chartKey]) { charts[chartKey].dispose(); charts[chartKey] = null; }
         const dom = document.getElementById(domId);
-        dom.innerHTML = '<div class="flex items-center justify-center h-full text-gray-400">暂无数据</div>';
+        dom.innerHTML = '<div class="flex items-center justify-center h-full min-h-[360px] text-gray-400">暂无数据</div>';
     }
 
     async function loadOverview() {
@@ -370,10 +372,7 @@
         if (!res.ok) throw new Error('项目接口 HTTP ' + res.status);
         const json = await res.json();
         const data = json.data || [];
-        if (data.length === 0) { showChartEmpty('projectChart', 'project'); return; }
-        const names = data.map(d => d.project_name || '未知');
-        const values = data.map(d => d.total_tokens || 0);
-        renderHorizontalBar('projectChart', names, values, '#3b82f6', 'project');
+        renderTopRank('projectLegend', 'projectChart', data, 'project_name', 'project');
     }
 
     async function loadByAuthor() {
@@ -381,32 +380,118 @@
         if (!res.ok) throw new Error('用户接口 HTTP ' + res.status);
         const json = await res.json();
         const data = json.data || [];
-        if (data.length === 0) { showChartEmpty('authorChart', 'author'); return; }
-        const names = data.map(d => d.author || '未知');
-        const values = data.map(d => d.total_tokens || 0);
-        renderHorizontalBar('authorChart', names, values, '#8b5cf6', 'author');
+        renderTopRank('authorLegend', 'authorChart', data, 'author', 'author');
     }
 
-    function renderHorizontalBar(domId, names, values, color, chartKey) {
-        if (names.length !== values.length) {
-            console.warn(`renderHorizontalBar: 数组长度不一致 (${names.length} vs ${values.length})`);
+    // renderTopRank 上方图例（可点击） + 下方 ECharts 柱状图（每个项目/用户一个颜色）
+    // 设计：
+    //   - 所有名称在图表上方（2 列图例区），不截断、可悬浮查看
+    //   - 点击图例项 → 对应柱子高亮（emphasis.focus: 'self'）+ 当前图例加 ring 标记
+    //   - 默认高亮第一项
+    //   - Y 轴不显示（柱子从最左边开始），右侧数值标签保留
+    function renderTopRank(legendDomId, chartDomId, data, nameField, chartKey) {
+        const legendEl = document.getElementById(legendDomId);
+        const chartEl = document.getElementById(chartDomId);
+        if (!data || data.length === 0) {
+            legendEl.innerHTML = '';
+            if (charts[chartKey]) { charts[chartKey].dispose(); charts[chartKey] = null; }
+            chartEl.innerHTML = '<div class="flex items-center justify-center h-full text-gray-400">暂无数据</div>';
+            return;
         }
+        // 按 total_tokens 降序
+        const sorted = [...data].sort((a, b) => (b.total_tokens || 0) - (a.total_tokens || 0));
+        // 调色板：10 种区分度高的颜色（Tailwind 500 色阶）
+        const palette = [
+            '#3b82f6', // blue
+            '#10b981', // emerald
+            '#f59e0b', // amber
+            '#ef4444', // red
+            '#8b5cf6', // violet
+            '#ec4899', // pink
+            '#06b6d4', // cyan
+            '#84cc16', // lime
+            '#f97316', // orange
+            '#6366f1', // indigo
+        ];
+        const values = sorted.map(d => d.total_tokens || 0);
+
+        // 上方图例（2 列，每行：色块 + 完整名；点击高亮对应柱子）
+        legendEl.innerHTML = sorted.map((d, idx) => {
+            const color = palette[idx % palette.length];
+            const name = d[nameField] || '-';
+            return `
+                <div class="legend-item flex items-center gap-1.5 cursor-pointer px-1.5 py-1 rounded hover:bg-gray-100 transition-colors max-w-[180px] ${idx === 0 ? 'is-active ring-2 ring-blue-400 bg-blue-50/50' : ''}"
+                     data-idx="${idx}"
+                     title="${escapeHtml(name)}">
+                    <span class="w-2.5 h-2.5 rounded-sm flex-shrink-0" style="background:${color}"></span>
+                    <span class="truncate text-gray-700">${escapeHtml(name)}</span>
+                </div>
+            `;
+        }).join('');
+
+        // 下方柱状图：Y 轴不显示，柱子从最左边开始；emphasis.focus:'self' 让未选中柱子变暗
         if (charts[chartKey]) charts[chartKey].dispose();
-        // ECharts 横向条形图：x/y 轴对调
-        const sorted = names.map((n, i) => ({ name: n, value: values[i] || 0 })).sort((a, b) => a.value - b.value);
-        charts[chartKey] = echarts.init(document.getElementById(domId));
+        charts[chartKey] = echarts.init(chartEl);
         charts[chartKey].setOption({
-            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-            grid: { left: 100, right: 70, top: 10, bottom: 30, containLabel: false },
-            xAxis: { type: 'value', axisLabel: { formatter: v => formatNumber(v) } },
-            yAxis: { type: 'category', data: sorted.map(d => d.name), axisLabel: { fontSize: 12 } },
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'shadow' },
+                formatter: params => {
+                    const p = params[0];
+                    const fullName = sorted[p.dataIndex][nameField] || '-';
+                    return `<div style="max-width:340px;white-space:normal;word-break:break-all;">${escapeHtml(fullName)}<br/>用量: <b>${formatNumber(p.value)}</b></div>`;
+                }
+            },
+            grid: { left: 4, right: 60, top: 6, bottom: 6, containLabel: false },
+            xAxis: { type: 'value', show: false },
+            yAxis: {
+                type: 'category',
+                data: sorted.map(() => ''),   // 不显示 Y 轴标签
+                inverse: true,
+                axisLine: { show: false },
+                axisTick: { show: false },
+                splitLine: { show: false }
+            },
             series: [{
                 type: 'bar',
-                data: sorted.map(d => d.value),
-                itemStyle: { color: color, borderRadius: [0, 4, 4, 0] },
-                label: { show: true, position: 'right', distance: 8, formatter: p => formatNumber(p.value) }
+                data: values.map((v, idx) => ({
+                    value: v,
+                    itemStyle: { color: palette[idx % palette.length], borderRadius: [0, 4, 4, 0] }
+                })),
+                barCategoryGap: '40%',
+                emphasis: {
+                    focus: 'self',  // 只高亮自身，其他柱子变暗
+                    itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.3)' }
+                },
+                label: {
+                    show: true,
+                    position: 'right',
+                    distance: 4,
+                    fontSize: 11,
+                    color: '#374151',
+                    formatter: p => formatNumber(p.value)
+                }
             }]
         });
+
+        // 图例点击 → 高亮对应柱子
+        legendEl.querySelectorAll('.legend-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const idx = parseInt(item.dataset.idx, 10);
+                // 取消所有高亮
+                charts[chartKey].dispatchAction({ type: 'downplay', seriesIndex: 0 });
+                // 高亮选中项
+                charts[chartKey].dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: idx });
+                // 标记当前选中的图例项
+                legendEl.querySelectorAll('.legend-item').forEach(el => {
+                    el.classList.remove('is-active', 'ring-2', 'ring-blue-400', 'bg-blue-50/50');
+                });
+                item.classList.add('is-active', 'ring-2', 'ring-blue-400', 'bg-blue-50/50');
+            });
+        });
+
+        // 默认高亮第一项
+        charts[chartKey].dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: 0 });
     }
 
     async function loadCalls(page) {
